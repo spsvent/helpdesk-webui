@@ -26,12 +26,18 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_LIVELY_COAST_062DFC51E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
           action: "upload"
-          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
+          ###### Repository/Build Configurations ######
           app_location: "/" # App source code path
           api_location: "" # Api source code path - optional
           output_location: "out" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
+        env:
+          # Build-time environment variables for Next.js
+          NEXT_PUBLIC_CLIENT_ID: "06fcde50-24bf-4d53-838d-ecc035653d8f"
+          NEXT_PUBLIC_TENANT_ID: "f0db97c1-2010-4d0c-826e-d6e0f2b25f2f"
+          NEXT_PUBLIC_SHAREPOINT_SITE_ID: "skyparksv.sharepoint.com,946827f8-eb7d-4319-a7bc-3f73eb568a0c,a183a604-4a6e-4d21-89e9-870711e87723"
+          NEXT_PUBLIC_TICKETS_LIST_ID: "018f0d5c-318d-4856-a7f2-491f4e71a554"
+          NEXT_PUBLIC_COMMENTS_LIST_ID: "2484abfd-ca8a-4202-ab24-82c0acce03c2"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
