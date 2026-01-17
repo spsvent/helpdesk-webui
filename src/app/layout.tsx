@@ -20,6 +20,9 @@ export default function RootLayout({
     // Initialize MSAL and handle any redirect response
     const initializeMsal = async () => {
       try {
+        // Must initialize MSAL before calling any other methods
+        await msalInstance.initialize();
+
         // Handle redirect promise - this processes the auth response after redirect
         const response = await msalInstance.handleRedirectPromise();
 
