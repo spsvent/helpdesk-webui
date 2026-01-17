@@ -93,9 +93,17 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-text-primary">
-          SkyPark Help Desk
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold text-text-primary">
+            SkyPark Help Desk
+          </h1>
+          <Link
+            href="/new"
+            className="px-4 py-1.5 bg-brand-blue text-white text-sm rounded-lg font-medium hover:bg-brand-blue-light transition-colors"
+          >
+            + New Ticket
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
           <Link
             href="/help"

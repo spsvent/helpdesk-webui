@@ -106,6 +106,37 @@ export async function updateTicket(
   return mapToTicket(item);
 }
 
+// Create a new ticket
+export interface CreateTicketData {
+  title: string;
+  description: string;
+  category: "Request" | "Problem";
+  priority: "Low" | "Normal" | "High" | "Urgent";
+  problemType: string;
+  location?: string;
+}
+
+export async function createTicket(
+  client: Client,
+  ticketData: CreateTicketData
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items`;
+
+  const item = await client.api(endpoint).post({
+    fields: {
+      Title: ticketData.title,
+      Description: ticketData.description,
+      Category: ticketData.category,
+      Priority: ticketData.priority,
+      ProblemType: ticketData.problemType,
+      Location: ticketData.location || "",
+      Status: "New",
+    },
+  });
+
+  return mapToTicket(item);
+}
+
 // Get current user info
 export async function getCurrentUser(client: Client) {
   return await client.api("/me").get();

@@ -14,13 +14,12 @@ interface DetailsPanelProps {
 const STATUS_OPTIONS: Ticket["status"][] = [
   "New",
   "In Progress",
-  "Pending",
   "On Hold",
   "Resolved",
   "Closed",
 ];
 
-const PRIORITY_OPTIONS: Ticket["priority"][] = ["Normal", "Urgent"];
+const PRIORITY_OPTIONS: Ticket["priority"][] = ["Low", "Normal", "High", "Urgent"];
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {

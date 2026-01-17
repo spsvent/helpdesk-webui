@@ -17,12 +17,21 @@ function getStatusBadgeClass(status: Ticket["status"]): string {
   const classes: Record<Ticket["status"], string> = {
     "New": "bg-blue-500",
     "In Progress": "bg-green-500",
-    "Pending": "bg-yellow-500",
-    "On Hold": "bg-gray-500",
+    "On Hold": "bg-yellow-500",
     "Resolved": "bg-emerald-500",
     "Closed": "bg-slate-500",
   };
   return `${classes[status] || "bg-blue-500"} text-white`;
+}
+
+function getPriorityClass(priority: Ticket["priority"]): string {
+  const classes: Record<Ticket["priority"], string> = {
+    "Low": "text-gray-500",
+    "Normal": "text-blue-600",
+    "High": "text-orange-600 font-semibold",
+    "Urgent": "text-red-600 font-bold",
+  };
+  return classes[priority] || "text-blue-600";
 }
 
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
@@ -93,9 +102,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
             <div className="flex items-center gap-4 text-sm text-text-secondary">
               <span>#{ticket.id}</span>
               <span>{ticket.problemType}</span>
-              {ticket.priority === "Urgent" && (
-                <span className="text-red-600 font-semibold">URGENT</span>
-              )}
+              <span className={getPriorityClass(ticket.priority)}>
+                {ticket.priority.toUpperCase()}
+              </span>
             </div>
           </div>
         </div>

@@ -12,12 +12,22 @@ function getStatusBadgeClass(status: Ticket["status"]): string {
   const classes: Record<Ticket["status"], string> = {
     "New": "badge-new",
     "In Progress": "badge-in-progress",
-    "Pending": "badge-pending",
     "On Hold": "badge-on-hold",
     "Resolved": "badge-resolved",
     "Closed": "badge-closed",
   };
   return `badge ${classes[status] || "badge-new"}`;
+}
+
+function getPriorityIndicator(priority: Ticket["priority"]): { label: string; className: string } | null {
+  switch (priority) {
+    case "Urgent":
+      return { label: "URGENT", className: "text-red-600 font-bold" };
+    case "High":
+      return { label: "HIGH", className: "text-orange-600 font-semibold" };
+    default:
+      return null;
+  }
 }
 
 function formatDate(dateString: string): string {
@@ -58,9 +68,9 @@ export default function TicketList({ tickets, selectedId, onSelect }: TicketList
             <h3 className="font-medium text-text-primary line-clamp-1">
               {ticket.title}
             </h3>
-            {ticket.priority === "Urgent" && (
-              <span className="text-red-600 text-xs font-semibold shrink-0">
-                URGENT
+            {getPriorityIndicator(ticket.priority) && (
+              <span className={`text-xs shrink-0 ${getPriorityIndicator(ticket.priority)!.className}`}>
+                {getPriorityIndicator(ticket.priority)!.label}
               </span>
             )}
           </div>

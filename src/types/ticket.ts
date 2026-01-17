@@ -5,8 +5,8 @@ export interface Ticket {
   title: string;
   description: string;
   category: "Request" | "Problem";
-  priority: "Normal" | "Urgent";
-  status: "New" | "In Progress" | "Pending" | "On Hold" | "Resolved" | "Closed";
+  priority: "Low" | "Normal" | "High" | "Urgent";
+  status: "New" | "In Progress" | "On Hold" | "Resolved" | "Closed";
   location?: string;
   problemType: string;
   assignedTo?: User;

@@ -16,8 +16,8 @@ const helpSections: HelpSection[] = [
     content: (
       <div className="space-y-4">
         <p>
-          Welcome to the SkyPark Help Desk! This application allows you to view
-          and manage support tickets submitted through the organization.
+          Welcome to the SkyPark Help Desk! This application allows you to submit,
+          view, and manage support tickets for the organization.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Signing In</h4>
@@ -43,11 +43,11 @@ const helpSections: HelpSection[] = [
         <h4 className="font-semibold text-text-primary mt-6">
           Interface Overview
         </h4>
-        <p>The main interface is divided into three areas:</p>
+        <p>The main interface is divided into key areas:</p>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
-            <strong>Header:</strong> Shows your name and provides sign-out and
-            help links
+            <strong>Header:</strong> Contains the &quot;+ New Ticket&quot; button, Help link,
+            your name, and sign-out
           </li>
           <li>
             <strong>Ticket List (Left Sidebar):</strong> Displays all tickets in
@@ -58,6 +58,82 @@ const helpSections: HelpSection[] = [
             ticket&apos;s conversation and details
           </li>
         </ul>
+      </div>
+    ),
+  },
+  {
+    id: "submitting-tickets",
+    title: "Submitting a New Ticket",
+    content: (
+      <div className="space-y-4">
+        <p>
+          You can submit a new support ticket directly from the Help Desk application.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          How to Submit a Ticket
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Click the <strong>&quot;+ New Ticket&quot;</strong> button in the header
+          </li>
+          <li>Fill out the ticket form with the following information:</li>
+        </ol>
+
+        <div className="ml-8 mt-3 space-y-3">
+          <p><strong>Title</strong> (required): A brief summary of your issue</p>
+          <p><strong>Description</strong> (required): Detailed explanation of the problem or request</p>
+          <p><strong>Category</strong>: Select &quot;Request&quot; for new features/access, or &quot;Problem&quot; for something broken</p>
+          <p><strong>Department</strong>: Which team should handle this (Tech, Operations, HR, etc.)</p>
+          <p><strong>Priority</strong>: How urgent is this issue (see Priority Levels below)</p>
+          <p><strong>Location</strong> (optional): Where the issue is occurring</p>
+        </div>
+
+        <ol className="list-decimal list-inside space-y-2 ml-4" start={3}>
+          <li>
+            Click <strong>&quot;Submit Ticket&quot;</strong> to create your ticket
+          </li>
+          <li>You&apos;ll be redirected to the main page where you can view your new ticket</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Priority Levels
+        </h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+            <span className="text-gray-500 font-medium shrink-0">Low</span>
+            <span className="text-sm">Nice to have, no rush. Will be addressed as time permits.</span>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+            <span className="text-blue-600 font-medium shrink-0">Normal</span>
+            <span className="text-sm">Standard priority. Addressed within normal workflow.</span>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+            <span className="text-orange-600 font-semibold shrink-0">High</span>
+            <span className="text-sm">Important issue requiring prompt attention.</span>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-red-200 bg-red-50 rounded-lg">
+            <span className="text-red-600 font-bold shrink-0">Urgent</span>
+            <div className="text-sm">
+              <p className="font-medium text-red-800">Drop everything - full company resources.</p>
+              <p className="mt-1 text-red-700">Only use for critical business impact:</p>
+              <ul className="list-disc list-inside ml-2 mt-1">
+                <li>Complete system outages</li>
+                <li>Safety concerns</li>
+                <li>Revenue-impacting issues</li>
+                <li>Time-sensitive events</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Important:</strong> Please use Urgent priority sparingly.
+            Overuse of Urgent priority reduces its effectiveness and can delay
+            truly critical issues.
+          </p>
+        </div>
       </div>
     ),
   },
@@ -80,7 +156,7 @@ const helpSections: HelpSection[] = [
           </li>
           <li>
             <strong>Status Badge:</strong> Current status (New, In Progress,
-            Pending, On Hold, Resolved, Closed)
+            On Hold, Resolved, Closed)
           </li>
           <li>
             <strong>Problem Type:</strong> Category of the issue
@@ -92,8 +168,8 @@ const helpSections: HelpSection[] = [
             <strong>Time:</strong> When the ticket was created
           </li>
           <li>
-            <strong>Urgent Flag:</strong> Red &quot;URGENT&quot; label for high-priority
-            tickets
+            <strong>Priority Flag:</strong> Red &quot;URGENT&quot; or orange &quot;HIGH&quot; label
+            for elevated priority tickets
           </li>
         </ul>
 
@@ -111,8 +187,8 @@ const helpSections: HelpSection[] = [
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-yellow-800">
-            <strong>Tip:</strong> Look for the red &quot;URGENT&quot; label to quickly
-            identify high-priority tickets that need immediate attention.
+            <strong>Tip:</strong> Look for the red &quot;URGENT&quot; or orange &quot;HIGH&quot;
+            labels to quickly identify elevated priority tickets.
           </p>
         </div>
       </div>
@@ -144,7 +220,7 @@ const helpSections: HelpSection[] = [
             <strong>Problem Type:</strong> Category of the issue
           </li>
           <li>
-            <strong>Priority Indicator:</strong> Shows &quot;URGENT&quot; if applicable
+            <strong>Priority:</strong> Color-coded priority level (LOW, NORMAL, HIGH, URGENT)
           </li>
         </ul>
 
@@ -186,7 +262,7 @@ const helpSections: HelpSection[] = [
             <strong>Status:</strong> Dropdown to change ticket status
           </li>
           <li>
-            <strong>Priority:</strong> Dropdown to change priority
+            <strong>Priority:</strong> Dropdown to change priority (Low, Normal, High, Urgent)
           </li>
           <li>
             <strong>Assignee:</strong> Who is working on the ticket
@@ -316,13 +392,7 @@ const helpSections: HelpSection[] = [
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
             <span>
-              <strong>Pending:</strong> Waiting for info
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-gray-500"></span>
-            <span>
-              <strong>On Hold:</strong> Temporarily paused
+              <strong>On Hold:</strong> Paused/waiting
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -347,12 +417,34 @@ const helpSections: HelpSection[] = [
             In the Details panel, find the <strong>Priority</strong> dropdown
           </li>
           <li>
-            Select either <strong>Normal</strong> or <strong>Urgent</strong>
+            Select from <strong>Low</strong>, <strong>Normal</strong>, <strong>High</strong>, or <strong>Urgent</strong>
           </li>
           <li>
             Click <strong>&quot;Save Changes&quot;</strong> to apply
           </li>
         </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Priority Levels
+        </h4>
+        <div className="space-y-2 mt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 font-medium">Low:</span>
+            <span>Nice to have, no rush</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600 font-medium">Normal:</span>
+            <span>Standard priority</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-orange-600 font-semibold">High:</span>
+            <span>Needs prompt attention</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-red-600 font-bold">Urgent:</span>
+            <span>Critical - drop everything</span>
+          </div>
+        </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-blue-800">
@@ -390,15 +482,9 @@ const helpSections: HelpSection[] = [
           </div>
           <div className="flex items-center gap-3">
             <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500 text-white">
-              Pending
-            </span>
-            <span>Waiting for additional information or action</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-500 text-white">
               On Hold
             </span>
-            <span>Work temporarily paused</span>
+            <span>Work paused - waiting for info, resources, or external factors</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="px-2 py-1 rounded text-xs font-medium bg-emerald-500 text-white">
@@ -411,6 +497,26 @@ const helpSections: HelpSection[] = [
               Closed
             </span>
             <span>Ticket is complete and archived</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Priority Indicators</h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-center gap-3">
+            <span className="text-gray-500 text-xs font-medium">LOW</span>
+            <span>Lowest priority - no rush</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-blue-600 text-xs font-medium">NORMAL</span>
+            <span>Standard priority</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-orange-600 text-xs font-semibold">HIGH</span>
+            <span>Elevated priority - needs prompt attention</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-red-600 text-xs font-bold">URGENT</span>
+            <span>Critical priority - immediate action required</span>
           </div>
         </div>
 
@@ -447,7 +553,7 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
-    id: "keyboard-shortcuts",
+    id: "tips",
     title: "Tips & Best Practices",
     content: (
       <div className="space-y-4">
@@ -456,8 +562,8 @@ const helpSections: HelpSection[] = [
         </h4>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
-            <strong>Prioritize urgent tickets:</strong> Look for the red URGENT
-            label in the ticket list
+            <strong>Check priority labels:</strong> Look for red URGENT or orange HIGH
+            labels in the ticket list to identify elevated priority tickets
           </li>
           <li>
             <strong>Update status promptly:</strong> Change status to &quot;In
@@ -474,6 +580,17 @@ const helpSections: HelpSection[] = [
         </ul>
 
         <h4 className="font-semibold text-text-primary mt-6">
+          Submitting Good Tickets
+        </h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>Write a clear, descriptive title</li>
+          <li>Include all relevant details in the description</li>
+          <li>Select the correct department so it gets routed properly</li>
+          <li>Use the appropriate priority level - reserve Urgent for true emergencies</li>
+          <li>Include the location if it&apos;s relevant to the issue</li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">
           Communication Best Practices
         </h4>
         <ul className="list-disc list-inside space-y-2 ml-4">
@@ -483,8 +600,8 @@ const helpSections: HelpSection[] = [
           </li>
           <li>Use internal notes for technical details or team discussions</li>
           <li>
-            Update the ticket status when requesting information (use
-            &quot;Pending&quot;)
+            Update the ticket status when waiting for information (use
+            &quot;On Hold&quot;)
           </li>
         </ul>
 
@@ -501,7 +618,7 @@ const helpSections: HelpSection[] = [
             </span>
             <span>→</span>
             <span className="px-2 py-1 rounded bg-yellow-500 text-white">
-              Pending
+              On Hold
             </span>
             <span className="text-gray-400">(if waiting)</span>
             <span>→</span>
