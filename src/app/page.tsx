@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
@@ -96,6 +97,12 @@ export default function Home() {
           SkyPark Help Desk
         </h1>
         <div className="flex items-center gap-4">
+          <Link
+            href="/help"
+            className="text-sm text-text-secondary hover:text-text-primary"
+          >
+            Help
+          </Link>
           <span className="text-sm text-text-secondary">
             {accounts[0]?.name || accounts[0]?.username}
           </span>
