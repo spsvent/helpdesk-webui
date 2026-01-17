@@ -1,0 +1,85 @@
+"use client";
+
+import { Ticket } from "@/types/ticket";
+
+interface TicketListProps {
+  tickets: Ticket[];
+  selectedId?: string;
+  onSelect: (ticket: Ticket) => void;
+}
+
+function getStatusBadgeClass(status: Ticket["status"]): string {
+  const classes: Record<Ticket["status"], string> = {
+    "New": "badge-new",
+    "In Progress": "badge-in-progress",
+    "Pending": "badge-pending",
+    "On Hold": "badge-on-hold",
+    "Resolved": "badge-resolved",
+    "Closed": "badge-closed",
+  };
+  return `badge ${classes[status] || "badge-new"}`;
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+export default function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
+  if (tickets.length === 0) {
+    return (
+      <div className="p-4 text-center text-text-secondary">
+        No tickets found
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-border">
+      {tickets.map((ticket) => (
+        <button
+          key={ticket.id}
+          onClick={() => onSelect(ticket)}
+          className={`w-full text-left p-4 hover:bg-bg-subtle transition-colors ${
+            selectedId === ticket.id ? "bg-blue-50 border-l-4 border-brand-blue" : ""
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="font-medium text-text-primary line-clamp-1">
+              {ticket.title}
+            </h3>
+            {ticket.priority === "Urgent" && (
+              <span className="text-red-600 text-xs font-semibold shrink-0">
+                URGENT
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mb-2">
+            <span className={getStatusBadgeClass(ticket.status)}>
+              {ticket.status}
+            </span>
+            <span className="text-xs text-text-secondary">
+              {ticket.problemType}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-text-secondary">
+            <span>{ticket.requester.displayName}</span>
+            <span>{formatDate(ticket.created)}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
