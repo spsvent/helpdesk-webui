@@ -119,16 +119,24 @@ export default function ConversationThread({
         </div>
       )}
 
-      {comments.map((comment) => (
-        <CommentCard
-          key={comment.id}
-          author={comment.createdBy}
-          content={comment.commentBody}
-          timestamp={comment.created}
-          isInternal={comment.isInternal}
-          commentType={comment.commentType}
-        />
-      ))}
+      {comments.map((comment) => {
+        // For migrated comments, use original author/date if available
+        const author = comment.originalAuthor
+          ? { displayName: comment.originalAuthor.split('<')[0].trim(), email: '' }
+          : comment.createdBy;
+        const timestamp = comment.originalCreated || comment.created;
+
+        return (
+          <CommentCard
+            key={comment.id}
+            author={author}
+            content={comment.commentBody}
+            timestamp={timestamp}
+            isInternal={comment.isInternal}
+            commentType={comment.commentType}
+          />
+        );
+      })}
     </div>
   );
 }

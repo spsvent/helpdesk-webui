@@ -90,9 +90,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold text-text-primary">
             SkyPark Help Desk
@@ -124,7 +124,7 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         {/* Ticket list sidebar */}
         <aside className="w-80 border-r border-border bg-white overflow-hidden flex flex-col">
           <div className="p-4 border-b border-border">
@@ -148,7 +148,7 @@ export default function Home() {
         </aside>
 
         {/* Ticket detail */}
-        <main className="flex-1 bg-bg-subtle">
+        <main className="flex-1 bg-bg-subtle overflow-y-auto">
           {selectedTicket ? (
             <TicketDetail
               ticket={selectedTicket}

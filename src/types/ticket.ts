@@ -26,6 +26,8 @@ export interface Comment {
   commentType: "Comment" | "Status Change" | "Assignment" | "Resolution" | "Note";
   created: string;
   createdBy: User;
+  originalAuthor?: string;  // For migrated comments - original author name/email
+  originalCreated?: string; // For migrated comments - original timestamp
 }
 
 export interface User {
@@ -89,18 +91,31 @@ export function mapToTicket(item: SharePointListItem): Ticket {
 // Transform SharePoint response to Comment
 export function mapToComment(item: SharePointListItem): Comment {
   const fields = item.fields as Record<string, unknown>;
+
+  // Handle both old schema (Body) and new schema (CommentBody)
+  const commentBody = (fields.CommentBody as string) || (fields.Body as string) || "";
+
+  // Handle old CommentType values (Reply, Private note)
+  const rawCommentType = fields.CommentType as string;
+  const isPrivateNote = rawCommentType === "Private note";
+  const commentType = rawCommentType === "Reply" ? "Comment" :
+                      rawCommentType === "Private note" ? "Note" :
+                      (rawCommentType as Comment["commentType"]) || "Comment";
+
   return {
     id: item.id,
     ticketId: (fields.TicketID as number) || 0,
     title: (fields.Title as string) || "",
-    commentBody: (fields.CommentBody as string) || "",
-    isInternal: (fields.IsInternal as boolean) || false,
-    commentType: (fields.CommentType as Comment["commentType"]) || "Comment",
+    commentBody: commentBody,
+    isInternal: (fields.IsInternal as boolean) || isPrivateNote,
+    commentType: commentType,
     created: item.createdDateTime,
     createdBy: {
       id: item.createdBy.user.id,
       displayName: item.createdBy.user.displayName,
       email: item.createdBy.user.email || "",
     },
+    originalAuthor: fields.OriginalAuthor as string | undefined,
+    originalCreated: fields.OriginalCreated as string | undefined,
   };
 }
