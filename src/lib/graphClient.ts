@@ -78,7 +78,7 @@ export async function addComment(
     fields: {
       Title: commentBody.substring(0, 50) + (commentBody.length > 50 ? "..." : ""),
       TicketID: ticketId,
-      CommentBody: commentBody,
+      Body: commentBody,  // Field is named "Body" not "CommentBody"
       IsInternal: isInternal,
       CommentType: commentType,
     },
@@ -118,21 +118,29 @@ export interface CreateTicketData {
 
 export async function createTicket(
   client: Client,
-  ticketData: CreateTicketData
+  ticketData: CreateTicketData,
+  requesterEmail?: string
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items`;
 
-  const item = await client.api(endpoint).post({
-    fields: {
-      Title: ticketData.title,
-      Description: ticketData.description,
-      Category: ticketData.category,
-      Priority: ticketData.priority,
-      ProblemType: ticketData.problemType,
-      Location: ticketData.location || "",
-      Status: "New",
-    },
-  });
+  // Build the fields object
+  const fields: Record<string, unknown> = {
+    Title: ticketData.title,
+    Description: ticketData.description,
+    Category: ticketData.category,
+    Priority: ticketData.priority,
+    ProblemType: ticketData.problemType,
+    Location: ticketData.location || "",
+    Status: "New",
+    SupportChannel: "Web Form",
+  };
+
+  // Set Requester if email provided (uses LookupId format for Person fields)
+  if (requesterEmail) {
+    fields.RequesterLookupId = requesterEmail;
+  }
+
+  const item = await client.api(endpoint).post({ fields });
 
   return mapToTicket(item);
 }

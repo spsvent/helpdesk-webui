@@ -119,13 +119,24 @@ export default function NewTicketPage() {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const newTicket = await createTicket(client, formData);
+      const requesterEmail = accounts[0]?.username;
+      const newTicket = await createTicket(client, formData, requesterEmail);
 
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Failed to create ticket:", e);
-      setError("Failed to submit ticket. Please try again.");
+
+      // Try to provide a more helpful error message based on the error type
+      const err = e as { statusCode?: number; code?: string; message?: string };
+
+      if (err.statusCode === 403 || err.code === "accessDenied") {
+        setError("You don't have permission to create tickets. Please contact your administrator to request access.");
+      } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken") {
+        setError("Your session has expired. Please refresh the page and sign in again.");
+      } else {
+        setError("Failed to submit ticket. Please try again or contact support if the problem persists.");
+      }
       setSubmitting(false);
     }
   };

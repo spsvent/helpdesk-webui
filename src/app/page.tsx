@@ -44,9 +44,21 @@ export default function Home() {
         const client = getGraphClient(instance, accounts[0]);
         const ticketList = await getTickets(client);
         setTickets(ticketList);
-      } catch (e) {
+      } catch (e: unknown) {
         console.error("Failed to fetch tickets:", e);
-        setError("Failed to load tickets. Please check your permissions.");
+
+        // Try to provide a more helpful error message based on the error type
+        const err = e as { statusCode?: number; code?: string; message?: string };
+
+        if (err.statusCode === 403 || err.code === "accessDenied") {
+          setError("You don't have permission to view tickets. Please contact your administrator to request access to the Help Desk site.");
+        } else if (err.statusCode === 404 || err.code === "itemNotFound") {
+          setError("The tickets list could not be found. Please contact your administrator.");
+        } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken") {
+          setError("Your session has expired. Please sign out and sign back in.");
+        } else {
+          setError("Unable to load tickets. Please try again or contact support if the problem persists.");
+        }
       } finally {
         setLoading(false);
       }
@@ -136,7 +148,20 @@ export default function Home() {
                 Loading tickets...
               </div>
             ) : error ? (
-              <div className="p-4 text-center text-red-600">{error}</div>
+              <div className="p-6 text-center">
+                <div className="text-red-500 mb-3">
+                  <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-sm text-brand-blue hover:underline"
+                >
+                  Try again
+                </button>
+              </div>
             ) : (
               <TicketList
                 tickets={tickets}
