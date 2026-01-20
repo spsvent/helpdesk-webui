@@ -195,6 +195,117 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "filtering-searching",
+    title: "Filtering & Searching Tickets",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The ticket list includes powerful filtering and search capabilities to help
+          you quickly find the tickets you need.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Search Bar</h4>
+        <p>
+          Type in the search bar to instantly filter tickets. Search matches against:
+        </p>
+        <ul className="list-disc list-inside space-y-1 ml-4">
+          <li>Ticket title</li>
+          <li>Ticket description</li>
+          <li>Requester name</li>
+        </ul>
+        <p className="mt-2 text-sm text-text-secondary">
+          Search results update as you type (with a small delay to avoid flickering).
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Quick View Buttons</h4>
+        <p>
+          Use the preset view buttons for common filtering needs:
+        </p>
+        <div className="space-y-2 mt-3">
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-blue text-white">Active Tickets</span>
+            <span className="text-sm">Default view - hides resolved/closed, urgent on top</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">By Priority</span>
+            <span className="text-sm">Sorted by urgency level, then by date</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">All Tickets</span>
+            <span className="text-sm">Shows everything including resolved/closed</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Open Only</span>
+            <span className="text-sm">New and In Progress tickets only</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Advanced Filters</h4>
+        <p>
+          Click the <strong>Filters</strong> button to expand the filter panel with more options:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Status:</strong> Select one or more status types (New, In Progress, On Hold, Resolved, Closed)
+          </li>
+          <li>
+            <strong>Priority:</strong> Filter by priority level (Urgent, High, Normal, Low)
+          </li>
+          <li>
+            <strong>Department:</strong> Cascading dropdowns for ProblemType → Sub-category → Specific type
+          </li>
+          <li>
+            <strong>Category:</strong> Filter by Request or Problem
+          </li>
+          <li>
+            <strong>Date Range:</strong> Today, Last 7 days, Last 30 days, or All time
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Sort Options</h4>
+        <p>Use the sort dropdown to change how tickets are ordered:</p>
+        <div className="space-y-2 mt-3 ml-4">
+          <p><strong>Smart (urgent on top):</strong> Urgent tickets first, then by date, with higher priority shown first for same-day tickets</p>
+          <p><strong>By priority:</strong> All urgent first, then high, normal, low</p>
+          <p><strong>Newest first:</strong> Most recently created tickets first</p>
+          <p><strong>Oldest first:</strong> Oldest tickets first</p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Clearing Filters</h4>
+        <p>
+          When you have active filters, two buttons appear at the bottom of the filter panel:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Reset to default:</strong> Returns to the &quot;Active Tickets&quot; view (hides resolved/closed)
+          </li>
+          <li>
+            <strong>Show all tickets:</strong> Clears ALL filters to show every ticket
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Archived Tickets</h4>
+        <p>
+          To improve performance, resolved and closed tickets older than 90 days are not loaded
+          by default. To view these older tickets:
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Click the <strong>&quot;Load archived tickets (90+ days old)&quot;</strong> button at the bottom of the filter area</li>
+          <li>Wait for the archived tickets to load</li>
+          <li>Switch to &quot;All Tickets&quot; view to see them</li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> The filter badge on the Filters button shows how many
+            filters are currently active. This helps you know when filtered results
+            might be hiding tickets.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "ticket-details",
     title: "Ticket Details View",
     content: (
@@ -330,7 +441,7 @@ const helpSections: HelpSection[] = [
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>Type your message in the comment box</li>
           <li>
-            Check the <strong>&quot;Internal note (only visible to staff)&quot;</strong>{" "}
+            Check the <strong>&quot;Internal note (hidden from requester)&quot;</strong>{" "}
             checkbox
           </li>
           <li>

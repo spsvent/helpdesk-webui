@@ -40,7 +40,7 @@ export default function CommentInput({ onSubmit, disabled }: CommentInputProps) 
             disabled={disabled}
             className="rounded border-border text-brand-blue focus:ring-brand-blue"
           />
-          Internal note (only visible to staff)
+          Internal note (hidden from requester - only managers &amp; assigned staff can see)
         </label>
 
         <button

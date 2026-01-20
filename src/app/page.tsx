@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { getGraphClient, getTickets } from "@/lib/graphClient";
+import { getGraphClient, getTickets, getArchivedTickets } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
+import { TicketFilters, DEFAULT_FILTERS } from "@/types/filters";
+import { filterTickets, sortTickets } from "@/lib/filterUtils";
 import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
+import TicketFiltersComponent from "@/components/TicketFilters";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
@@ -19,9 +22,71 @@ export default function Home() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TicketFilters>(DEFAULT_FILTERS);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(false);
+
+  // Sidebar resize state
+  const [sidebarWidth, setSidebarWidth] = useState(384); // 384px = w-96 default
+  const isResizing = useRef(false);
+  const MIN_SIDEBAR_WIDTH = 280;
+  const MAX_SIDEBAR_WIDTH = 600;
+
+  // Handle sidebar resize
+  const startResizing = useCallback(() => {
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  // Memoized filter change handler
+  const handleFiltersChange = useCallback((newFilters: TicketFilters) => {
+    setFilters(newFilters);
+  }, []);
+
+  // Load archived tickets (resolved/closed older than 90 days)
+  const loadArchivedTickets = useCallback(async () => {
+    if (!accounts[0] || archivedLoaded) return;
+
+    setLoadingArchived(true);
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const archived = await getArchivedTickets(client);
+      setTickets((prev) => [...prev, ...archived]);
+      setArchivedLoaded(true);
+    } catch (e) {
+      console.error("Failed to load archived tickets:", e);
+    } finally {
+      setLoadingArchived(false);
+    }
+  }, [accounts, instance, archivedLoaded]);
 
   // Filter tickets based on RBAC permissions
-  const visibleTickets = useMemo(() => {
+  const rbacFilteredTickets = useMemo(() => {
     if (!permissions || permissions.canSeeAllTickets) {
       // Admins and support staff see all tickets
       return tickets;
@@ -29,6 +94,12 @@ export default function Home() {
     // Regular users only see tickets they have access to
     return tickets.filter((ticket) => canView(ticket));
   }, [tickets, permissions, canView]);
+
+  // Apply user filters and sort on top of RBAC filtering
+  const filteredAndSortedTickets = useMemo(() => {
+    const filtered = filterTickets(rbacFilteredTickets, filters);
+    return sortTickets(filtered, filters.sort);
+  }, [rbacFilteredTickets, filters]);
 
   // Handle login
   const handleLogin = async () => {
@@ -169,10 +240,22 @@ export default function Home() {
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {/* Ticket list sidebar */}
-        <aside className="w-80 border-r border-border bg-white overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-border">
-            <h2 className="font-semibold text-text-primary">Tickets</h2>
-          </div>
+        <aside
+          className="border-r border-border bg-white overflow-hidden flex flex-col shrink-0"
+          style={{ width: sidebarWidth }}
+        >
+          {/* Filters */}
+          <TicketFiltersComponent
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            totalCount={rbacFilteredTickets.length}
+            filteredCount={filteredAndSortedTickets.length}
+            archivedLoaded={archivedLoaded}
+            loadingArchived={loadingArchived}
+            onLoadArchived={loadArchivedTickets}
+          />
+
+          {/* Ticket List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="p-4 text-center text-text-secondary">
@@ -199,7 +282,7 @@ export default function Home() {
               </div>
             ) : (
               <TicketList
-                tickets={visibleTickets}
+                tickets={filteredAndSortedTickets}
                 selectedId={selectedTicket?.id}
                 onSelect={setSelectedTicket}
               />
@@ -207,8 +290,15 @@ export default function Home() {
           </div>
         </aside>
 
+        {/* Resize handle */}
+        <div
+          onMouseDown={startResizing}
+          className="w-1 cursor-col-resize hover:bg-brand-blue/30 active:bg-brand-blue/50 transition-colors shrink-0"
+          title="Drag to resize"
+        />
+
         {/* Ticket detail */}
-        <main className="flex-1 bg-bg-subtle overflow-y-auto">
+        <main className="flex-1 bg-bg-subtle overflow-y-auto min-w-0">
           {selectedTicket ? (
             <TicketDetail
               ticket={selectedTicket}

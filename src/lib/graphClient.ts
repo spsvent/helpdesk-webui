@@ -37,12 +37,59 @@ export function getGraphClient(
   });
 }
 
-// Fetch all tickets
+// Archive threshold: 90 days
+const ARCHIVE_DAYS = 90;
+
+function getArchiveDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() - ARCHIVE_DAYS);
+  return date.toISOString();
+}
+
+// Fetch active tickets (excludes resolved/closed older than 90 days)
 export async function getTickets(client: Client): Promise<Ticket[]> {
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=100`;
+  // Fetch all tickets without server-side filtering (Status column not indexed)
+  // We'll filter client-side for better reliability
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
 
   const response: SharePointListResponse = await client.api(endpoint).get();
-  return response.value.map(mapToTicket);
+  const allTickets = response.value.map(mapToTicket);
+
+  // Filter client-side: show all active tickets + recently resolved/closed (last 90 days)
+  const archiveDate = new Date();
+  archiveDate.setDate(archiveDate.getDate() - ARCHIVE_DAYS);
+
+  return allTickets.filter((ticket) => {
+    const isResolved = ticket.status === "Resolved" || ticket.status === "Closed";
+    if (!isResolved) {
+      return true; // Always show active tickets
+    }
+    // For resolved/closed, only show if created within last 90 days
+    const createdDate = new Date(ticket.created);
+    return createdDate >= archiveDate;
+  });
+}
+
+// Fetch archived tickets (resolved/closed older than 90 days)
+export async function getArchivedTickets(client: Client): Promise<Ticket[]> {
+  // Fetch all tickets and filter for old resolved/closed ones
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
+
+  const response: SharePointListResponse = await client.api(endpoint).get();
+  const allTickets = response.value.map(mapToTicket);
+
+  // Filter to only include resolved/closed tickets older than 90 days
+  const archiveDate = new Date();
+  archiveDate.setDate(archiveDate.getDate() - ARCHIVE_DAYS);
+
+  return allTickets.filter((ticket) => {
+    const isResolved = ticket.status === "Resolved" || ticket.status === "Closed";
+    if (!isResolved) {
+      return false; // Not an archived ticket
+    }
+    const createdDate = new Date(ticket.created);
+    return createdDate < archiveDate;
+  });
 }
 
 // Fetch single ticket by ID
