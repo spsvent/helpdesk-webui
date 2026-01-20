@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -9,14 +9,26 @@ import { getGraphClient, getTickets } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
+import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+  const { permissions, loading: rbacLoading, canView } = useRBAC();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter tickets based on RBAC permissions
+  const visibleTickets = useMemo(() => {
+    if (!permissions || permissions.canSeeAllTickets) {
+      // Admins and support staff see all tickets
+      return tickets;
+    }
+    // Regular users only see tickets they have access to
+    return tickets.filter((ticket) => canView(ticket));
+  }, [tickets, permissions, canView]);
 
   // Handle login
   const handleLogin = async () => {
@@ -123,9 +135,28 @@ export default function Home() {
           >
             Help
           </Link>
-          <span className="text-sm text-text-secondary">
-            {accounts[0]?.name || accounts[0]?.username}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-text-secondary">
+              {accounts[0]?.name || accounts[0]?.username}
+            </span>
+            {permissions && (
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  permissions.role === "admin"
+                    ? "bg-purple-100 text-purple-800"
+                    : permissions.role === "support"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {permissions.role === "admin"
+                  ? "Admin"
+                  : permissions.role === "support"
+                  ? "Support"
+                  : "User"}
+              </span>
+            )}
+          </div>
           <button
             onClick={handleLogout}
             className="text-sm text-text-secondary hover:text-text-primary"
@@ -162,9 +193,13 @@ export default function Home() {
                   Try again
                 </button>
               </div>
+            ) : rbacLoading ? (
+              <div className="p-4 text-center text-text-secondary">
+                Loading permissions...
+              </div>
             ) : (
               <TicketList
-                tickets={tickets}
+                tickets={visibleTickets}
                 selectedId={selectedTicket?.id}
                 onSelect={setSelectedTicket}
               />

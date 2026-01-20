@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication, EventType, AuthenticationResult } from "@azure/msal-browser";
 import { msalConfig } from "@/lib/msalConfig";
+import { RBACProvider } from "@/contexts/RBACContext";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -74,7 +75,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-bg-subtle min-h-screen">
         <MsalProvider instance={msalInstance}>
-          {children}
+          <RBACProvider>
+            {children}
+          </RBACProvider>
         </MsalProvider>
       </body>
     </html>

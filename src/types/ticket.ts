@@ -9,6 +9,8 @@ export interface Ticket {
   status: "New" | "In Progress" | "On Hold" | "Resolved" | "Closed";
   location?: string;
   problemType: string;
+  problemTypeSub?: string;
+  problemTypeSub2?: string;
   assignedTo?: User;
   requester: User;
   originalRequester?: string;  // For migrated tickets - original requester email
@@ -71,6 +73,8 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     status: (fields.Status as Ticket["status"]) || "New",
     location: fields.Location as string | undefined,
     problemType: (fields.ProblemType as string) || "Other",
+    problemTypeSub: fields.ProblemTypeSub as string | undefined,
+    problemTypeSub2: fields.ProblemTypeSub2 as string | undefined,
     assignedTo: fields.AssignedTo ? {
       displayName: (fields.AssignedTo as Record<string, unknown>)?.LookupValue as string || "",
       email: "",

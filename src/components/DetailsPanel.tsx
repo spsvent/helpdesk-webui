@@ -9,6 +9,7 @@ import UserAvatar from "./UserAvatar";
 interface DetailsPanelProps {
   ticket: Ticket;
   onUpdate: (ticket: Ticket) => void;
+  canEdit?: boolean;
 }
 
 const STATUS_OPTIONS: Ticket["status"][] = [
@@ -31,7 +32,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
+export default function DetailsPanel({ ticket, onUpdate, canEdit = true }: DetailsPanelProps) {
   const { instance, accounts } = useMsal();
   const [status, setStatus] = useState(ticket.status);
   const [priority, setPriority] = useState(ticket.priority);
@@ -78,17 +79,21 @@ export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
         <label className="block text-xs text-text-secondary mb-1.5">
           Status
         </label>
-        <select
-          value={status}
-          onChange={(e) => handleStatusChange(e.target.value as Ticket["status"])}
-          className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        {canEdit ? (
+          <select
+            value={status}
+            onChange={(e) => handleStatusChange(e.target.value as Ticket["status"])}
+            className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-sm">{status}</span>
+        )}
       </div>
 
       {/* Priority */}
@@ -96,21 +101,25 @@ export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
         <label className="block text-xs text-text-secondary mb-1.5">
           Priority
         </label>
-        <select
-          value={priority}
-          onChange={(e) => handlePriorityChange(e.target.value as Ticket["priority"])}
-          className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
-        >
-          {PRIORITY_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        {canEdit ? (
+          <select
+            value={priority}
+            onChange={(e) => handlePriorityChange(e.target.value as Ticket["priority"])}
+            className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          >
+            {PRIORITY_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-sm">{priority}</span>
+        )}
       </div>
 
       {/* Save button */}
-      {hasChanges && (
+      {hasChanges && canEdit && (
         <button
           onClick={handleSave}
           disabled={saving}
@@ -161,10 +170,30 @@ export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
       {/* Problem Type */}
       <div>
         <label className="block text-xs text-text-secondary mb-1">
-          Problem Type
+          Department
         </label>
         <span className="text-sm">{ticket.problemType}</span>
       </div>
+
+      {/* Sub-Category */}
+      {ticket.problemTypeSub && (
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Sub-Category
+          </label>
+          <span className="text-sm">{ticket.problemTypeSub}</span>
+        </div>
+      )}
+
+      {/* Specific Type */}
+      {ticket.problemTypeSub2 && (
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Specific Type
+          </label>
+          <span className="text-sm">{ticket.problemTypeSub2}</span>
+        </div>
+      )}
 
       {/* Location */}
       {ticket.location && (

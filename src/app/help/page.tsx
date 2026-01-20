@@ -553,6 +553,157 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "permissions",
+    title: "Permissions & Visibility",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Help Desk uses role-based access control (RBAC) to determine what
+          tickets you can see and edit based on your role and group memberships.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">User Roles</h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-start gap-3 p-3 border border-purple-200 bg-purple-50 rounded-lg">
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 shrink-0">
+              Admin
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">Full access to all tickets</p>
+              <p className="text-gray-600 mt-1">Can view, edit, and delete any ticket. See all details.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 shrink-0">
+              Support
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">Department-based access</p>
+              <p className="text-gray-600 mt-1">Can view all tickets. Can edit tickets assigned to their department.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 shrink-0">
+              User
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">Limited access</p>
+              <p className="text-gray-600 mt-1">Can view own tickets and tickets from team members. Can add comments to own tickets.</p>
+            </div>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Team-Based Visibility</h4>
+        <p>
+          Regular users can see tickets created by other members of their Entra ID groups.
+          This allows team members to view and collaborate on each other&apos;s requests.
+        </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-3">
+          <p className="text-sm text-blue-800">
+            <strong>Example:</strong> If you and a coworker are both in the &quot;Marketing Team&quot;
+            group, you&apos;ll be able to see each other&apos;s tickets even though you&apos;re both regular users.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Read-Only Mode</h4>
+        <p>
+          If you see a <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">Read only</span> badge
+          on a ticket, it means you can view the ticket but don&apos;t have permission to edit its status or priority.
+          You may still be able to add comments depending on your role.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Your Ticket Badge</h4>
+        <p>
+          Tickets you created will show a <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">Your ticket</span> badge.
+          You always have the ability to add comments to your own tickets.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "admin-rbac",
+    title: "Admin: Managing Visibility Groups",
+    content: (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admin Only:</strong> This section is for administrators who manage
+            which groups can share ticket visibility.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">How Visibility Groups Work</h4>
+        <p>
+          The Help Desk uses a SharePoint list called <strong>RBACGroups</strong> to control
+          which Entra ID groups are considered for ticket visibility sharing. Only groups
+          in this list will allow members to see each other&apos;s tickets.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Adding a New Visibility Group</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Open the{" "}
+            <a
+              href="https://skyparksv.sharepoint.com/sites/helpdesk/Lists/RBACGroups"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-blue hover:underline"
+            >
+              RBACGroups SharePoint List
+            </a>
+          </li>
+          <li>Click <strong>+ New</strong> to add a new item</li>
+          <li>Fill in the following fields:</li>
+        </ol>
+
+        <div className="ml-8 mt-3 space-y-3 bg-gray-50 p-4 rounded-lg">
+          <p><strong>Title:</strong> A friendly name for the group (e.g., &quot;Marketing Team&quot;)</p>
+          <p><strong>Group ID:</strong> The Entra ID group GUID (find this in Azure Portal → Groups)</p>
+          <p><strong>Group Type:</strong> Select <strong>&quot;visibility&quot;</strong> for team ticket sharing</p>
+          <p><strong>Is Active:</strong> Set to <strong>Yes</strong> to enable</p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Group Types</h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded shrink-0">visibility</span>
+            <span className="text-sm">Members can see each other&apos;s tickets (for regular users/teams)</span>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded shrink-0">department</span>
+            <span className="text-sm">Support staff group - can edit tickets in their department</span>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded shrink-0">admin</span>
+            <span className="text-sm">Full admin access to all tickets</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Finding a Group ID</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">Azure Portal</a></li>
+          <li>Navigate to <strong>Groups</strong></li>
+          <li>Search for and select the group</li>
+          <li>Copy the <strong>Object ID</strong> (a GUID like &quot;146e05ff-0c79-4bf3-b22f-1777838cf9c1&quot;)</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">When Changes Take Effect</h4>
+        <p>
+          Changes to the RBACGroups list take effect within <strong>5 minutes</strong> due to caching.
+          Users may need to sign out and back in, or wait for the cache to refresh.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Important:</strong> Admin and support staff tickets are excluded from
+            group-based visibility. If an admin creates a ticket, regular team members
+            won&apos;t see it through group sharing (only the admin themselves or other admins/support can see it).
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "tips",
     title: "Tips & Best Practices",
     content: (

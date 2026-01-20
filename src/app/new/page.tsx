@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { getGraphClient, createTicket, CreateTicketData } from "@/lib/graphClient";
+import {
+  getProblemTypes,
+  getProblemTypeSubs,
+  getProblemTypeSub2s,
+  hasSubCategories,
+  hasSub2Categories,
+} from "@/lib/categoryConfig";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -15,17 +22,6 @@ const PRIORITY_OPTIONS = [
   { value: "Normal", label: "Normal", description: "Standard priority, address within normal workflow" },
   { value: "High", label: "High", description: "Important issue requiring prompt attention" },
   { value: "Urgent", label: "Urgent", description: "Drop everything - full company resources, critical business impact" },
-] as const;
-
-const PROBLEM_TYPE_OPTIONS = [
-  "Tech",
-  "Operations",
-  "Marketing",
-  "Grounds Keeping",
-  "HR",
-  "Customer Service",
-  "Joshua Weldon",
-  "Other",
 ] as const;
 
 const LOCATION_OPTIONS = [
@@ -81,12 +77,45 @@ export default function NewTicketPage() {
     category: "Request",
     priority: "Normal",
     problemType: "Tech",
+    problemTypeSub: "",
+    problemTypeSub2: "",
     location: "",
   });
+
+  // Cascading dropdown options
+  const [problemTypeSubs, setProblemTypeSubs] = useState<string[]>([]);
+  const [problemTypeSub2s, setProblemTypeSub2s] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUrgentTooltip, setShowUrgentTooltip] = useState(false);
+
+  // Update sub-category options when problemType changes
+  useEffect(() => {
+    const subs = getProblemTypeSubs(formData.problemType);
+    setProblemTypeSubs(subs);
+    // Reset sub selections when parent changes
+    setFormData((prev) => ({
+      ...prev,
+      problemTypeSub: subs.length > 0 ? subs[0] : "",
+      problemTypeSub2: "",
+    }));
+  }, [formData.problemType]);
+
+  // Update sub2 options when problemTypeSub changes
+  useEffect(() => {
+    if (formData.problemType && formData.problemTypeSub) {
+      const sub2s = getProblemTypeSub2s(formData.problemType, formData.problemTypeSub);
+      setProblemTypeSub2s(sub2s);
+      // Reset sub2 selection when parent changes
+      setFormData((prev) => ({
+        ...prev,
+        problemTypeSub2: "",
+      }));
+    } else {
+      setProblemTypeSub2s([]);
+    }
+  }, [formData.problemType, formData.problemTypeSub]);
 
   const handleLogin = async () => {
     try {
@@ -111,6 +140,12 @@ export default function NewTicketPage() {
 
     if (!formData.description.trim()) {
       setError("Please describe your issue");
+      return;
+    }
+
+    // Validate that sub-category is selected if available
+    if (hasSubCategories(formData.problemType) && !formData.problemTypeSub) {
+      setError("Please select a sub-category");
       return;
     }
 
@@ -181,6 +216,9 @@ export default function NewTicketPage() {
       </div>
     );
   }
+
+  const showProblemTypeSub = hasSubCategories(formData.problemType);
+  const showProblemTypeSub2 = showProblemTypeSub && hasSub2Categories(formData.problemType, formData.problemTypeSub || "");
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
@@ -259,39 +297,43 @@ export default function NewTicketPage() {
                 />
               </div>
 
-              {/* Category and Problem Type row */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Category */}
-                <div>
-                  <label
-                    htmlFor="category"
-                    className="block text-sm font-medium text-text-primary mb-1"
-                  >
-                    Category
-                  </label>
-                  <select
-                    id="category"
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                  >
-                    {CATEGORY_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    Request = new feature/access; Problem = something is broken
-                  </p>
+              {/* Category */}
+              <div>
+                <label
+                  htmlFor="category"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
+                  Category
+                </label>
+                <select
+                  id="category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                >
+                  {CATEGORY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Request = new feature/access; Problem = something is broken
+                </p>
+              </div>
+
+              {/* Department (Problem Type) - 3-level cascading dropdowns */}
+              <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-sm font-medium text-text-primary">
+                  Department & Category <span className="text-red-500">*</span>
                 </div>
 
-                {/* Problem Type */}
+                {/* Level 1: Problem Type (Department) */}
                 <div>
                   <label
                     htmlFor="problemType"
-                    className="block text-sm font-medium text-text-primary mb-1"
+                    className="block text-xs font-medium text-text-secondary mb-1"
                   >
                     Department
                   </label>
@@ -300,18 +342,67 @@ export default function NewTicketPage() {
                     name="problemType"
                     value={formData.problemType}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
                   >
-                    {PROBLEM_TYPE_OPTIONS.map((opt) => (
+                    {getProblemTypes().map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    Which team should handle this?
-                  </p>
                 </div>
+
+                {/* Level 2: Problem Type Sub */}
+                {showProblemTypeSub && (
+                  <div>
+                    <label
+                      htmlFor="problemTypeSub"
+                      className="block text-xs font-medium text-text-secondary mb-1"
+                    >
+                      Sub-Category <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="problemTypeSub"
+                      name="problemTypeSub"
+                      value={formData.problemTypeSub}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
+                      required
+                    >
+                      {problemTypeSubs.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Level 3: Problem Type Sub 2 (optional) */}
+                {showProblemTypeSub2 && (
+                  <div>
+                    <label
+                      htmlFor="problemTypeSub2"
+                      className="block text-xs font-medium text-text-secondary mb-1"
+                    >
+                      Specific Type <span className="text-text-secondary">(optional)</span>
+                    </label>
+                    <select
+                      id="problemTypeSub2"
+                      name="problemTypeSub2"
+                      value={formData.problemTypeSub2}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
+                    >
+                      <option value="">Select...</option>
+                      {problemTypeSub2s.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Priority */}
@@ -378,7 +469,7 @@ export default function NewTicketPage() {
                               </button>
                               {showUrgentTooltip && (
                                 <div className="absolute left-6 top-0 z-10 w-64 p-3 bg-red-900 text-white text-xs rounded-lg shadow-lg">
-                                  <p className="font-bold mb-1">⚠️ Use Sparingly!</p>
+                                  <p className="font-bold mb-1">Use Sparingly!</p>
                                   <p>
                                     Urgent means drop everything. Full company resources
                                     will be redirected to this issue. This should only be

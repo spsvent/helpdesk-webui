@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment } from "@/types/ticket";
 import { getGraphClient, getComments, addComment } from "@/lib/graphClient";
+import { useRBAC } from "@/contexts/RBACContext";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
@@ -36,9 +37,14 @@ function getPriorityClass(priority: Ticket["priority"]): string {
 
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const { instance, accounts } = useMsal();
+  const { canEdit, canComment, isOwn, permissions } = useRBAC();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const canEditThisTicket = canEdit(ticket);
+  const canCommentOnThisTicket = canComment(ticket);
+  const isOwnTicket = isOwn(ticket);
 
   // Fetch comments when ticket changes
   useEffect(() => {
@@ -101,10 +107,24 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
             </div>
             <div className="flex items-center gap-4 text-sm text-text-secondary">
               <span>#{ticket.id}</span>
-              <span>{ticket.problemType}</span>
+              <span>
+                {ticket.problemType}
+                {ticket.problemTypeSub && ` / ${ticket.problemTypeSub}`}
+                {ticket.problemTypeSub2 && ` / ${ticket.problemTypeSub2}`}
+              </span>
               <span className={getPriorityClass(ticket.priority)}>
                 {ticket.priority.toUpperCase()}
               </span>
+              {isOwnTicket && (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                  Your ticket
+                </span>
+              )}
+              {!canEditThisTicket && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                  Read only
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -124,12 +144,18 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           </div>
 
           {/* Comment input at bottom */}
-          <div className="border-t border-border bg-white p-4">
-            <CommentInput
-              onSubmit={handleAddComment}
-              disabled={submitting}
-            />
-          </div>
+          {canCommentOnThisTicket ? (
+            <div className="border-t border-border bg-white p-4">
+              <CommentInput
+                onSubmit={handleAddComment}
+                disabled={submitting}
+              />
+            </div>
+          ) : (
+            <div className="border-t border-border bg-gray-50 p-4 text-center text-sm text-text-secondary">
+              You don&apos;t have permission to add comments to this ticket.
+            </div>
+          )}
         </div>
 
         {/* Details sidebar */}
@@ -137,6 +163,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           <DetailsPanel
             ticket={ticket}
             onUpdate={onUpdate}
+            canEdit={canEditThisTicket}
           />
         </aside>
       </div>

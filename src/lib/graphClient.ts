@@ -28,13 +28,10 @@ export function getGraphClient(
         });
         done(null, response.accessToken);
       } catch (error) {
-        // Fallback to interactive if silent fails
-        try {
-          const response = await msalInstance.acquireTokenPopup(graphScopes);
-          done(null, response.accessToken);
-        } catch (popupError) {
-          done(popupError as Error, null);
-        }
+        // Don't redirect - just fail gracefully
+        // User can sign out and back in to get new token with updated scopes
+        console.error("Token acquisition failed. Try signing out and back in.", error);
+        done(error as Error, null);
       }
     },
   });
@@ -113,6 +110,8 @@ export interface CreateTicketData {
   category: "Request" | "Problem";
   priority: "Low" | "Normal" | "High" | "Urgent";
   problemType: string;
+  problemTypeSub?: string;
+  problemTypeSub2?: string;
   location?: string;
 }
 
@@ -130,15 +129,23 @@ export async function createTicket(
     Category: ticketData.category,
     Priority: ticketData.priority,
     ProblemType: ticketData.problemType,
-    Location: ticketData.location || "",
     Status: "New",
     SupportChannel: "Web Form",
   };
 
-  // Set Requester if email provided (uses LookupId format for Person fields)
-  if (requesterEmail) {
-    fields.RequesterLookupId = requesterEmail;
+  // Only add optional fields if they have values
+  if (ticketData.problemTypeSub) {
+    fields.ProblemTypeSub = ticketData.problemTypeSub;
   }
+  if (ticketData.problemTypeSub2) {
+    fields.ProblemTypeSub2 = ticketData.problemTypeSub2;
+  }
+  if (ticketData.location) {
+    fields.Location = ticketData.location;
+  }
+
+  // Note: Requester is automatically set to the authenticated user by SharePoint (Author/createdBy field)
+  // The requesterEmail parameter is kept for potential future use (e.g., submitting on behalf of someone)
 
   const item = await client.api(endpoint).post({ fields });
 
