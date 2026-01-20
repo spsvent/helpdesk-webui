@@ -11,6 +11,8 @@ export interface Ticket {
   problemType: string;
   assignedTo?: User;
   requester: User;
+  originalRequester?: string;  // For migrated tickets - original requester email
+  originalAssignedTo?: string; // For migrated tickets - original assignee email
   dueDate?: string;
   created: string;
   modified: string;
@@ -77,6 +79,8 @@ export function mapToTicket(item: SharePointListItem): Ticket {
       displayName: (fields.Requester as Record<string, unknown>)?.LookupValue as string || item.createdBy.user.displayName,
       email: item.createdBy.user.email || "",
     },
+    originalRequester: fields.OriginalRequester as string | undefined,
+    originalAssignedTo: fields.OriginalAssignedTo as string | undefined,
     dueDate: fields.DueDate as string | undefined,
     created: item.createdDateTime,
     modified: item.lastModifiedDateTime,

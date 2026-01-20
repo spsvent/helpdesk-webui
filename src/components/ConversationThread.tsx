@@ -95,12 +95,35 @@ export default function ConversationThread({
   comments,
   loading,
 }: ConversationThreadProps) {
+  // For migrated tickets, use originalRequester if available
+  const descriptionAuthor = ticket.originalRequester
+    ? { displayName: ticket.originalRequester.split('<')[0].trim() || ticket.originalRequester, email: '' }
+    : ticket.requester;
+
+  // Check if first comment is the "initial submission" from SharePoint App (Plumsail behavior)
+  // If description is empty, use that comment as the description
+  const firstComment = comments[0];
+  const isFirstCommentInitialSubmission = firstComment && !ticket.description && (
+    firstComment.originalAuthor === "SharePoint App" ||
+    firstComment.createdBy.displayName === "SharePoint App"
+  );
+
+  // Use first comment as description if it's the initial submission
+  const effectiveDescription = isFirstCommentInitialSubmission
+    ? firstComment.commentBody
+    : ticket.description;
+
+  // Filter out the first comment if we're using it as description
+  const displayComments = isFirstCommentInitialSubmission
+    ? comments.slice(1)
+    : comments;
+
   return (
     <div className="space-y-4">
       {/* Description as first "comment" */}
       <CommentCard
-        author={ticket.requester}
-        content={ticket.description || "<em>No description provided</em>"}
+        author={descriptionAuthor}
+        content={effectiveDescription || "<em>No description provided</em>"}
         timestamp={ticket.created}
         isDescription={true}
       />
@@ -113,13 +136,13 @@ export default function ConversationThread({
       )}
 
       {/* Comments */}
-      {!loading && comments.length === 0 && (
+      {!loading && displayComments.length === 0 && (
         <div className="text-center py-4 text-text-secondary">
           No comments yet. Be the first to add one.
         </div>
       )}
 
-      {comments.map((comment) => {
+      {displayComments.map((comment) => {
         // For migrated comments, use original author/date if available
         const author = comment.originalAuthor
           ? { displayName: comment.originalAuthor.split('<')[0].trim(), email: '' }

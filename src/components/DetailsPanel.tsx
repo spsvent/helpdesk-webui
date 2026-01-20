@@ -129,8 +129,8 @@ export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
         </label>
         {ticket.assignedTo ? (
           <div className="flex items-center gap-2">
-            <UserAvatar name={ticket.assignedTo.displayName} size="sm" />
-            <span className="text-sm">{ticket.assignedTo.displayName}</span>
+            <UserAvatar name={ticket.originalAssignedTo?.split('<')[0].trim() || ticket.assignedTo.displayName} size="sm" />
+            <span className="text-sm">{ticket.originalAssignedTo || ticket.assignedTo.displayName}</span>
           </div>
         ) : (
           <span className="text-sm text-text-secondary">Unassigned</span>
@@ -143,8 +143,8 @@ export default function DetailsPanel({ ticket, onUpdate }: DetailsPanelProps) {
           Requester
         </label>
         <div className="flex items-center gap-2">
-          <UserAvatar name={ticket.requester.displayName} size="sm" />
-          <span className="text-sm">{ticket.requester.displayName}</span>
+          <UserAvatar name={ticket.originalRequester?.split('<')[0].trim() || ticket.requester.displayName} size="sm" />
+          <span className="text-sm">{ticket.originalRequester || ticket.requester.displayName}</span>
         </div>
       </div>
 
