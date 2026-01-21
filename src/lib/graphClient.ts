@@ -341,8 +341,11 @@ export async function searchUsers(
     return [];
   }
 
+  // Escape single quotes for OData filter
+  const escapedQuery = searchQuery.replace(/'/g, "''");
+
   // Search by displayName, mail, or userPrincipalName
-  const filter = `startswith(displayName,'${searchQuery}') or startswith(mail,'${searchQuery}') or startswith(userPrincipalName,'${searchQuery}')`;
+  const filter = `startswith(displayName,'${escapedQuery}') or startswith(mail,'${escapedQuery}') or startswith(userPrincipalName,'${escapedQuery}')`;
 
   const endpoint = `/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,jobTitle,department,userPrincipalName&$top=${top}&$orderby=displayName`;
 

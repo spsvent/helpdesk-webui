@@ -46,7 +46,7 @@ export const graphScopes = {
   scopes: [
     "User.Read",
     "Sites.ReadWrite.All",
-    "User.ReadBasic.All",
+    "User.Read.All", // For searching users in the organization
     "GroupMember.Read.All", // For RBAC - reading user's group memberships
     "Mail.Send", // For sending approval notification emails
   ],
