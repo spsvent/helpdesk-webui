@@ -160,6 +160,7 @@ export interface CreateTicketData {
   problemTypeSub?: string;
   problemTypeSub2?: string;
   location?: string;
+  assigneeEmail?: string; // Auto-assignment target
 }
 
 export async function createTicket(
@@ -191,6 +192,13 @@ export async function createTicket(
     fields.Location = ticketData.location;
   }
 
+  // Auto-assignment: store the assignee email in OriginalAssignedTo field
+  // SharePoint Person field lookup requires the user to exist in the site's user info list
+  // Using OriginalAssignedTo as a text field is more reliable for auto-assignment
+  if (ticketData.assigneeEmail) {
+    fields.OriginalAssignedTo = ticketData.assigneeEmail;
+  }
+
   // Note: Requester is automatically set to the authenticated user by SharePoint (Author/createdBy field)
   // The requesterEmail parameter is kept for potential future use (e.g., submitting on behalf of someone)
 
@@ -213,4 +221,258 @@ export async function getUserPhoto(client: Client, userId?: string): Promise<str
   } catch {
     return null;
   }
+}
+
+// ============================================
+// Approval Workflow Functions
+// ============================================
+
+// Request approval on a ticket (sets status to Pending)
+export async function requestApproval(
+  client: Client,
+  ticketId: string,
+  requesterName: string
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+
+  const item = await client.api(endpoint).patch({
+    fields: {
+      ApprovalStatus: "Pending",
+      ApprovalRequestedDate: new Date().toISOString(),
+    },
+  });
+
+  return mapToTicket(item);
+}
+
+// Process approval decision (approve/deny/request changes)
+export async function processApprovalDecision(
+  client: Client,
+  ticketId: string,
+  decision: "Approved" | "Denied" | "Changes Requested",
+  approverName: string,
+  notes?: string
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+
+  const fields: Record<string, unknown> = {
+    ApprovalStatus: decision,
+    ApprovalDate: new Date().toISOString(),
+  };
+
+  if (notes) {
+    fields.ApprovalNotes = notes;
+  }
+
+  const item = await client.api(endpoint).patch({ fields });
+
+  return mapToTicket(item);
+}
+
+// Get count of pending approvals (for header badge)
+export async function getPendingApprovalsCount(client: Client): Promise<number> {
+  // Fetch all tickets and count pending approvals client-side
+  // (ApprovalStatus column may not be indexed)
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500`;
+
+  const response: SharePointListResponse = await client.api(endpoint).get();
+  const pendingCount = response.value.filter(
+    (item) => (item.fields as Record<string, unknown>).ApprovalStatus === "Pending"
+  ).length;
+
+  return pendingCount;
+}
+
+// Send email notification via Graph API
+export async function sendEmail(
+  client: Client,
+  recipientEmail: string,
+  subject: string,
+  htmlContent: string
+): Promise<void> {
+  const endpoint = "/me/sendMail";
+
+  await client.api(endpoint).post({
+    message: {
+      subject,
+      body: {
+        contentType: "HTML",
+        content: htmlContent,
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: recipientEmail,
+          },
+        },
+      ],
+    },
+    saveToSentItems: true,
+  });
+}
+
+// ============================================
+// User/Group Search Functions
+// ============================================
+
+export interface OrgUser {
+  id: string;
+  displayName: string;
+  email: string;
+  jobTitle?: string;
+  department?: string;
+  userPrincipalName: string;
+}
+
+export interface OrgGroup {
+  id: string;
+  displayName: string;
+  description?: string;
+  mail?: string;
+}
+
+// Search users in the organization
+export async function searchUsers(
+  client: Client,
+  searchQuery: string,
+  top: number = 20
+): Promise<OrgUser[]> {
+  if (!searchQuery || searchQuery.length < 2) {
+    return [];
+  }
+
+  // Search by displayName, mail, or userPrincipalName
+  const filter = `startswith(displayName,'${searchQuery}') or startswith(mail,'${searchQuery}') or startswith(userPrincipalName,'${searchQuery}')`;
+
+  const endpoint = `/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,jobTitle,department,userPrincipalName&$top=${top}&$orderby=displayName`;
+
+  try {
+    const response = await client.api(endpoint).get();
+    return (response.value || []).map((user: Record<string, unknown>) => ({
+      id: user.id as string,
+      displayName: user.displayName as string,
+      email: (user.mail as string) || (user.userPrincipalName as string) || "",
+      jobTitle: user.jobTitle as string | undefined,
+      department: user.department as string | undefined,
+      userPrincipalName: user.userPrincipalName as string,
+    }));
+  } catch (error) {
+    console.error("Failed to search users:", error);
+    return [];
+  }
+}
+
+// Search groups in the organization (Microsoft 365 groups and security groups)
+export async function searchGroups(
+  client: Client,
+  searchQuery: string,
+  top: number = 10
+): Promise<OrgGroup[]> {
+  if (!searchQuery || searchQuery.length < 2) {
+    return [];
+  }
+
+  const filter = `startswith(displayName,'${searchQuery}')`;
+  const endpoint = `/groups?$filter=${encodeURIComponent(filter)}&$select=id,displayName,description,mail&$top=${top}&$orderby=displayName`;
+
+  try {
+    const response = await client.api(endpoint).get();
+    return (response.value || []).map((group: Record<string, unknown>) => ({
+      id: group.id as string,
+      displayName: group.displayName as string,
+      description: group.description as string | undefined,
+      mail: group.mail as string | undefined,
+    }));
+  } catch (error) {
+    console.error("Failed to search groups:", error);
+    return [];
+  }
+}
+
+// Search both users and groups
+export async function searchUsersAndGroups(
+  client: Client,
+  searchQuery: string
+): Promise<{ users: OrgUser[]; groups: OrgGroup[] }> {
+  const [users, groups] = await Promise.all([
+    searchUsers(client, searchQuery),
+    searchGroups(client, searchQuery),
+  ]);
+  return { users, groups };
+}
+
+// Get user by email (for looking up assignees)
+export async function getUserByEmail(
+  client: Client,
+  email: string
+): Promise<OrgUser | null> {
+  try {
+    const endpoint = `/users/${encodeURIComponent(email)}?$select=id,displayName,mail,jobTitle,department,userPrincipalName`;
+    const user = await client.api(endpoint).get();
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.mail || user.userPrincipalName || "",
+      jobTitle: user.jobTitle,
+      department: user.department,
+      userPrincipalName: user.userPrincipalName,
+    };
+  } catch (error) {
+    console.error("Failed to get user by email:", error);
+    return null;
+  }
+}
+
+// Get SharePoint user lookup ID for a user (needed for assignee field)
+export async function getSharePointUserLookupId(
+  client: Client,
+  userEmail: string
+): Promise<number | null> {
+  try {
+    // First, ensure the user exists in the SharePoint site's user info list
+    const endpoint = `/sites/${SITE_ID}/lists('User Information List')/items?$filter=fields/EMail eq '${userEmail}'&$select=id,fields`;
+    const response = await client.api(endpoint).get();
+
+    if (response.value && response.value.length > 0) {
+      return parseInt(response.value[0].id);
+    }
+
+    // User not found in site - they may need to be added
+    return null;
+  } catch (error) {
+    console.error("Failed to get SharePoint user lookup ID:", error);
+    return null;
+  }
+}
+
+// Update ticket with extended fields (for admin edits)
+export async function updateTicketFields(
+  client: Client,
+  ticketId: string,
+  updates: Partial<{
+    Status: string;
+    Priority: string;
+    Category: string;
+    ProblemType: string;
+    ProblemTypeSub: string;
+    ProblemTypeSub2: string;
+    AssignedToLookupId: number;
+    Location: string;
+  }>
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+
+  // Filter out undefined values
+  const filteredUpdates: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      filteredUpdates[key] = value;
+    }
+  }
+
+  const item = await client.api(endpoint).patch({
+    fields: filteredUpdates,
+  });
+
+  return mapToTicket(item);
 }

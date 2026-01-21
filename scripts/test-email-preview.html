@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Approval Email Preview</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #1e3a5f; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
+    .ticket-info { background: white; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #e5e7eb; }
+    .ticket-info h3 { margin: 0 0 8px 0; color: #1e3a5f; }
+    .ticket-info p { margin: 4px 0; color: #6b7280; }
+    .label { font-weight: 600; color: #374151; }
+    .actions { text-align: center; margin: 24px 0; }
+    .btn { display: inline-block; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 0 8px 8px 8px; }
+    .btn-approve { background: #10b981; color: white; }
+    .btn-deny { background: #ef4444; color: white; }
+    .btn-changes { background: #f59e0b; color: white; }
+    .btn-view { background: #1e3a5f; color: white; }
+    .footer { text-align: center; padding: 16px; color: #6b7280; font-size: 14px; border-top: 1px solid #e5e7eb; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #d1fae5; color: #065f46; }
+    .badge-denied { background: #fee2e2; color: #991b1b; }
+    .badge-changes { background: #ffedd5; color: #9a3412; }
+
+    /* Preview controls */
+    .preview-controls { background: #f3f4f6; padding: 16px; margin-bottom: 20px; border-radius: 8px; }
+    .preview-controls h2 { margin: 0 0 12px 0; }
+    .preview-controls button { margin-right: 8px; padding: 8px 16px; cursor: pointer; }
+    .preview-controls button.active { background: #1e3a5f; color: white; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="preview-controls">
+    <h2>Email Preview - Select Type:</h2>
+    <button class="active" onclick="showEmail('request')">Approval Request</button>
+    <button onclick="showEmail('approved')">Approved</button>
+    <button onclick="showEmail('denied')">Denied</button>
+    <button onclick="showEmail('changes')">Changes Requested</button>
+  </div>
+
+  <div id="email-container">
+    <!-- Email content will be injected here -->
+  </div>
+
+  <script>
+    const appUrl = 'https://lively-coast-062dfc51e.1.azurestaticapps.net';
+
+    const sampleTicket = {
+      id: '42',
+      title: 'Request for new software license - Adobe Creative Suite',
+      category: 'Request',
+      priority: 'Normal',
+      status: 'In Progress',
+      problemType: 'Tech',
+      problemTypeSub: 'Software',
+      requester: 'John Smith',
+      description: 'We need Adobe Creative Suite licenses for the marketing team to create promotional materials for the upcoming product launch. This includes Photoshop, Illustrator, and InDesign.'
+    };
+
+    function showEmail(type) {
+      // Update button styles
+      document.querySelectorAll('.preview-controls button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+
+      let html = '';
+
+      if (type === 'request') {
+        html = generateRequestEmail();
+      } else {
+        html = generateDecisionEmail(type);
+      }
+
+      document.getElementById('email-container').innerHTML = html;
+    }
+
+    function generateRequestEmail() {
+      const approveUrl = `${appUrl}?ticket=${sampleTicket.id}&action=approve`;
+      const denyUrl = `${appUrl}?ticket=${sampleTicket.id}&action=deny`;
+      const changesUrl = `${appUrl}?ticket=${sampleTicket.id}&action=changes`;
+      const viewUrl = `${appUrl}?ticket=${sampleTicket.id}`;
+
+      return `
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0; font-size: 24px;">Approval Request</h1>
+            <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+          </div>
+          <div class="content">
+            <p><strong>Jane Doe (Support Staff)</strong> has requested your approval on a support ticket.</p>
+
+            <div class="ticket-info">
+              <h3>Ticket #${sampleTicket.id}: ${sampleTicket.title}</h3>
+              <p><span class="label">Category:</span> ${sampleTicket.category}</p>
+              <p><span class="label">Priority:</span> ${sampleTicket.priority}</p>
+              <p><span class="label">Status:</span> ${sampleTicket.status}</p>
+              <p><span class="label">Problem Type:</span> ${sampleTicket.problemType} > ${sampleTicket.problemTypeSub}</p>
+              <p><span class="label">Requester:</span> ${sampleTicket.requester}</p>
+              <p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${sampleTicket.description}</p>
+            </div>
+
+            <div class="actions">
+              <a href="${approveUrl}" class="btn btn-approve">Approve</a>
+              <a href="${denyUrl}" class="btn btn-deny">Deny</a>
+              <a href="${changesUrl}" class="btn btn-changes">Request Changes</a>
+            </div>
+
+            <p style="text-align: center; color: #6b7280; font-size: 14px;">
+              Or <a href="${viewUrl}" style="color: #1e3a5f;">view the full ticket</a> in the Help Desk
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from SkyPark Help Desk.</p>
+            <p>Please do not reply directly to this email.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function generateDecisionEmail(decision) {
+      const viewUrl = `${appUrl}?ticket=${sampleTicket.id}`;
+
+      const decisions = {
+        approved: { label: 'Approved', badge: 'badge-approved', text: 'has been approved', notes: '' },
+        denied: { label: 'Denied', badge: 'badge-denied', text: 'has been denied', notes: 'Budget constraints do not allow for this purchase at this time. Please resubmit in Q2 when new budget is available.' },
+        changes: { label: 'Changes Requested', badge: 'badge-changes', text: 'requires changes', notes: 'Please provide a detailed cost breakdown and justification for why the standard licenses won\'t work.' }
+      };
+
+      const d = decisions[decision];
+
+      return `
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0; font-size: 24px;">Approval Decision</h1>
+            <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+          </div>
+          <div class="content">
+            <p style="text-align: center; margin-bottom: 16px;">
+              <span class="badge ${d.badge}">${d.label}</span>
+            </p>
+
+            <p>Your approval request for ticket <strong>#${sampleTicket.id}</strong> ${d.text}.</p>
+
+            <div class="ticket-info">
+              <h3>${sampleTicket.title}</h3>
+              <p><span class="label">Decision by:</span> Mike Johnson (General Manager)</p>
+              <p><span class="label">Decision:</span> ${d.label}</p>
+              ${d.notes ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Notes:</span><br>${d.notes}</p>` : ''}
+            </div>
+
+            <div class="actions">
+              <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from SkyPark Help Desk.</p>
+            <p>Please do not reply directly to this email.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    // Show request email by default
+    showEmail('request');
+  </script>
+</body>
+</html>

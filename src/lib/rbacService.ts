@@ -377,3 +377,39 @@ export function hasOnlySubtypeAccess(
     (r) => r.problemType === problemType
   );
 }
+
+// ============================================
+// Approval Workflow Permission Functions
+// ============================================
+
+/**
+ * Check if user can request approval on a ticket
+ * - Only support staff can request approval
+ * - Cannot request while already pending
+ * - Must be able to edit the ticket
+ */
+export function canRequestApproval(
+  permissions: UserPermissions,
+  ticket: Ticket
+): boolean {
+  // Only support staff can request approval
+  if (permissions.role !== "support") {
+    return false;
+  }
+
+  // Cannot request if already pending approval
+  if (ticket.approvalStatus === "Pending") {
+    return false;
+  }
+
+  // Must be able to edit the ticket
+  return canEditTicket(permissions, ticket);
+}
+
+/**
+ * Check if user can approve/deny tickets
+ * - Only admins can approve tickets
+ */
+export function canApproveTickets(permissions: UserPermissions): boolean {
+  return permissions.role === "admin";
+}

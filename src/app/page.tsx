@@ -2,22 +2,25 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { getGraphClient, getTickets, getArchivedTickets } from "@/lib/graphClient";
+import { getGraphClient, getTickets, getArchivedTickets, getTicket } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, DEFAULT_FILTERS } from "@/types/filters";
 import { filterTickets, sortTickets } from "@/lib/filterUtils";
 import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
+import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
-  const { permissions, loading: rbacLoading, canView } = useRBAC();
+  const searchParams = useSearchParams();
+  const { permissions, loading: rbacLoading, canView, canApprove } = useRBAC();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,6 +28,7 @@ export default function Home() {
   const [filters, setFilters] = useState<TicketFilters>(DEFAULT_FILTERS);
   const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [loadingArchived, setLoadingArchived] = useState(false);
+  const [pendingApprovalAction, setPendingApprovalAction] = useState<string | null>(null);
 
   // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(384); // 384px = w-96 default
@@ -115,6 +119,51 @@ export default function Home() {
     instance.logoutRedirect();
   };
 
+  // Handle URL parameters for email action buttons
+  useEffect(() => {
+    const ticketId = searchParams.get("ticket");
+    const action = searchParams.get("action");
+
+    if (ticketId && isAuthenticated && accounts[0] && !loading) {
+      // Load the specific ticket from URL
+      const loadTicketFromUrl = async () => {
+        try {
+          const client = getGraphClient(instance, accounts[0]);
+          const ticket = await getTicket(client, ticketId);
+          setSelectedTicket(ticket);
+
+          // Store the action if provided (will be handled by TicketDetail)
+          if (action && canApprove() && ["approve", "deny", "changes"].includes(action)) {
+            setPendingApprovalAction(action);
+          }
+
+          // Clear URL params after processing
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, "", newUrl);
+        } catch (e) {
+          console.error("Failed to load ticket from URL:", e);
+        }
+      };
+
+      loadTicketFromUrl();
+    }
+  }, [searchParams, isAuthenticated, accounts, instance, loading, canApprove]);
+
+  // Filter tickets for pending approvals (for badge click handling)
+  const handlePendingApprovalsClick = useCallback(() => {
+    // Filter to show only pending approval tickets
+    setFilters((prev) => ({
+      ...prev,
+      status: ["New", "In Progress", "On Hold", "Resolved", "Closed"], // All statuses
+      search: "", // Clear search
+    }));
+    // Select the first pending approval ticket if available
+    const pendingTicket = tickets.find((t) => t.approvalStatus === "Pending");
+    if (pendingTicket) {
+      setSelectedTicket(pendingTicket);
+    }
+  }, [tickets]);
+
   // Fetch tickets when authenticated
   useEffect(() => {
     const fetchTickets = async () => {
@@ -200,6 +249,7 @@ export default function Home() {
           </Link>
         </div>
         <div className="flex items-center gap-4">
+          <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
           <Link
             href="/help"
             className="text-sm text-text-secondary hover:text-text-primary"

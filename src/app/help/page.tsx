@@ -568,6 +568,121 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "approval-workflow",
+    title: "Approval Workflow",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Some tickets may require manager approval before proceeding. The approval
+          workflow allows support staff to request approval from General Managers,
+          who can then approve, deny, or request changes.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Approval Status Badges</h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300">
+              Pending Approval
+            </span>
+            <span>Waiting for a manager to review and decide</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-300">
+              Approved
+            </span>
+            <span>A manager has approved this ticket</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-300">
+              Denied
+            </span>
+            <span>A manager has denied the request</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800 border border-orange-300">
+              Changes Requested
+            </span>
+            <span>A manager has requested modifications before approval</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">For Support Staff: Requesting Approval</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open a ticket you have permission to edit</li>
+          <li>
+            In the Details panel on the right, find the <strong>&quot;Request Approval&quot;</strong> button
+          </li>
+          <li>Click the button and confirm your request</li>
+          <li>An email notification will be sent to all General Managers</li>
+          <li>The ticket will show a &quot;Pending Approval&quot; badge</li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Re-requesting Approval:</strong> If a ticket was previously approved, denied,
+            or had changes requested, you can request approval again as the ticket evolves with
+            new information. The button will show &quot;Re-request Approval&quot; in these cases.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">For Managers: Reviewing Approvals</h4>
+        <p>Managers can approve or deny tickets in three ways:</p>
+
+        <div className="space-y-3 mt-3">
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">1. Email Buttons</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Click the Approve, Deny, or Request Changes button directly in the email notification.
+              This will open the ticket in the Help Desk where you can add notes and confirm your decision.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">2. Pending Approvals Badge</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Click the yellow &quot;Approvals&quot; badge in the header to see pending approval requests.
+              The badge shows a count of tickets awaiting your decision.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">3. In-App on Any Ticket</p>
+            <p className="text-sm text-gray-600 mt-1">
+              As a manager, you can approve or deny any ticket directly from the Details panel,
+              even without a formal approval request. This allows proactive approval when needed.
+            </p>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Making an Approval Decision</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open the ticket requiring approval</li>
+          <li>In the Details panel, you&apos;ll see the Approval Actions section</li>
+          <li>Click <strong>Approve</strong>, <strong>Deny</strong>, or <strong>Changes</strong></li>
+          <li>
+            Add notes (required for Deny and Changes Requested, optional for Approve)
+          </li>
+          <li>Click Confirm to submit your decision</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Approval History</h4>
+        <p>
+          The Details panel shows a timeline of approval activity including:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>Who requested approval and when</li>
+          <li>The decision made (if any)</li>
+          <li>Who made the decision and any notes they provided</li>
+        </ul>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Automatic Notes:</strong> All approval actions automatically create an internal
+            note on the ticket documenting the decision, so there&apos;s always a record of what happened.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "understanding-badges",
     title: "Understanding Status Badges",
     content: (
@@ -728,6 +843,122 @@ const helpSections: HelpSection[] = [
           Tickets you created will show a <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">Your ticket</span> badge.
           You always have the ability to add comments to your own tickets.
         </p>
+      </div>
+    ),
+  },
+  {
+    id: "admin-ticket-management",
+    title: "Admin: Managing Ticket Details",
+    content: (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admin Only:</strong> These features are only available to administrators.
+          </p>
+        </div>
+
+        <p>
+          Administrators have additional editing capabilities in the ticket Details panel.
+          Fields marked with <span className="text-brand-blue">(editable)</span> can be modified by admins.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Editable Fields</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Assignee:</strong> Who is responsible for the ticket (searchable dropdown)
+          </li>
+          <li>
+            <strong>Category:</strong> Request or Problem
+          </li>
+          <li>
+            <strong>Department:</strong> Which team handles this (Tech, Operations, etc.)
+          </li>
+          <li>
+            <strong>Sub-Category:</strong> More specific category within the department
+          </li>
+          <li>
+            <strong>Specific Type:</strong> Most detailed classification (when available)
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Searching for Assignees</h4>
+        <p>
+          The assignee field uses a searchable dropdown that lets you find users from your organization:
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Click on the assignee search box</li>
+          <li>Start typing a name or email (at least 2 characters)</li>
+          <li>Results will appear showing matching users</li>
+          <li>Click on a user to select them</li>
+          <li>Click the X button to clear the selection</li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> You can search by display name or email address.
+            The dropdown shows the user&apos;s job title to help identify the right person.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Auto-Assignment Rules</h4>
+        <p>
+          When you change the department of a ticket, the system may suggest an automatic assignee
+          based on configured rules. A blue suggestion box will appear:
+        </p>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-700">Auto-assign: jnunn@skyparksantasvillage.com</span>
+            <span className="text-xs text-blue-600 font-medium cursor-pointer">Apply</span>
+          </div>
+        </div>
+
+        <p className="mt-3">Click &quot;Apply&quot; to accept the suggestion, or search for a different user.</p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Current Auto-Assignment Rules</h4>
+        <div className="space-y-2 mt-3">
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Tech</span>
+            <span>→ jnunn@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Operations</span>
+            <span>→ operations@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Grounds Keeping</span>
+            <span>→ grounds@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Janitorial</span>
+            <span>→ janitorial@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Marketing</span>
+            <span>→ marketing@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">HR</span>
+            <span>→ hr@skyparksantasvillage.com</span>
+          </div>
+          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
+            <span className="font-medium w-32">Customer Service</span>
+            <span>→ customerservice@skyparksantasvillage.com</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Saving Changes</h4>
+        <p>
+          After making changes to any fields, click the <strong>&quot;Save Changes&quot;</strong> button
+          that appears at the bottom of the Details panel. Changes are not saved until you click this button.
+        </p>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Changing the department or category may affect which team members
+            can see and edit the ticket based on their permissions.
+          </p>
+        </div>
       </div>
     ),
   },

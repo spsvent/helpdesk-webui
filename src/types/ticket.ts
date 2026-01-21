@@ -1,5 +1,8 @@
 // SharePoint list item types for the Helpdesk system
 
+// Approval workflow status
+export type ApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Changes Requested";
+
 export interface Ticket {
   id: string;
   title: string;
@@ -19,6 +22,13 @@ export interface Ticket {
   created: string;
   modified: string;
   createdBy: User;
+  // Approval workflow fields
+  approvalStatus: ApprovalStatus;
+  approvalRequestedBy?: User;
+  approvalRequestedDate?: string;
+  approvedBy?: User;
+  approvalDate?: string;
+  approvalNotes?: string;
 }
 
 export interface Comment {
@@ -27,7 +37,7 @@ export interface Comment {
   title: string;
   commentBody: string;
   isInternal: boolean;
-  commentType: "Comment" | "Status Change" | "Assignment" | "Resolution" | "Note";
+  commentType: "Comment" | "Status Change" | "Assignment" | "Resolution" | "Note" | "Approval";
   created: string;
   createdBy: User;
   originalAuthor?: string;  // For migrated comments - original author name/email
@@ -93,6 +103,19 @@ export function mapToTicket(item: SharePointListItem): Ticket {
       displayName: item.createdBy.user.displayName,
       email: item.createdBy.user.email || "",
     },
+    // Approval workflow fields
+    approvalStatus: (fields.ApprovalStatus as ApprovalStatus) || "None",
+    approvalRequestedBy: fields.ApprovalRequestedBy ? {
+      displayName: ((fields.ApprovalRequestedBy as Record<string, unknown>)?.LookupValue as string) || "",
+      email: ((fields.ApprovalRequestedBy as Record<string, unknown>)?.Email as string) || "",
+    } : undefined,
+    approvalRequestedDate: fields.ApprovalRequestedDate as string | undefined,
+    approvedBy: fields.ApprovedBy ? {
+      displayName: ((fields.ApprovedBy as Record<string, unknown>)?.LookupValue as string) || "",
+      email: ((fields.ApprovedBy as Record<string, unknown>)?.Email as string) || "",
+    } : undefined,
+    approvalDate: fields.ApprovalDate as string | undefined,
+    approvalNotes: fields.ApprovalNotes as string | undefined,
   };
 }
 

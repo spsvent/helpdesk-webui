@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment } from "@/types/ticket";
-import { getGraphClient, getComments, addComment } from "@/lib/graphClient";
+import {
+  getGraphClient,
+  getComments,
+  addComment,
+  requestApproval,
+  processApprovalDecision,
+} from "@/lib/graphClient";
+import { sendApprovalRequestEmail, sendDecisionEmail } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
+import ApprovalStatusBadge from "./ApprovalStatusBadge";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -41,6 +49,44 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Right sidebar resize state
+  const [sidebarWidth, setSidebarWidth] = useState(320); // 320px = w-80 default
+  const isResizing = useRef(false);
+  const MIN_SIDEBAR_WIDTH = 240;
+  const MAX_SIDEBAR_WIDTH = 500;
+
+  // Handle sidebar resize
+  const startResizing = useCallback(() => {
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      // Calculate from right edge
+      const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - e.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   const canEditThisTicket = canEdit(ticket);
   const canCommentOnThisTicket = canComment(ticket);
@@ -87,6 +133,78 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     }
   };
 
+  // Handle requesting approval
+  const handleRequestApproval = async () => {
+    if (!accounts[0]) return;
+
+    const client = getGraphClient(instance, accounts[0]);
+    const requesterName = accounts[0].name || accounts[0].username;
+
+    // Update ticket status to Pending
+    const updatedTicket = await requestApproval(client, ticket.id, requesterName);
+    onUpdate(updatedTicket);
+
+    // Send email notifications to managers
+    await sendApprovalRequestEmail(client, updatedTicket, requesterName);
+
+    // Add internal note about approval request
+    const approvalComment = await addComment(
+      client,
+      parseInt(ticket.id),
+      `Approval requested by ${requesterName}`,
+      true,
+      "Approval"
+    );
+    setComments((prev) => [...prev, approvalComment]);
+  };
+
+  // Handle approval decision
+  const handleApprovalDecision = async (
+    decision: "Approved" | "Denied" | "Changes Requested",
+    notes?: string
+  ) => {
+    if (!accounts[0]) return;
+
+    const client = getGraphClient(instance, accounts[0]);
+    const approverName = accounts[0].name || accounts[0].username;
+
+    // Process the approval decision
+    const updatedTicket = await processApprovalDecision(
+      client,
+      ticket.id,
+      decision,
+      approverName,
+      notes
+    );
+    onUpdate(updatedTicket);
+
+    // Add internal note about the decision
+    const noteText = notes
+      ? `**${decision}** by ${approverName}\n\nNotes: ${notes}`
+      : `**${decision}** by ${approverName}`;
+
+    const approvalComment = await addComment(
+      client,
+      parseInt(ticket.id),
+      noteText,
+      true,
+      "Approval"
+    );
+    setComments((prev) => [...prev, approvalComment]);
+
+    // Send notification to the person who requested approval (if there was a requester)
+    if (ticket.approvalRequestedBy?.email) {
+      await sendDecisionEmail(
+        client,
+        updatedTicket,
+        decision,
+        approverName,
+        ticket.approvalRequestedBy.email,
+        notes
+      );
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Ticket header */}
@@ -104,6 +222,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               >
                 {ticket.status}
               </span>
+              <ApprovalStatusBadge status={ticket.approvalStatus} size="sm" />
             </div>
             <div className="flex items-center gap-4 text-sm text-text-secondary">
               <span>#{ticket.id}</span>
@@ -158,12 +277,24 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           )}
         </div>
 
+        {/* Resize handle */}
+        <div
+          onMouseDown={startResizing}
+          className="w-1 cursor-col-resize hover:bg-brand-blue/30 active:bg-brand-blue/50 transition-colors shrink-0"
+          title="Drag to resize"
+        />
+
         {/* Details sidebar */}
-        <aside className="w-80 border-l border-border bg-white overflow-y-auto scroll-container">
+        <aside
+          className="border-l border-border bg-white overflow-y-auto scroll-container shrink-0"
+          style={{ width: sidebarWidth }}
+        >
           <DetailsPanel
             ticket={ticket}
             onUpdate={onUpdate}
             canEdit={canEditThisTicket}
+            onRequestApproval={handleRequestApproval}
+            onApprovalDecision={handleApprovalDecision}
           />
         </aside>
       </div>

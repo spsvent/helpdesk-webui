@@ -14,6 +14,7 @@ import {
   hasSubCategories,
   hasSub2Categories,
 } from "@/lib/categoryConfig";
+import { getSuggestedAssignee } from "@/lib/autoAssignConfig";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -155,7 +156,20 @@ export default function NewTicketPage() {
     try {
       const client = getGraphClient(instance, accounts[0]);
       const requesterEmail = accounts[0]?.username;
-      const newTicket = await createTicket(client, formData, requesterEmail);
+
+      // Get auto-assignment based on department/category
+      const assigneeEmail = getSuggestedAssignee(
+        formData.problemType,
+        formData.problemTypeSub || undefined,
+        formData.problemTypeSub2 || undefined,
+        formData.category
+      );
+
+      const newTicket = await createTicket(
+        client,
+        { ...formData, assigneeEmail: assigneeEmail || undefined },
+        requesterEmail
+      );
 
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);

@@ -41,13 +41,14 @@ export const loginRequest = {
   scopes: ["User.Read"],
 };
 
-// Scopes needed for SharePoint list access and RBAC
+// Scopes needed for SharePoint list access, RBAC, and email
 export const graphScopes = {
   scopes: [
     "User.Read",
     "Sites.ReadWrite.All",
     "User.ReadBasic.All",
     "GroupMember.Read.All", // For RBAC - reading user's group memberships
+    "Mail.Send", // For sending approval notification emails
   ],
 };
 
