@@ -1,6 +1,8 @@
 "use client";
 
+import { memo } from "react";
 import { Ticket } from "@/types/ticket";
+import { formatRelativeDate } from "@/lib/dateUtils";
 
 interface TicketListProps {
   tickets: Ticket[];
@@ -30,22 +32,8 @@ function getPriorityIndicator(priority: Ticket["priority"]): { label: string; cl
   }
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
-
-export default function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
+function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
   if (tickets.length === 0) {
     return (
       <div className="p-6 text-center">
@@ -68,7 +56,9 @@ export default function TicketList({ tickets, selectedId, onSelect }: TicketList
 
   return (
     <div className="divide-y divide-border">
-      {tickets.map((ticket) => (
+      {tickets.map((ticket) => {
+        const priorityIndicator = getPriorityIndicator(ticket.priority);
+        return (
         <button
           key={ticket.id}
           onClick={() => onSelect(ticket)}
@@ -80,9 +70,9 @@ export default function TicketList({ tickets, selectedId, onSelect }: TicketList
             <h3 className="font-medium text-text-primary line-clamp-1">
               {ticket.title}
             </h3>
-            {getPriorityIndicator(ticket.priority) && (
-              <span className={`text-xs shrink-0 ${getPriorityIndicator(ticket.priority)!.className}`}>
-                {getPriorityIndicator(ticket.priority)!.label}
+            {priorityIndicator && (
+              <span className={`text-xs shrink-0 ${priorityIndicator.className}`}>
+                {priorityIndicator.label}
               </span>
             )}
           </div>
@@ -98,10 +88,14 @@ export default function TicketList({ tickets, selectedId, onSelect }: TicketList
 
           <div className="flex items-center justify-between text-xs text-text-secondary">
             <span>{ticket.requester.displayName}</span>
-            <span>{formatDate(ticket.created)}</span>
+            <span>{formatRelativeDate(ticket.created)}</span>
           </div>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
+
+// Memoize to prevent re-renders when parent state changes but props are same
+export default memo(TicketList);

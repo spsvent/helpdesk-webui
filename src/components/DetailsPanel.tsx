@@ -23,6 +23,7 @@ import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
 import ApprovalActionPanel from "./ApprovalActionPanel";
 import ApprovalHistory from "./ApprovalHistory";
+import { formatDateTime } from "@/lib/dateUtils";
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -42,16 +43,6 @@ const STATUS_OPTIONS: Ticket["status"][] = [
 
 const PRIORITY_OPTIONS: Ticket["priority"][] = ["Low", "Normal", "High", "Urgent"];
 const CATEGORY_OPTIONS: Ticket["category"][] = ["Request", "Problem"];
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 export default function DetailsPanel({
   ticket,
@@ -480,14 +471,14 @@ export default function DetailsPanel({
         <label className="block text-xs text-text-secondary mb-1">
           Created
         </label>
-        <span className="text-sm">{formatDate(ticket.created)}</span>
+        <span className="text-sm">{formatDateTime(ticket.created)}</span>
       </div>
 
       <div>
         <label className="block text-xs text-text-secondary mb-1">
           Last Updated
         </label>
-        <span className="text-sm">{formatDate(ticket.modified)}</span>
+        <span className="text-sm">{formatDateTime(ticket.modified)}</span>
       </div>
 
       {ticket.dueDate && (
@@ -495,7 +486,7 @@ export default function DetailsPanel({
           <label className="block text-xs text-text-secondary mb-1">
             Due Date
           </label>
-          <span className="text-sm">{formatDate(ticket.dueDate)}</span>
+          <span className="text-sm">{formatDateTime(ticket.dueDate)}</span>
         </div>
       )}
     </div>
