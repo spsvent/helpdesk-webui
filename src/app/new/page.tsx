@@ -150,6 +150,12 @@ export default function NewTicketPage() {
       return;
     }
 
+    // Validate location is selected
+    if (!formData.location) {
+      setError("Please select a location");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -513,13 +519,14 @@ export default function NewTicketPage() {
                   htmlFor="location"
                   className="block text-sm font-medium text-text-primary mb-1"
                 >
-                  Location <span className="text-text-secondary">(optional)</span>
+                  Location <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="location"
                   name="location"
                   value={formData.location}
                   onChange={handleChange}
+                  required
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
                 >
                   <option value="">Select a location...</option>
@@ -530,7 +537,7 @@ export default function NewTicketPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Where is the issue occurring?
+                  Where is the issue occurring? Select &quot;Park Wide&quot; or &quot;N/A&quot; if not location-specific.
                 </p>
               </div>
 
