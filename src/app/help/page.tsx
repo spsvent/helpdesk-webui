@@ -137,17 +137,53 @@ const helpSections: HelpSection[] = [
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
+          Phone Layout
+        </h4>
+        <p>
+          On phones (screens narrower than 768px), the layout adapts to single-panel views:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Ticket list view:</strong> Shows the list of tickets. Tap a ticket to view it.
+          </li>
+          <li>
+            <strong>Ticket detail view:</strong> Use the &quot;← Back to Tickets&quot; button in the header to return to the list.
+          </li>
+          <li>
+            <strong>Comments/Details toggle:</strong> When viewing a ticket, use the tabs at the top to switch between the Comments thread and the Details panel.
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Tablet/iPad Layout
+        </h4>
+        <p>
+          On tablets (768px and wider), you get the full split-panel experience:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Ticket list sidebar:</strong> Always visible on the left
+          </li>
+          <li>
+            <strong>Comments &amp; Details:</strong> Both panels visible side-by-side
+          </li>
+          <li>
+            <strong>Resizable sidebar:</strong> Drag the divider to adjust ticket list width
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">
           Mobile-Friendly Features
         </h4>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
           <li>
-            <strong>Responsive layout:</strong> Interface adapts to your screen size
-          </li>
-          <li>
             <strong>Touch-optimized:</strong> Larger tap targets for easier interaction
           </li>
           <li>
-            <strong>Resizable sidebar:</strong> Drag the divider to adjust ticket list width
+            <strong>Compact headers:</strong> Information adapts to fit smaller screens
+          </li>
+          <li>
+            <strong>Dark mode support:</strong> Works great in both light and dark modes
           </li>
         </ul>
 

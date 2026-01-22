@@ -47,12 +47,18 @@ function getPriorityClass(priority: Ticket["priority"]): string {
   return classes[priority] || "text-brand-primary";
 }
 
+type MobileDetailView = "comments" | "details";
+
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const { instance, accounts } = useMsal();
   const { canEdit, canComment, isOwn, permissions } = useRBAC();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Mobile view state
+  const [mobileDetailView, setMobileDetailView] = useState<MobileDetailView>("comments");
+  const [isMobile, setIsMobile] = useState(false);
 
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -63,6 +69,16 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const isResizing = useRef(false);
   const MIN_SIDEBAR_WIDTH = 240;
   const MAX_SIDEBAR_WIDTH = 500;
+
+  // Detect mobile screen
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Handle sidebar resize
   const startResizing = useCallback(() => {
@@ -323,15 +339,15 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Ticket header */}
-      <div className="bg-bg-card border-b border-border px-6 py-4">
+      <div className="bg-bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-xl font-semibold text-text-primary">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-1">
+              <h1 className="text-lg md:text-xl font-semibold text-text-primary truncate max-w-full">
                 {ticket.title}
               </h1>
               <span
-                className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(
+                className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${getStatusBadgeClass(
                   ticket.status
                 )}`}
               >
@@ -339,23 +355,24 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               </span>
               <ApprovalStatusBadge status={ticket.approvalStatus} size="sm" />
             </div>
-            <div className="flex items-center gap-4 text-sm text-text-secondary">
+            <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-text-secondary">
               <span>#{ticket.id}</span>
-              <span>
+              <span className="hidden sm:inline">
                 {ticket.problemType}
                 {ticket.problemTypeSub && ` / ${ticket.problemTypeSub}`}
                 {ticket.problemTypeSub2 && ` / ${ticket.problemTypeSub2}`}
               </span>
+              <span className="sm:hidden">{ticket.problemType}</span>
               <span className={getPriorityClass(ticket.priority)}>
                 {ticket.priority.toUpperCase()}
               </span>
               {isOwnTicket && (
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded whitespace-nowrap">
                   Your ticket
                 </span>
               )}
               {!canEditThisTicket && (
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded whitespace-nowrap">
                   Read only
                 </span>
               )}
@@ -364,59 +381,93 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         </div>
       </div>
 
+      {/* Mobile panel toggle */}
+      {isMobile && (
+        <div className="flex border-b border-border bg-bg-card">
+          <button
+            onClick={() => setMobileDetailView("comments")}
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              mobileDetailView === "comments"
+                ? "text-brand-primary border-b-2 border-brand-primary bg-brand-primary/5"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Comments
+          </button>
+          <button
+            onClick={() => setMobileDetailView("details")}
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              mobileDetailView === "details"
+                ? "text-brand-primary border-b-2 border-brand-primary bg-brand-primary/5"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Details
+          </button>
+        </div>
+      )}
+
       {/* Main content area - conversation + details */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Conversation panel */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Scrollable conversation thread */}
-          <div className="flex-1 overflow-y-auto p-6 scroll-container">
-            <ConversationThread
-              ticket={ticket}
-              comments={comments}
-              loading={loading}
-            />
-          </div>
-
-          {/* Comment input at bottom */}
-          {canCommentOnThisTicket ? (
-            <div className="border-t border-border bg-bg-card p-4">
-              <CommentInput
-                onSubmit={handleAddComment}
-                disabled={submitting}
+        {/* Conversation panel - hide on mobile when viewing details */}
+        {(!isMobile || mobileDetailView === "comments") && (
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Scrollable conversation thread */}
+            <div className="flex-1 overflow-y-auto p-6 scroll-container">
+              <ConversationThread
+                ticket={ticket}
+                comments={comments}
+                loading={loading}
               />
             </div>
-          ) : (
-            <div className="border-t border-border bg-gray-50 p-4 text-center text-sm text-text-secondary">
-              You don&apos;t have permission to add comments to this ticket.
-            </div>
-          )}
-        </div>
 
-        {/* Resize handle */}
-        <div
-          onMouseDown={startResizing}
-          className="w-1 cursor-col-resize hover:bg-brand-blue/30 active:bg-brand-blue/50 transition-colors shrink-0"
-          title="Drag to resize"
-        />
+            {/* Comment input at bottom */}
+            {canCommentOnThisTicket ? (
+              <div className="border-t border-border bg-bg-card p-4">
+                <CommentInput
+                  onSubmit={handleAddComment}
+                  disabled={submitting}
+                />
+              </div>
+            ) : (
+              <div className="border-t border-border bg-gray-50 p-4 text-center text-sm text-text-secondary">
+                You don&apos;t have permission to add comments to this ticket.
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Details sidebar */}
-        <aside
-          className="border-l border-border bg-bg-card overflow-y-auto scroll-container shrink-0"
-          style={{ width: sidebarWidth }}
-        >
-          <DetailsPanel
-            ticket={ticket}
-            onUpdate={onUpdate}
-            canEdit={canEditThisTicket}
-            onRequestApproval={handleRequestApproval}
-            onApprovalDecision={handleApprovalDecision}
-            attachments={attachments}
-            attachmentsLoading={attachmentsLoading}
-            onUploadAttachment={handleUploadAttachment}
-            onDeleteAttachment={handleDeleteAttachment}
-            onDownloadAttachment={handleDownloadAttachment}
+        {/* Resize handle - desktop only */}
+        {!isMobile && (
+          <div
+            onMouseDown={startResizing}
+            className="w-1 cursor-col-resize hover:bg-brand-blue/30 active:bg-brand-blue/50 transition-colors shrink-0"
+            title="Drag to resize"
           />
-        </aside>
+        )}
+
+        {/* Details sidebar - on mobile, show full width when selected */}
+        {(!isMobile || mobileDetailView === "details") && (
+          <aside
+            className={`border-l border-border bg-bg-card overflow-y-auto scroll-container shrink-0 ${
+              isMobile ? "flex-1 border-l-0" : ""
+            }`}
+            style={isMobile ? undefined : { width: sidebarWidth }}
+          >
+            <DetailsPanel
+              ticket={ticket}
+              onUpdate={onUpdate}
+              canEdit={canEditThisTicket}
+              onRequestApproval={handleRequestApproval}
+              onApprovalDecision={handleApprovalDecision}
+              attachments={attachments}
+              attachmentsLoading={attachmentsLoading}
+              onUploadAttachment={handleUploadAttachment}
+              onDeleteAttachment={handleDeleteAttachment}
+              onDownloadAttachment={handleDownloadAttachment}
+            />
+          </aside>
+        )}
       </div>
     </div>
   );
