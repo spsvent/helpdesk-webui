@@ -115,6 +115,51 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "mobile-ipad",
+    title: "Mobile & iPad",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Help Desk is optimized for mobile devices and iPads, and can be installed as an app on your device.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Installing on iPad/iPhone
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open the Help Desk in Safari</li>
+          <li>Tap the <strong>Share</strong> button (square with arrow)</li>
+          <li>Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong></li>
+          <li>Tap <strong>&quot;Add&quot;</strong> in the top right</li>
+        </ol>
+        <p className="mt-2">
+          The Help Desk will now appear as an app icon on your home screen and launch in full-screen mode.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Mobile-Friendly Features
+        </h4>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Responsive layout:</strong> Interface adapts to your screen size
+          </li>
+          <li>
+            <strong>Touch-optimized:</strong> Larger tap targets for easier interaction
+          </li>
+          <li>
+            <strong>Resizable sidebar:</strong> Drag the divider to adjust ticket list width
+          </li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> For the best experience on iPad, use landscape orientation when viewing ticket details.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "submitting-tickets",
     title: "Submitting a New Ticket",
     content: (

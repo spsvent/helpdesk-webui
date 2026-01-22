@@ -36,11 +36,39 @@ export default function Home() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [lastCheckedId, setLastCheckedId] = useState<string | null>(null);
 
-  // Sidebar resize state
-  const [sidebarWidth, setSidebarWidth] = useState(384); // 384px = w-96 default
+  // Sidebar resize state - responsive default based on screen width
+  const getDefaultSidebarWidth = () => {
+    if (typeof window === "undefined") return 384;
+    if (window.innerWidth < 768) return 280; // Mobile
+    if (window.innerWidth < 1024) return 320; // Tablet
+    return 384; // Desktop
+  };
+  const [sidebarWidth, setSidebarWidth] = useState(384);
   const isResizing = useRef(false);
-  const MIN_SIDEBAR_WIDTH = 280;
+  const MIN_SIDEBAR_WIDTH = 260;
   const MAX_SIDEBAR_WIDTH = 600;
+
+  // Set responsive sidebar width on mount and resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isResizing.current) {
+        const defaultWidth = getDefaultSidebarWidth();
+        setSidebarWidth((prev) => {
+          // Only adjust if close to a default value (user hasn't manually resized much)
+          if (Math.abs(prev - 384) < 50 || Math.abs(prev - 320) < 50 || Math.abs(prev - 280) < 50) {
+            return defaultWidth;
+          }
+          return prev;
+        });
+      }
+    };
+
+    // Set initial value
+    setSidebarWidth(getDefaultSidebarWidth());
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Handle sidebar resize
   const startResizing = useCallback(() => {
@@ -303,29 +331,32 @@ export default function Home() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-bg-card border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-text-primary">
+      <header className="bg-bg-card border-b border-border px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shrink-0 safe-area-inset">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <h1 className="text-lg sm:text-xl font-semibold text-text-primary hidden sm:block">
             SkyPark Help Desk
+          </h1>
+          <h1 className="text-lg font-semibold text-text-primary sm:hidden">
+            Help Desk
           </h1>
           <Link
             href="/new"
-            className="px-4 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors"
+            className="px-3 sm:px-4 py-1.5 sm:py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors touch-manipulation"
           >
-            + New Ticket
+            + New
           </Link>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
           <DarkModeToggle />
           <Link
             href="/help"
-            className="text-sm text-text-secondary hover:text-text-primary"
+            className="text-sm text-text-secondary hover:text-text-primary p-1 touch-manipulation hidden sm:block"
           >
             Help
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-text-secondary">
+            <span className="text-sm text-text-secondary hidden md:block">
               {accounts[0]?.name || accounts[0]?.username}
             </span>
             {permissions && (
@@ -348,7 +379,7 @@ export default function Home() {
           </div>
           <button
             onClick={handleLogout}
-            className="text-sm text-text-secondary hover:text-text-primary"
+            className="text-sm text-text-secondary hover:text-text-primary p-1 touch-manipulation"
           >
             Sign out
           </button>

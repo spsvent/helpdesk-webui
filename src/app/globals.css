@@ -264,3 +264,73 @@ body {
 * {
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
+
+/* ============================================
+   Mobile/iPad Responsive Utilities
+   ============================================ */
+
+/* Safe area insets for notched devices */
+.safe-area-inset {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch-friendly tap targets (minimum 44x44px recommended by Apple) */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent text selection on touch */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Prevent pull-to-refresh on iOS */
+html {
+  overscroll-behavior: none;
+}
+
+/* Better touch scrolling */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
+/* Responsive font sizes */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* iPad-specific styles (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Slightly larger tap targets on iPad */
+  .btn-primary {
+    @apply px-5 py-2.5;
+  }
+}
+
+/* Landscape mode on tablets */
+@media (min-width: 768px) and (max-height: 600px) and (orientation: landscape) {
+  /* Compact header in landscape */
+  header {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* PWA standalone mode - hide browser UI related items */
+@media (display-mode: standalone) {
+  /* Can add specific styles for when running as PWA */
+}
