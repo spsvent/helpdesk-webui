@@ -623,7 +623,7 @@ export async function getAttachments(
       return (data.d?.results || []).map((att: Record<string, unknown>) => ({
         name: att.FileName as string,
         contentType: "application/octet-stream",
-        size: 0, // SharePoint REST API doesn't return size in this endpoint
+        size: (att.Length as number) || 0,
         contentUrl: att.ServerRelativeUrl as string || "",
       }));
     } catch (error) {
