@@ -55,10 +55,11 @@ export const graphScopes = {
 
 // Scopes for SharePoint REST API (needed for list item attachments)
 // SharePoint REST API requires a token with SharePoint audience, not Graph
+// Using .default requests all configured SharePoint permissions for this app
 const SHAREPOINT_HOSTNAME = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL?.match(/https:\/\/([^/]+)/)?.[1] || "skyparksv.sharepoint.com";
 export const sharepointScopes = {
   scopes: [
-    `https://${SHAREPOINT_HOSTNAME}/AllSites.Write`,
+    `https://${SHAREPOINT_HOSTNAME}/.default`,
   ],
 };
 

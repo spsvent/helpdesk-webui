@@ -582,10 +582,20 @@ export async function getAttachments(
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
-      const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...sharepointScopes,
-        account,
-      });
+      let tokenResponse;
+      try {
+        tokenResponse = await msalInstance.acquireTokenSilent({
+          ...sharepointScopes,
+          account,
+        });
+      } catch {
+        // Silent acquisition failed, try interactive
+        console.log("SharePoint token silent acquisition failed, trying popup...");
+        tokenResponse = await msalInstance.acquireTokenPopup({
+          ...sharepointScopes,
+          account,
+        });
+      }
 
       const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles`;
 
@@ -599,6 +609,11 @@ export async function getAttachments(
       if (!response.ok) {
         // Attachments may not be enabled on this list - return empty array silently
         if (response.status === 404 || response.status === 400) {
+          return [];
+        }
+        // 401 might mean consent not granted - silently return empty
+        if (response.status === 401) {
+          console.warn("SharePoint attachment access denied (401) - check AllSites.Write permission");
           return [];
         }
         throw new Error(`SharePoint REST API error: ${response.status}`);
