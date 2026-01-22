@@ -39,6 +39,9 @@ jobs:
           NEXT_PUBLIC_SHAREPOINT_SITE_URL: "https://skyparksv.sharepoint.com/sites/helpdesk"
           NEXT_PUBLIC_TICKETS_LIST_ID: "018f0d5c-318d-4856-a7f2-491f4e71a554"
           NEXT_PUBLIC_COMMENTS_LIST_ID: ${{ secrets.NEXT_PUBLIC_COMMENTS_LIST_ID }}
+          NEXT_PUBLIC_RBAC_GROUPS_LIST_ID: "ce6c0e8c-ff31-4af4-92bd-5d0fdc263ea7"
+          NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"
+          NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
