@@ -4,6 +4,7 @@ import { graphScopes } from "./msalConfig";
 import {
   Ticket,
   Comment,
+  Attachment,
   SharePointListResponse,
   mapToTicket,
   mapToComment,
@@ -478,4 +479,139 @@ export async function updateTicketFields(
   });
 
   return mapToTicket(item);
+}
+
+// ============================================
+// File Attachment Functions
+// ============================================
+
+// Get all attachments for a ticket
+export async function getAttachments(
+  client: Client,
+  ticketId: string
+): Promise<Attachment[]> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
+
+  try {
+    const response = await client.api(endpoint).get();
+    return (response.value || []).map((att: Record<string, unknown>) => ({
+      name: att.name as string,
+      contentType: att.contentType as string || "application/octet-stream",
+      size: att.size as number || 0,
+      contentUrl: att.contentUrl as string || "",
+    }));
+  } catch (error) {
+    console.error("Failed to get attachments:", error);
+    return [];
+  }
+}
+
+// Upload an attachment to a ticket
+export async function uploadAttachment(
+  client: Client,
+  ticketId: string,
+  file: File
+): Promise<Attachment | null> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
+
+  try {
+    // Read file as array buffer
+    const arrayBuffer = await file.arrayBuffer();
+
+    // Upload the attachment
+    const response = await client
+      .api(endpoint)
+      .header("Content-Type", "application/json")
+      .post({
+        "@odata.type": "#microsoft.graph.attachment",
+        name: file.name,
+        contentBytes: arrayBufferToBase64(arrayBuffer),
+      });
+
+    return {
+      name: response.name,
+      contentType: file.type || "application/octet-stream",
+      size: file.size,
+      contentUrl: response.contentUrl || "",
+    };
+  } catch (error) {
+    console.error("Failed to upload attachment:", error);
+    return null;
+  }
+}
+
+// Alternative upload method using direct PUT (for larger files)
+export async function uploadAttachmentDirect(
+  client: Client,
+  ticketId: string,
+  file: File
+): Promise<Attachment | null> {
+  // Sanitize filename - remove special characters that SharePoint doesn't like
+  const sanitizedName = file.name.replace(/[#%&*:<>?\/\\|]/g, "_");
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(sanitizedName)}/content`;
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+
+    await client
+      .api(endpoint)
+      .header("Content-Type", file.type || "application/octet-stream")
+      .put(arrayBuffer);
+
+    // Fetch the attachment details after upload
+    const attachments = await getAttachments(client, ticketId);
+    return attachments.find(a => a.name === sanitizedName) || {
+      name: sanitizedName,
+      contentType: file.type || "application/octet-stream",
+      size: file.size,
+      contentUrl: "",
+    };
+  } catch (error) {
+    console.error("Failed to upload attachment:", error);
+    return null;
+  }
+}
+
+// Delete an attachment from a ticket
+export async function deleteAttachment(
+  client: Client,
+  ticketId: string,
+  filename: string
+): Promise<boolean> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}`;
+
+  try {
+    await client.api(endpoint).delete();
+    return true;
+  } catch (error) {
+    console.error("Failed to delete attachment:", error);
+    return false;
+  }
+}
+
+// Download an attachment (returns blob)
+export async function downloadAttachment(
+  client: Client,
+  ticketId: string,
+  filename: string
+): Promise<Blob | null> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}/$value`;
+
+  try {
+    const response = await client.api(endpoint).get();
+    return response;
+  } catch (error) {
+    console.error("Failed to download attachment:", error);
+    return null;
+  }
+}
+
+// Helper: Convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }

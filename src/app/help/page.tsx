@@ -390,6 +390,9 @@ const helpSections: HelpSection[] = [
           <li>
             <strong>Dates:</strong> Created, Last Updated, and Due Date
           </li>
+          <li>
+            <strong>Attachments:</strong> Upload, download, and manage file attachments
+          </li>
         </ul>
       </div>
     ),
@@ -454,6 +457,104 @@ const helpSections: HelpSection[] = [
             <strong>Important:</strong> Internal notes are displayed with a
             yellow background and &quot;Internal&quot; badge to clearly distinguish them
             from public comments.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "file-attachments",
+    title: "File Attachments",
+    content: (
+      <div className="space-y-4">
+        <p>
+          You can attach files to tickets to provide screenshots, documents, or other
+          supporting materials. Attachments are stored securely in SharePoint.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Uploading Attachments</h4>
+        <p>To upload a file to a ticket:</p>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Select the ticket you want to add files to</li>
+          <li>In the Details panel on the right, scroll down to the <strong>Attachments</strong> section</li>
+          <li>Either drag and drop files onto the upload zone, or click to browse for files</li>
+          <li>Wait for the upload to complete</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Supported File Types</h4>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-purple-500">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <span className="text-sm">Images (PNG, JPG, GIF)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-red-500">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <span className="text-sm">PDFs</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-blue-500">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </span>
+            <span className="text-sm">Word docs (DOC, DOCX)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-green-500">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+            </span>
+            <span className="text-sm">Excel files (XLS, XLSX, CSV)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-gray-500">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </span>
+            <span className="text-sm">Text files (TXT, LOG)</span>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">File Size Limits</h4>
+        <p>
+          The maximum file size for attachments is <strong>10 MB</strong> per file.
+          Files larger than this will be rejected with an error message.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Downloading Attachments</h4>
+        <p>
+          To download an attachment, hover over the file in the attachment list and click the
+          download button (arrow icon). The file will be downloaded to your computer.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Deleting Attachments</h4>
+        <p>
+          If you have edit permissions for the ticket, you can delete attachments by hovering
+          over the file and clicking the trash icon. You&apos;ll be asked to confirm before the
+          file is deleted.
+        </p>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Important:</strong> Deleted attachments cannot be recovered.
+            Make sure you have a backup if needed before deleting.
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Attachments are helpful for providing screenshots of error
+            messages, relevant documents, or any visual information that helps explain the issue.
           </p>
         </div>
       </div>

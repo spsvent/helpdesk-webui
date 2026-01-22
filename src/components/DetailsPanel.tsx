@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket } from "@/types/ticket";
+import { Ticket, Attachment } from "@/types/ticket";
 import {
   getGraphClient,
   updateTicketFields,
@@ -23,6 +23,8 @@ import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
 import ApprovalActionPanel from "./ApprovalActionPanel";
 import ApprovalHistory from "./ApprovalHistory";
+import AttachmentList from "./AttachmentList";
+import AttachmentUpload from "./AttachmentUpload";
 import { formatDateTime } from "@/lib/dateUtils";
 
 interface DetailsPanelProps {
@@ -31,6 +33,12 @@ interface DetailsPanelProps {
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
   onApprovalDecision?: (decision: "Approved" | "Denied" | "Changes Requested", notes?: string) => Promise<void>;
+  // Attachments
+  attachments: Attachment[];
+  attachmentsLoading?: boolean;
+  onUploadAttachment?: (file: File) => Promise<boolean>;
+  onDeleteAttachment?: (filename: string) => Promise<void>;
+  onDownloadAttachment?: (filename: string) => Promise<void>;
 }
 
 const STATUS_OPTIONS: Ticket["status"][] = [
@@ -50,6 +58,11 @@ export default function DetailsPanel({
   canEdit = true,
   onRequestApproval,
   onApprovalDecision,
+  attachments,
+  attachmentsLoading = false,
+  onUploadAttachment,
+  onDeleteAttachment,
+  onDownloadAttachment,
 }: DetailsPanelProps) {
   const { instance, accounts } = useMsal();
   const { canRequestApproval, canApprove, permissions } = useRBAC();
@@ -489,6 +502,32 @@ export default function DetailsPanel({
           <span className="text-sm">{formatDateTime(ticket.dueDate)}</span>
         </div>
       )}
+
+      <hr className="border-border" />
+
+      {/* Attachments */}
+      <div>
+        <label className="block text-xs text-text-secondary mb-2 uppercase tracking-wide font-semibold">
+          Attachments
+        </label>
+
+        <AttachmentList
+          attachments={attachments}
+          onDelete={canEdit ? onDeleteAttachment : undefined}
+          onDownload={onDownloadAttachment}
+          canDelete={canEdit}
+          loading={attachmentsLoading}
+        />
+
+        {canEdit && onUploadAttachment && (
+          <div className="mt-3">
+            <AttachmentUpload
+              onUpload={onUploadAttachment}
+              disabled={attachmentsLoading}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

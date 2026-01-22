@@ -5,7 +5,7 @@
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | 1 | **Search & Filtering** | ✅ Complete | Full search (ID, title, desc, requester, assignee, location) + filters |
-| 2 | **File Attachments** | ⬜ Planned | Upload files to tickets via SharePoint |
+| 2 | **File Attachments** | ✅ Complete | Upload/download/delete via SharePoint list attachments |
 | 3 | **Old Ticket Migration** | ⬜ Planned | Import historical tickets from previous system |
 | 4 | **Email Notifications** | ⬜ Planned | Notify on updates, comments, assignments |
 | 5 | **Bulk Actions** | ⬜ Planned | Admin-only: close/reassign multiple tickets |
@@ -39,19 +39,23 @@
 
 ---
 
-### 2. File Attachments ⬜
-**Status:** Planned
+### 2. File Attachments ✅
+**Status:** Complete
 
-**Approach:**
-- Use SharePoint document library for storage
-- Link attachments to tickets via metadata
-- Support common file types (images, PDFs, docs)
-- Display inline previews where possible
+**Implemented:**
+- SharePoint list item attachments for storage
+- Upload via drag-and-drop or file picker
+- Download attachments to local machine
+- Delete attachments (with confirmation)
+- File type icons (images, PDFs, docs, spreadsheets)
+- File size display in human-readable format
+- 10MB max file size limit
+- Supported types: images, PDFs, Word docs, Excel files, text/CSV, log files
 
-**Considerations:**
-- File size limits
-- Virus scanning (SharePoint built-in)
-- Permission inheritance from ticket
+**Components:**
+- `AttachmentUpload.tsx` - Drag-and-drop upload zone
+- `AttachmentList.tsx` - Display with download/delete actions
+- Graph API functions in `graphClient.ts`
 
 ---
 

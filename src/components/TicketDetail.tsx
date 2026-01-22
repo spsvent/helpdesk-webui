@@ -2,13 +2,17 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Comment } from "@/types/ticket";
+import { Ticket, Comment, Attachment } from "@/types/ticket";
 import {
   getGraphClient,
   getComments,
   addComment,
   requestApproval,
   processApprovalDecision,
+  getAttachments,
+  uploadAttachment,
+  deleteAttachment,
+  downloadAttachment,
 } from "@/lib/graphClient";
 import { sendApprovalRequestEmail, sendDecisionEmail } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -49,6 +53,10 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Attachments state
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
 
   // Right sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(320); // 320px = w-80 default
@@ -112,6 +120,26 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     fetchComments();
   }, [ticket.id, accounts, instance]);
 
+  // Fetch attachments when ticket changes
+  useEffect(() => {
+    const fetchAttachments = async () => {
+      if (!accounts[0]) return;
+
+      setAttachmentsLoading(true);
+      try {
+        const client = getGraphClient(instance, accounts[0]);
+        const ticketAttachments = await getAttachments(client, ticket.id);
+        setAttachments(ticketAttachments);
+      } catch (e) {
+        console.error("Failed to fetch attachments:", e);
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    };
+
+    fetchAttachments();
+  }, [ticket.id, accounts, instance]);
+
   // Handle adding a new comment
   const handleAddComment = async (text: string, isInternal: boolean) => {
     if (!accounts[0] || !text.trim()) return;
@@ -130,6 +158,62 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       console.error("Failed to add comment:", e);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Handle uploading an attachment
+  const handleUploadAttachment = async (file: File): Promise<boolean> => {
+    if (!accounts[0]) return false;
+
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const attachment = await uploadAttachment(client, ticket.id, file);
+      if (attachment) {
+        setAttachments((prev) => [...prev, attachment]);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Failed to upload attachment:", e);
+      return false;
+    }
+  };
+
+  // Handle deleting an attachment
+  const handleDeleteAttachment = async (filename: string): Promise<void> => {
+    if (!accounts[0]) return;
+
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const success = await deleteAttachment(client, ticket.id, filename);
+      if (success) {
+        setAttachments((prev) => prev.filter((a) => a.name !== filename));
+      }
+    } catch (e) {
+      console.error("Failed to delete attachment:", e);
+    }
+  };
+
+  // Handle downloading an attachment
+  const handleDownloadAttachment = async (filename: string): Promise<void> => {
+    if (!accounts[0]) return;
+
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const blob = await downloadAttachment(client, ticket.id, filename);
+      if (blob) {
+        // Create a download link and trigger it
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error("Failed to download attachment:", e);
     }
   };
 
@@ -295,6 +379,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
             canEdit={canEditThisTicket}
             onRequestApproval={handleRequestApproval}
             onApprovalDecision={handleApprovalDecision}
+            attachments={attachments}
+            attachmentsLoading={attachmentsLoading}
+            onUploadAttachment={handleUploadAttachment}
+            onDeleteAttachment={handleDeleteAttachment}
+            onDownloadAttachment={handleDownloadAttachment}
           />
         </aside>
       </div>

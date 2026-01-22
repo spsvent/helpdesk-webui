@@ -51,6 +51,14 @@ export interface User {
   photoUrl?: string;
 }
 
+// File attachment on a ticket
+export interface Attachment {
+  name: string;
+  contentType: string;
+  size: number;
+  contentUrl: string;  // URL to download the file
+}
+
 // SharePoint Graph API response types
 export interface SharePointListItem {
   id: string;
