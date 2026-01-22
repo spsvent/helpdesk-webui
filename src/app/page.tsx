@@ -32,6 +32,29 @@ export default function Home() {
   const [loadingArchived, setLoadingArchived] = useState(false);
   const [pendingApprovalAction, setPendingApprovalAction] = useState<string | null>(null);
 
+  // Mobile view state - which panel to show on small screens
+  type MobileView = "list" | "detail";
+  const [mobileView, setMobileView] = useState<MobileView>("list");
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Switch to detail view when ticket is selected on mobile
+  const handleSelectTicket = useCallback((ticket: Ticket | null) => {
+    setSelectedTicket(ticket);
+    if (ticket && isMobile) {
+      setMobileView("detail");
+    }
+  }, [isMobile]);
+
   // Bulk selection state (admin only)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [lastCheckedId, setLastCheckedId] = useState<string | null>(null);
@@ -388,10 +411,12 @@ export default function Home() {
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
-        {/* Ticket list sidebar */}
+        {/* Ticket list sidebar - hidden on mobile when viewing detail */}
         <aside
-          className="border-r border-border bg-bg-card overflow-hidden flex flex-col shrink-0"
-          style={{ width: sidebarWidth }}
+          className={`border-r border-border bg-bg-card overflow-hidden flex flex-col shrink-0 ${
+            isMobile && mobileView === "detail" ? "hidden" : ""
+          } ${isMobile ? "w-full" : ""}`}
+          style={isMobile ? undefined : { width: sidebarWidth }}
         >
           {/* Filters */}
           <TicketFiltersComponent
@@ -443,8 +468,8 @@ export default function Home() {
               <TicketList
                 tickets={filteredAndSortedTickets}
                 selectedId={selectedTicket?.id}
-                onSelect={setSelectedTicket}
-                showCheckboxes={permissions?.role === "admin"}
+                onSelect={handleSelectTicket}
+                showCheckboxes={permissions?.role === "admin" && !isMobile}
                 checkedIds={checkedIds}
                 onToggleCheck={handleToggleCheck}
               />
@@ -452,28 +477,57 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Resize handle */}
-        <div
-          onMouseDown={startResizing}
-          className="w-1 cursor-col-resize hover:bg-brand-primary/30 active:bg-brand-primary/50 transition-colors shrink-0"
-          title="Drag to resize"
-        />
+        {/* Resize handle - hidden on mobile */}
+        {!isMobile && (
+          <div
+            onMouseDown={startResizing}
+            className="w-1 cursor-col-resize hover:bg-brand-primary/30 active:bg-brand-primary/50 transition-colors shrink-0"
+            title="Drag to resize"
+          />
+        )}
 
-        {/* Ticket detail */}
-        <main className="flex-1 bg-bg-subtle overflow-y-auto min-w-0">
+        {/* Ticket detail - hidden on mobile when viewing list */}
+        <main className={`flex-1 bg-bg-subtle overflow-y-auto min-w-0 flex flex-col ${
+          isMobile && mobileView === "list" ? "hidden" : ""
+        }`}>
+          {/* Mobile back button */}
+          {isMobile && selectedTicket && (
+            <div className="bg-bg-card border-b border-border px-4 py-2 shrink-0">
+              <button
+                onClick={() => setMobileView("list")}
+                className="flex items-center gap-2 text-brand-primary font-medium touch-manipulation"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Tickets
+              </button>
+            </div>
+          )}
           {selectedTicket ? (
-            <TicketDetail
-              ticket={selectedTicket}
-              onUpdate={(updated) => {
-                setSelectedTicket(updated);
-                setTickets((prev) =>
-                  prev.map((t) => (t.id === updated.id ? updated : t))
-                );
-              }}
-            />
+            <div className="flex-1 overflow-y-auto">
+              <TicketDetail
+                ticket={selectedTicket}
+                onUpdate={(updated) => {
+                  setSelectedTicket(updated);
+                  setTickets((prev) =>
+                    prev.map((t) => (t.id === updated.id ? updated : t))
+                  );
+                }}
+              />
+            </div>
           ) : (
             <div className="h-full flex items-center justify-center text-text-secondary">
-              Select a ticket to view details
+              {isMobile ? (
+                <button
+                  onClick={() => setMobileView("list")}
+                  className="text-brand-primary font-medium"
+                >
+                  ← View Tickets
+                </button>
+              ) : (
+                "Select a ticket to view details"
+              )}
             </div>
           )}
         </main>
