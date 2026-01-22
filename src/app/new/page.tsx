@@ -8,6 +8,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { getGraphClient, createTicket, CreateTicketData, getUserByEmail } from "@/lib/graphClient";
 import { sendNewTicketEmail } from "@/lib/emailService";
+import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
   getProblemTypes,
   getProblemTypeSubs,
@@ -156,6 +157,9 @@ export default function NewTicketPage() {
         }
       }
 
+      // Send Teams notification (fire-and-forget, only for Normal+ priority)
+      sendNewTicketTeamsNotification(client, newTicket);
+
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);
     } catch (e: unknown) {
@@ -298,28 +302,67 @@ export default function NewTicketPage() {
 
               {/* Category */}
               <div>
-                <label
-                  htmlFor="category"
-                  className="block text-sm font-medium text-text-primary mb-1"
-                >
-                  Category
+                <label className="block text-sm font-medium text-text-primary mb-2">
+                  Category <span className="text-red-500">*</span>
                 </label>
-                <select
-                  id="category"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                >
-                  {CATEGORY_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-text-secondary">
-                  Request = new feature/access; Problem = something is broken
-                </p>
+                <div className="space-y-2">
+                  <label
+                    className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                      formData.category === "Problem"
+                        ? "border-brand-primary bg-brand-primary/10"
+                        : "border-border hover:bg-bg-subtle"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value="Problem"
+                      checked={formData.category === "Problem"}
+                      onChange={handleChange}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-text-primary">Problem</span>
+                      <p className="text-sm text-text-secondary mt-0.5">
+                        Something is broken, not working, or needs fixing
+                      </p>
+                      <p className="text-xs text-text-secondary mt-1">
+                        Examples: Equipment failure, software error, system outage, bug
+                      </p>
+                    </div>
+                  </label>
+                  <label
+                    className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                      formData.category === "Request"
+                        ? "border-brand-primary bg-brand-primary/10"
+                        : "border-border hover:bg-bg-subtle"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value="Request"
+                      checked={formData.category === "Request"}
+                      onChange={handleChange}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-text-primary">Request</span>
+                      <p className="text-sm text-text-secondary mt-0.5">
+                        Need something new, changed, or set up
+                      </p>
+                      <p className="text-xs text-text-secondary mt-1">
+                        Examples: New equipment, access request, software install, permission change
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-800">
+                    <strong>Note:</strong> Requests may require manager approval before being processed.
+                    Problems are routed directly to support staff.
+                  </p>
+                </div>
               </div>
 
               {/* Department (Problem Type) - 3-level cascading dropdowns */}

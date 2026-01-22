@@ -1304,6 +1304,250 @@ const helpSections: HelpSection[] = [
       </div>
     ),
   },
+  {
+    id: "teams-notifications",
+    title: "Teams Notifications",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Help Desk can automatically post notifications to Microsoft Teams channels
+          when certain ticket events occur. This helps teams stay informed about new
+          and updated tickets without needing to constantly check the Help Desk.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Triggers a Teams Notification?</h4>
+        <p>
+          Teams notifications are sent for tickets with <strong>Normal, High, or Urgent</strong>{" "}
+          priority. Low priority tickets do not trigger Teams notifications.
+        </p>
+
+        <div className="space-y-3 mt-3">
+          <div className="flex items-start gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+            <span className="px-2 py-1 rounded text-xs font-medium bg-blue-500 text-white shrink-0">
+              New Ticket
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">When a new ticket is created</p>
+              <p className="text-gray-600">
+                Posts a card with ticket ID, title, priority, category, department,
+                requester, location, and description preview.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-500 text-white shrink-0">
+              Status Change
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">When a ticket status is updated</p>
+              <p className="text-gray-600">
+                Shows the old status → new status transition and who made the change.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-orange-200 bg-orange-50 rounded-lg">
+            <span className="px-2 py-1 rounded text-xs font-medium bg-orange-500 text-white shrink-0">
+              Priority Escalation
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">When priority is increased</p>
+              <p className="text-gray-600">
+                Posts an attention-grabbing card when priority is escalated (e.g., Normal → High).
+                De-escalations do not trigger notifications.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Department-Specific Channels</h4>
+        <p>
+          Each department (Tech, Operations, HR, etc.) can have its own dedicated Teams channel.
+          Notifications are routed to the appropriate channel based on the ticket&apos;s department.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> If your department doesn&apos;t have a Teams channel configured,
+            no notification will be sent. Contact your administrator to set up Teams integration
+            for your department.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Adaptive Cards</h4>
+        <p>
+          Teams notifications use Microsoft Adaptive Cards for rich formatting. Each card includes:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>Color-coded header indicating the event type</li>
+          <li>Ticket ID and title</li>
+          <li>Key details (priority, status, department)</li>
+          <li>A &quot;View Ticket&quot; button that links directly to the ticket in the Help Desk</li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Minimum Priority Threshold</h4>
+        <p>
+          Each Teams channel can be configured with a minimum priority threshold. For example,
+          a channel might only receive notifications for High and Urgent tickets, ignoring
+          Normal priority. This helps reduce noise in channels that only need to see critical issues.
+        </p>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Important:</strong> Teams notifications are &quot;fire-and-forget&quot; - if a
+            notification fails to post (e.g., due to network issues), it won&apos;t block the
+            ticket operation. The ticket will still be created or updated successfully.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "admin-teams-config",
+    title: "Admin: Teams Channel Configuration",
+    content: (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admin Only:</strong> This section is for administrators who configure
+            Teams channel mappings.
+          </p>
+        </div>
+
+        <p>
+          Teams notifications are configured through a SharePoint list called{" "}
+          <strong>TeamsChannels</strong>. Each item in the list maps a department to a
+          specific Teams channel.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">SharePoint List Structure</h4>
+        <div className="overflow-x-auto mt-3">
+          <table className="min-w-full text-sm border border-gray-200 rounded-lg">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">Column</th>
+                <th className="px-4 py-2 text-left font-medium">Type</th>
+                <th className="px-4 py-2 text-left font-medium">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">Title</td>
+                <td className="px-4 py-2">Text</td>
+                <td className="px-4 py-2">Friendly name (e.g., &quot;Tech Support Channel&quot;)</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">Department</td>
+                <td className="px-4 py-2">Text</td>
+                <td className="px-4 py-2">Must match ticket problemType exactly (Tech, Operations, HR)</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">TeamId</td>
+                <td className="px-4 py-2">Text</td>
+                <td className="px-4 py-2">Microsoft Teams Team ID (GUID)</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">ChannelId</td>
+                <td className="px-4 py-2">Text</td>
+                <td className="px-4 py-2">Channel ID (format: 19:xxx@thread.tacv2)</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">IsActive</td>
+                <td className="px-4 py-2">Yes/No</td>
+                <td className="px-4 py-2">Enable or disable notifications for this channel</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">MinPriority</td>
+                <td className="px-4 py-2">Choice</td>
+                <td className="px-4 py-2">Minimum priority to notify (Low, Normal, High, Urgent)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Finding Team and Channel IDs</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open Microsoft Teams and navigate to the team and channel</li>
+          <li>Click the three dots (...) next to the channel name</li>
+          <li>Select &quot;Get link to channel&quot;</li>
+          <li>The link contains both IDs in encoded format</li>
+          <li>
+            Alternatively, use the{" "}
+            <a
+              href="https://developer.microsoft.com/en-us/graph/graph-explorer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-blue hover:underline"
+            >
+              Microsoft Graph Explorer
+            </a>{" "}
+            to query your teams and channels
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Azure AD Permissions</h4>
+        <p>
+          The Help Desk app registration requires the <strong>ChannelMessage.Send</strong>{" "}
+          delegated permission to post messages to Teams channels.
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Go to Azure Portal → App Registrations → Your App</li>
+          <li>Navigate to API Permissions</li>
+          <li>Add <strong>Microsoft Graph → Delegated → ChannelMessage.Send</strong></li>
+          <li>Grant admin consent for the organization</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Environment Variables</h4>
+        <p>
+          Set the following environment variables to configure Teams notifications:
+        </p>
+        <div className="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-sm mt-3 space-y-2">
+          <div># Enable Teams notifications (disabled by default)</div>
+          <div>NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED=true</div>
+          <div></div>
+          <div># Only notify for tickets created on/after this date (YYYY-MM-DD)</div>
+          <div># Prevents notification floods for migrated/old tickets</div>
+          <div>NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE=2026-01-23</div>
+          <div></div>
+          <div># SharePoint list ID for channel configuration</div>
+          <div>NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID=your-list-guid-here</div>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Important:</strong> Teams notifications are <strong>disabled by default</strong>.
+            You must set <code className="bg-yellow-100 px-1 rounded">NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED=true</code>{" "}
+            to enable them. This prevents accidental notification floods during setup or migration.
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Use the <code className="bg-blue-100 px-1 rounded">NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE</code>{" "}
+            variable to prevent notifications for old or migrated tickets. Set it to today&apos;s date
+            when you&apos;re ready to go live, and only tickets created from that point forward will
+            trigger Teams notifications.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Testing</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Create a TeamsChannels list item for a test department</li>
+          <li>Set IsActive to Yes and MinPriority to Normal</li>
+          <li>Create a Normal priority ticket in that department</li>
+          <li>Verify the notification appears in the Teams channel</li>
+          <li>Create a Low priority ticket - it should NOT post to Teams</li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Configuration changes are cached for 5 minutes.
+            After updating the SharePoint list, wait a few minutes for the cache
+            to refresh, or sign out and back in.
+          </p>
+        </div>
+      </div>
+    ),
+  },
 ];
 
 export default function HelpPage() {

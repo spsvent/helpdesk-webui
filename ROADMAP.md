@@ -10,11 +10,15 @@
 | 4 | **Email Notifications** | ✅ Complete | Notify on ticket create, assignments, comments, status changes |
 | 5 | **Bulk Actions** | ✅ Complete | Admin-only: status/priority/reassign multiple tickets |
 | 6 | **Dashboard** | ⬜ Planned | Analytics, ticket counts, response times |
-| 7 | **Teams Integration** | ⬜ Planned | Notifications in Teams channels |
-| 8 | **Mobile App** | ⬜ Planned | PWA or responsive improvements |
-| 9 | **Dark Mode** | ⬜ Planned | Manual dark/light toggle |
-| 10 | **SLA Tracking** | ⬜ Planned | Due date alerts, escalation rules |
-| 11 | **Grafana Connection** | ⬜ Planned | Metrics/dashboard integration (consider as main dashboard?) |
+| 7 | **Teams Integration** | ✅ Complete | Notifications in Teams channels |
+| 8 | **Request Approval Gate** | 🔴 Must Do | Requests require admin approval before support sees them |
+| 9 | **Assignee Preview** | 🔴 Must Do | Show assigned roles/titles when selecting department |
+| 10 | **Category Guidance** | 🔴 Must Do | Clear instructions for choosing Problem vs Request |
+| 11 | **Mobile App** | ⬜ Planned | PWA or responsive improvements |
+| 12 | **Dark Mode** | ⬜ Planned | Manual dark/light toggle |
+| 13 | **SLA Tracking** | ⬜ Planned | Due date alerts, escalation rules |
+| 14 | **Grafana Connection** | ⬜ Planned | Metrics/dashboard integration (consider as main dashboard?) |
+| 15 | **App-Only Sign Out** | ⬜ Explore | Sign out of Help Desk without clearing browser-wide MS token |
 
 ---
 
@@ -140,22 +144,157 @@
 
 ---
 
-### 7. Teams Integration ⬜
-**Status:** Planned
+### 7. Teams Integration ✅
+**Status:** Complete
 
-**Features:**
-- Post to channel on new high-priority tickets
-- Bot commands to check ticket status
-- Adaptive cards for ticket summaries
+**Implemented:**
+- Post to department-specific Teams channels
+- Notifications for Normal, High, and Urgent priority tickets (Low excluded)
+- Adaptive Cards with rich formatting
 - Deep links back to Help Desk app
 
-**Approach:**
-- Incoming webhook for simple notifications
-- Or full Teams app for rich integration
+**Notification Triggers:**
+- New ticket created → Blue accent card with full details
+- Status changed → Shows old → new status transition
+- Priority escalated → Orange/red warning card (only for increases)
+
+**Technical Details:**
+- Microsoft Graph API `ChannelMessage.Send` permission
+- SharePoint list (TeamsChannels) for channel configuration
+- Per-department channel mapping with configurable minimum priority
+- Fire-and-forget pattern - failures don't block ticket operations
+- 5-minute cache for channel configuration
+
+**Components:**
+- `src/types/teams.ts` - TypeScript interfaces
+- `src/lib/teamsService.ts` - Notification service
+- Integration in `new/page.tsx` and `DetailsPanel.tsx`
+
+**Configuration:**
+- Environment variable: `NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID`
+- SharePoint list columns: Title, Department, TeamId, ChannelId, IsActive, MinPriority
 
 ---
 
-### 8. Mobile App ⬜
+### 8. Request Approval Gate 🔴
+**Status:** Must Do
+
+**Business Requirement:**
+- **Request** category tickets require admin approval BEFORE appearing in support staff ticket list
+- **Problem** category tickets flow through immediately (current behavior)
+- Support staff can still request approval on Problem tickets when needed
+
+**User Flow - Requests:**
+1. User submits a Request ticket
+2. Ticket is created with `approvalStatus: "Pending"` automatically
+3. Admins receive notification and see ticket in their queue
+4. Support staff do NOT see the ticket until approved
+5. Admin approves → ticket becomes visible to support staff
+6. Admin denies → requester notified, ticket closed/hidden
+
+**User Flow - Problems:**
+1. User submits a Problem ticket
+2. Ticket flows through immediately (current behavior)
+3. Support staff can optionally request approval if needed
+4. No change to existing Problem workflow
+
+**Implementation:**
+- Modify ticket creation to auto-set `approvalStatus: "Pending"` for Requests
+- Update ticket list filtering: support staff don't see unapproved Requests
+- Update email notifications for auto-approval requests
+- Add visual indicator for "Awaiting Approval" state
+- Admin dashboard/queue for pending Request approvals
+
+**Technical Notes:**
+- Filter in `getTickets()` or client-side based on role + category + approvalStatus
+- May need new status like "Awaiting Approval" distinct from workflow statuses
+
+---
+
+### 9. Assignee Preview 🔴
+**Status:** Must Do
+
+**Business Requirement:**
+- When creating a ticket, show who will be assigned based on department selection
+- Display job titles in hierarchical fashion (NOT email addresses)
+- Look up assignee info from Entra ID (Azure AD)
+- If assignee is a **group** (security group or distribution list), list ALL members' job titles
+
+**Example Display:**
+When user selects: `Tech` → `POS` → `Hardware`
+
+Show in sidebar/preview area:
+```
+Assigned To:
+├── IT/Audio Manager
+├── IT/Audio Supervisor
+└── Audio Tech
+```
+
+**Group Handling:**
+- If auto-assign target is a group email (e.g., `itav@company.com`)
+- Look up group membership via Graph API
+- Display all members' job titles in hierarchy
+- Sort by job title seniority if possible
+
+**Implementation:**
+- Extend auto-assign config to include job title hierarchy
+- Query Entra for job titles of configured assignees
+- If assignee is a group, query `/groups/{id}/members` for all members
+- Display component in new ticket form (right side near dropdowns)
+- Cache job title lookups to avoid repeated API calls
+- Graceful fallback if Entra lookup fails
+
+**Technical Notes:**
+- Use Microsoft Graph `user` endpoint with `$select=jobTitle,displayName`
+- Use Graph `/groups/{id}/members` for group membership
+- Detect group vs user: check if email resolves to group or user in directory
+- May need to store title hierarchy in SharePoint config list
+- Consider caching titles with auto-assign rules (5-min cache like Teams config)
+
+**UI/UX:**
+- Show hierarchy visually (indented list or tree)
+- Update dynamically as user changes department dropdowns
+- Loading state while fetching from Entra
+- Handle cases where no assignee is configured
+- Clear indication when showing group members vs individual
+
+---
+
+### 10. Category Guidance 🔴
+**Status:** Must Do
+
+**Business Requirement:**
+- Users need clear guidance on when to choose "Problem" vs "Request"
+- This affects workflow (Requests need approval, Problems don't)
+- Reduce mis-categorization and user confusion
+
+**Problem vs Request:**
+| Category | When to Use | Examples |
+|----------|-------------|----------|
+| **Problem** | Something is broken or not working | Equipment failure, software error, system outage, bug report |
+| **Request** | Need something new or changed | New equipment, access request, software install, permission change |
+
+**Implementation:**
+- Enhance category selector in new ticket form with clear descriptions
+- Add expandable help text or tooltip with examples
+- Consider visual distinction (icons, colors)
+- Update help documentation with detailed guidance
+
+**UI Options:**
+1. **Inline descriptions** under each radio option
+2. **Info tooltip** with "Which should I choose?" link
+3. **Expandable section** with examples for each
+4. **Smart suggestions** based on keywords in title/description
+
+**Help Page Update:**
+- Add dedicated section explaining the difference
+- Include real-world examples for each category
+- Explain the workflow implications (approval for Requests)
+
+---
+
+### 11. Mobile App ⬜
 **Status:** Planned
 
 **Options:**
@@ -167,7 +306,7 @@
 
 ---
 
-### 9. Dark Mode ⬜
+### 12. Dark Mode ⬜
 **Status:** Planned
 
 **Approach:**
@@ -180,7 +319,7 @@
 
 ---
 
-### 10. SLA Tracking ⬜
+### 13. SLA Tracking ⬜
 **Status:** Planned
 
 **Features:**
@@ -199,7 +338,7 @@
 
 ---
 
-### 11. Grafana Connection ⬜
+### 14. Grafana Connection ⬜
 **Status:** Planned
 
 **Options:**
@@ -211,6 +350,54 @@
 - Already have Grafana infrastructure?
 - Real-time vs batch data sync
 - SharePoint as data source (via Azure SQL sync?)
+
+---
+
+### 15. App-Only Sign Out ⬜
+**Status:** Explore
+
+**Problem:**
+- Current sign out clears the Microsoft token for the entire browser
+- Users get signed out of other Microsoft apps (Outlook, Teams, SharePoint, etc.)
+- Frustrating UX when users just want to switch accounts in Help Desk
+
+**Desired Behavior:**
+- "Sign Out" only signs out of the Help Desk app
+- Other Microsoft apps in browser remain signed in
+- User can sign back in with a different account if needed
+
+**Technical Options to Explore:**
+
+1. **Clear app-specific cache only**
+   - Use `msalInstance.clearCache()` instead of `logoutRedirect()`
+   - Clears tokens for this app only, not browser-wide
+   - May need to clear sessionStorage keys manually
+
+2. **Account-specific logout**
+   - Use `logoutRedirect({ account: specificAccount })`
+   - Only removes the specific account from MSAL cache
+   - Other accounts remain available
+
+3. **Session storage isolation**
+   - MSAL config uses `sessionStorage` (already configured)
+   - Tokens should be tab-specific, not shared across browser
+   - Verify this is working as expected
+
+4. **Silent token clearing**
+   - Don't redirect to Microsoft logout endpoint
+   - Just clear local MSAL state
+   - User stays "logged in" to Microsoft, just not to Help Desk
+
+**Considerations:**
+- Security implications of not fully logging out
+- SSO behavior with other tenant apps
+- User expectations vs actual behavior
+- May need different buttons: "Switch Account" vs "Full Sign Out"
+
+**Research Needed:**
+- Test current MSAL behavior with multiple MS apps open
+- Review MSAL.js documentation for account-specific logout
+- Check if `postLogoutRedirectUri` affects other apps
 
 ---
 

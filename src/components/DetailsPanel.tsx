@@ -27,6 +27,10 @@ import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
 import { formatDateTime } from "@/lib/dateUtils";
 import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
+import {
+  sendStatusChangeTeamsNotification,
+  sendPriorityEscalationTeamsNotification,
+} from "@/lib/teamsService";
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -198,6 +202,7 @@ export default function DetailsPanel({
     setSaving(true);
     const currentUserName = accounts[0].name || accounts[0].username;
     const oldStatus = ticket.status;
+    const oldPriority = ticket.priority;
     const oldAssigneeEmail = ticket.assignedTo?.email;
 
     try {
@@ -254,6 +259,14 @@ export default function DetailsPanel({
           oldStatus,
           currentUserName
         ).catch((e) => console.error("Failed to send status change email:", e));
+
+        // Also send Teams notification for status change
+        sendStatusChangeTeamsNotification(client, updated, oldStatus, currentUserName);
+      }
+
+      // Send Teams notification for priority escalation
+      if (priority !== oldPriority) {
+        sendPriorityEscalationTeamsNotification(client, updated, oldPriority, currentUserName);
       }
     } catch (e) {
       console.error("Failed to update ticket:", e);

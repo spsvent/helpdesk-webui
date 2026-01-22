@@ -123,9 +123,9 @@ export async function addComment(
     fields: {
       Title: commentBody.substring(0, 50) + (commentBody.length > 50 ? "..." : ""),
       TicketID: ticketId,
-      Body: commentBody,  // Field is named "Body" not "CommentBody"
+      Body: commentBody,
       IsInternal: isInternal,
-      CommentType: commentType,
+      // CommentType field is optional - only include if it exists in SharePoint
     },
   });
 
