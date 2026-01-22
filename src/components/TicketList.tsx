@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { Ticket } from "@/types/ticket";
 import { formatRelativeDate } from "@/lib/dateUtils";
 
@@ -8,6 +8,10 @@ interface TicketListProps {
   tickets: Ticket[];
   selectedId?: string;
   onSelect: (ticket: Ticket) => void;
+  // Bulk selection (admin only)
+  showCheckboxes?: boolean;
+  checkedIds?: Set<string>;
+  onToggleCheck?: (ticketId: string, shiftKey: boolean) => void;
 }
 
 function getStatusBadgeClass(status: Ticket["status"]): string {
@@ -33,7 +37,22 @@ function getPriorityIndicator(priority: Ticket["priority"]): { label: string; cl
 }
 
 
-function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
+function TicketList({
+  tickets,
+  selectedId,
+  onSelect,
+  showCheckboxes = false,
+  checkedIds = new Set(),
+  onToggleCheck,
+}: TicketListProps) {
+  const handleCheckboxClick = useCallback(
+    (e: React.MouseEvent, ticketId: string) => {
+      e.stopPropagation();
+      onToggleCheck?.(ticketId, e.shiftKey);
+    },
+    [onToggleCheck]
+  );
+
   if (tickets.length === 0) {
     return (
       <div className="p-6 text-center">
@@ -59,38 +78,53 @@ function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
       {tickets.map((ticket) => {
         const priorityIndicator = getPriorityIndicator(ticket.priority);
         return (
-        <button
+        <div
           key={ticket.id}
-          onClick={() => onSelect(ticket)}
-          className={`w-full text-left p-4 hover:bg-bg-subtle transition-colors ${
+          className={`flex items-start gap-2 p-4 hover:bg-bg-subtle transition-colors cursor-pointer ${
             selectedId === ticket.id ? "bg-brand-primary/10 border-l-4 border-brand-primary" : ""
-          }`}
+          } ${checkedIds.has(ticket.id) ? "bg-brand-primary/5" : ""}`}
+          onClick={() => onSelect(ticket)}
         >
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="font-medium text-text-primary line-clamp-1">
-              {ticket.title}
-            </h3>
-            {priorityIndicator && (
-              <span className={`text-xs shrink-0 ${priorityIndicator.className}`}>
-                {priorityIndicator.label}
+          {showCheckboxes && (
+            <div
+              className="pt-0.5 shrink-0"
+              onClick={(e) => handleCheckboxClick(e, ticket.id)}
+            >
+              <input
+                type="checkbox"
+                checked={checkedIds.has(ticket.id)}
+                onChange={() => {}}
+                className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary cursor-pointer"
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h3 className="font-medium text-text-primary line-clamp-1">
+                {ticket.title}
+              </h3>
+              {priorityIndicator && (
+                <span className={`text-xs shrink-0 ${priorityIndicator.className}`}>
+                  {priorityIndicator.label}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+              <span className={getStatusBadgeClass(ticket.status)}>
+                {ticket.status}
               </span>
-            )}
+              <span className="text-xs text-text-secondary">
+                {ticket.problemType}
+              </span>
           </div>
 
-          <div className="flex items-center gap-2 mb-2">
-            <span className={getStatusBadgeClass(ticket.status)}>
-              {ticket.status}
-            </span>
-            <span className="text-xs text-text-secondary">
-              {ticket.problemType}
-            </span>
+            <div className="flex items-center justify-between text-xs text-text-secondary">
+              <span>{ticket.requester.displayName}</span>
+              <span>{formatRelativeDate(ticket.created)}</span>
+            </div>
           </div>
-
-          <div className="flex items-center justify-between text-xs text-text-secondary">
-            <span>{ticket.requester.displayName}</span>
-            <span>{formatRelativeDate(ticket.created)}</span>
-          </div>
-        </button>
+        </div>
         );
       })}
     </div>

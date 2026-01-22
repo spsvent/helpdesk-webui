@@ -14,6 +14,7 @@ import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
+import BulkActionToolbar from "@/components/BulkActionToolbar";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
@@ -29,6 +30,10 @@ export default function Home() {
   const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [loadingArchived, setLoadingArchived] = useState(false);
   const [pendingApprovalAction, setPendingApprovalAction] = useState<string | null>(null);
+
+  // Bulk selection state (admin only)
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [lastCheckedId, setLastCheckedId] = useState<string | null>(null);
 
   // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(384); // 384px = w-96 default
@@ -104,6 +109,60 @@ export default function Home() {
     const filtered = filterTickets(rbacFilteredTickets, filters);
     return sortTickets(filtered, filters.sort);
   }, [rbacFilteredTickets, filters]);
+
+  // Handle bulk checkbox toggle (with shift-click range selection)
+  const handleToggleCheck = useCallback(
+    (ticketId: string, shiftKey: boolean) => {
+      setCheckedIds((prev) => {
+        const newSet = new Set(prev);
+
+        if (shiftKey && lastCheckedId) {
+          // Range selection - find indices and select all between
+          const ticketIds = filteredAndSortedTickets.map((t) => t.id);
+          const lastIndex = ticketIds.indexOf(lastCheckedId);
+          const currentIndex = ticketIds.indexOf(ticketId);
+
+          if (lastIndex !== -1 && currentIndex !== -1) {
+            const start = Math.min(lastIndex, currentIndex);
+            const end = Math.max(lastIndex, currentIndex);
+            for (let i = start; i <= end; i++) {
+              newSet.add(ticketIds[i]);
+            }
+          }
+        } else {
+          // Toggle single item
+          if (newSet.has(ticketId)) {
+            newSet.delete(ticketId);
+          } else {
+            newSet.add(ticketId);
+          }
+        }
+
+        return newSet;
+      });
+      setLastCheckedId(ticketId);
+    },
+    [lastCheckedId, filteredAndSortedTickets]
+  );
+
+  // Clear bulk selection
+  const clearBulkSelection = useCallback(() => {
+    setCheckedIds(new Set());
+    setLastCheckedId(null);
+  }, []);
+
+  // Reload tickets after bulk action
+  const handleBulkActionComplete = useCallback(async () => {
+    if (!accounts[0]) return;
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const freshTickets = await getTickets(client);
+      setTickets(freshTickets);
+      clearBulkSelection();
+    } catch (e) {
+      console.error("Failed to refresh tickets:", e);
+    }
+  }, [accounts, instance, clearBulkSelection]);
 
   // Handle login
   const handleLogin = async () => {
@@ -306,6 +365,15 @@ export default function Home() {
             tickets={rbacFilteredTickets}
           />
 
+          {/* Bulk Action Toolbar (admin only) */}
+          {permissions?.role === "admin" && checkedIds.size > 0 && (
+            <BulkActionToolbar
+              selectedIds={Array.from(checkedIds)}
+              onClearSelection={clearBulkSelection}
+              onActionComplete={handleBulkActionComplete}
+            />
+          )}
+
           {/* Ticket List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
@@ -336,6 +404,9 @@ export default function Home() {
                 tickets={filteredAndSortedTickets}
                 selectedId={selectedTicket?.id}
                 onSelect={setSelectedTicket}
+                showCheckboxes={permissions?.role === "admin"}
+                checkedIds={checkedIds}
+                onToggleCheck={handleToggleCheck}
               />
             )}
           </div>

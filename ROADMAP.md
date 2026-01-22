@@ -8,7 +8,7 @@
 | 2 | **File Attachments** | ✅ Complete | Upload/download/delete via SharePoint list attachments |
 | 3 | **Old Ticket Migration** | ✅ Complete | PowerShell scripts migrate from Plumsail supportdesk |
 | 4 | **Email Notifications** | ✅ Complete | Notify on ticket create, assignments, comments, status changes |
-| 5 | **Bulk Actions** | ⬜ Planned | Admin-only: close/reassign multiple tickets |
+| 5 | **Bulk Actions** | ✅ Complete | Admin-only: status/priority/reassign multiple tickets |
 | 6 | **Dashboard** | ⬜ Planned | Analytics, ticket counts, response times |
 | 7 | **Teams Integration** | ⬜ Planned | Notifications in Teams channels |
 | 8 | **Mobile App** | ⬜ Planned | PWA or responsive improvements |
@@ -105,18 +105,23 @@
 
 ---
 
-### 5. Bulk Actions ⬜
-**Status:** Planned (Admin only)
+### 5. Bulk Actions ✅
+**Status:** Complete (Admin only)
 
-**Actions:**
-- Close multiple tickets
+**Implemented:**
+- Set status on multiple tickets
+- Set priority on multiple tickets
 - Reassign multiple tickets
-- Change priority/status in bulk
-- Export selected tickets
-
-**UI:**
 - Checkbox selection in ticket list
-- Action toolbar when items selected
+- Shift-click for range selection
+- Action toolbar appears when items selected
+
+**Components:**
+- `BulkActionToolbar.tsx` - Dropdown menus for bulk operations
+- Updated `TicketList.tsx` with checkbox support
+- Graph API functions: `bulkUpdateStatus`, `bulkUpdatePriority`, `bulkReassign`
+
+**Note:** Only visible to users with Admin role
 
 ---
 

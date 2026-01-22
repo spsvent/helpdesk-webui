@@ -1039,6 +1039,107 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "admin-bulk-actions",
+    title: "Admin: Bulk Actions",
+    content: (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admin Only:</strong> Bulk actions are only available to administrators.
+          </p>
+        </div>
+
+        <p>
+          Administrators can perform actions on multiple tickets at once using the bulk actions
+          feature. This saves time when you need to update status, priority, or assignee for
+          several tickets.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Selecting Tickets</h4>
+        <p>When logged in as an admin, checkboxes appear next to each ticket in the list:</p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Single select:</strong> Click the checkbox next to a ticket to select it
+          </li>
+          <li>
+            <strong>Range select:</strong> Hold <strong>Shift</strong> and click another checkbox
+            to select all tickets between your last selection and the clicked checkbox
+          </li>
+          <li>
+            <strong>Deselect:</strong> Click a selected checkbox again to deselect it
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Bulk Action Toolbar</h4>
+        <p>
+          When you have one or more tickets selected, a purple toolbar appears above the ticket
+          list showing how many tickets are selected and the available actions:
+        </p>
+
+        <div className="bg-brand-primary text-white px-4 py-2 rounded-lg mt-3">
+          <span className="font-medium">3 tickets selected</span>
+          <span className="ml-4 px-3 py-1 bg-white/20 rounded text-sm">Set Status</span>
+          <span className="ml-2 px-3 py-1 bg-white/20 rounded text-sm">Set Priority</span>
+          <span className="ml-2 px-3 py-1 bg-white/20 rounded text-sm">Reassign</span>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Available Bulk Actions</h4>
+        <div className="space-y-4 mt-3">
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">Set Status</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Change the status of all selected tickets to New, In Progress, On Hold, Resolved, or Closed.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">Set Priority</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Change the priority of all selected tickets to Low, Normal, High, or Urgent.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">Reassign</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Reassign all selected tickets to a different user. Type at least 2 characters
+              to search for users by name or email.
+            </p>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Using Bulk Actions</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Select the tickets you want to update using the checkboxes</li>
+          <li>Click one of the action buttons in the toolbar (Set Status, Set Priority, or Reassign)</li>
+          <li>Select the new value from the dropdown menu</li>
+          <li>The action will be applied to all selected tickets</li>
+          <li>A confirmation will show how many tickets were updated successfully</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Clearing Selection</h4>
+        <p>
+          Click the <strong>X</strong> button on the right side of the toolbar to clear all
+          selections and hide the bulk action toolbar.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Use shift-click to quickly select a range of tickets.
+            For example, select the first ticket, then shift-click the tenth ticket to
+            select all ten at once.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> If some tickets fail to update (e.g., due to permission
+            issues), the toolbar will show how many succeeded and how many failed. Successfully
+            updated tickets will reflect their new values immediately.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "admin-rbac",
     title: "Admin: Managing Visibility Groups",
     content: (

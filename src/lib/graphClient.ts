@@ -427,6 +427,88 @@ export async function getUserByEmail(
   }
 }
 
+// ============================================
+// Bulk Operations (Admin only)
+// ============================================
+
+export interface BulkUpdateResult {
+  ticketId: string;
+  success: boolean;
+  error?: string;
+}
+
+// Bulk update ticket status
+export async function bulkUpdateStatus(
+  client: Client,
+  ticketIds: string[],
+  newStatus: string
+): Promise<BulkUpdateResult[]> {
+  const results: BulkUpdateResult[] = [];
+
+  for (const ticketId of ticketIds) {
+    try {
+      await updateTicketFields(client, ticketId, { Status: newStatus });
+      results.push({ ticketId, success: true });
+    } catch (error) {
+      results.push({
+        ticketId,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return results;
+}
+
+// Bulk update ticket priority
+export async function bulkUpdatePriority(
+  client: Client,
+  ticketIds: string[],
+  newPriority: string
+): Promise<BulkUpdateResult[]> {
+  const results: BulkUpdateResult[] = [];
+
+  for (const ticketId of ticketIds) {
+    try {
+      await updateTicketFields(client, ticketId, { Priority: newPriority });
+      results.push({ ticketId, success: true });
+    } catch (error) {
+      results.push({
+        ticketId,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return results;
+}
+
+// Bulk reassign tickets
+export async function bulkReassign(
+  client: Client,
+  ticketIds: string[],
+  assigneeEmail: string
+): Promise<BulkUpdateResult[]> {
+  const results: BulkUpdateResult[] = [];
+
+  for (const ticketId of ticketIds) {
+    try {
+      await updateTicketFields(client, ticketId, { OriginalAssignedTo: assigneeEmail });
+      results.push({ ticketId, success: true });
+    } catch (error) {
+      results.push({
+        ticketId,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return results;
+}
+
 // Get SharePoint user lookup ID for a user (needed for assignee field)
 export async function getSharePointUserLookupId(
   client: Client,
@@ -462,6 +544,7 @@ export async function updateTicketFields(
     ProblemTypeSub2: string;
     AssignedToLookupId: number;
     Location: string;
+    OriginalAssignedTo: string;
   }>
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
