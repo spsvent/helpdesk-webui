@@ -7,7 +7,7 @@
 | 1 | **Search & Filtering** | ✅ Complete | Full search (ID, title, desc, requester, assignee, location) + filters |
 | 2 | **File Attachments** | ✅ Complete | Upload/download/delete via SharePoint list attachments |
 | 3 | **Old Ticket Migration** | ⬜ Planned | Import historical tickets from previous system |
-| 4 | **Email Notifications** | ⬜ Planned | Notify on updates, comments, assignments |
+| 4 | **Email Notifications** | ✅ Complete | Notify on ticket create, assignments, comments, status changes |
 | 5 | **Bulk Actions** | ⬜ Planned | Admin-only: close/reassign multiple tickets |
 | 6 | **Dashboard** | ⬜ Planned | Analytics, ticket counts, response times |
 | 7 | **Teams Integration** | ⬜ Planned | Notifications in Teams channels |
@@ -73,20 +73,22 @@
 
 ---
 
-### 4. Email Notifications ⬜
-**Status:** Planned
+### 4. Email Notifications ✅
+**Status:** Complete
 
-**Triggers:**
-- New ticket created (to assignee)
-- Ticket assigned/reassigned
-- New comment added
-- Status changed
-- Approval requested/decided
+**Implemented Triggers:**
+- New ticket created → notify assignee
+- Ticket assigned/reassigned → notify new assignee
+- New public comment added → notify requester and assignee
+- Status changed → notify requester
+- Approval requested → notify managers (General Managers group)
+- Approval decided → notify requester
 
-**Approach:**
+**Technical Details:**
 - Microsoft Graph API sendMail
-- Template-based emails
-- User preference for notification frequency
+- HTML email templates with responsive design
+- Action buttons in emails (for approvals)
+- Non-blocking - email failures don't block ticket operations
 
 ---
 

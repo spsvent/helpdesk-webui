@@ -1017,36 +1017,11 @@ const helpSections: HelpSection[] = [
         <p className="mt-3">Click &quot;Apply&quot; to accept the suggestion, or search for a different user.</p>
 
         <h4 className="font-semibold text-text-primary mt-6">Current Auto-Assignment Rules</h4>
-        <div className="space-y-2 mt-3">
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Tech</span>
-            <span>→ jnunn@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Operations</span>
-            <span>→ operations@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Grounds Keeping</span>
-            <span>→ grounds@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Janitorial</span>
-            <span>→ janitorial@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Marketing</span>
-            <span>→ marketing@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">HR</span>
-            <span>→ hr@skyparksantasvillage.com</span>
-          </div>
-          <div className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg text-sm">
-            <span className="font-medium w-32">Customer Service</span>
-            <span>→ customerservice@skyparksantasvillage.com</span>
-          </div>
-        </div>
+        <p className="text-sm text-text-secondary mt-2">
+          Auto-assignment rules are configured by administrators in SharePoint. Each department
+          has a designated contact who receives new tickets automatically. Contact your
+          administrator to view or modify the current assignment rules.
+        </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Saving Changes</h4>
         <p>

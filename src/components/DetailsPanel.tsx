@@ -26,6 +26,7 @@ import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
 import { formatDateTime } from "@/lib/dateUtils";
+import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -195,6 +196,10 @@ export default function DetailsPanel({
     if (!accounts[0] || !hasChanges) return;
 
     setSaving(true);
+    const currentUserName = accounts[0].name || accounts[0].username;
+    const oldStatus = ticket.status;
+    const oldAssigneeEmail = ticket.assignedTo?.email;
+
     try {
       const client = getGraphClient(instance, accounts[0]);
 
@@ -227,6 +232,29 @@ export default function DetailsPanel({
       onUpdate(updated);
       setHasChanges(false);
       setAutoAssignSuggestion(null);
+
+      // Send email notifications (don't block on these)
+      // Notify new assignee if assignment changed
+      if (selectedAssignee?.email && selectedAssignee.email !== oldAssigneeEmail) {
+        sendAssignmentEmail(
+          client,
+          updated,
+          selectedAssignee.email,
+          selectedAssignee.displayName,
+          currentUserName
+        ).catch((e) => console.error("Failed to send assignment email:", e));
+      }
+
+      // Notify requester if status changed
+      if (status !== oldStatus && ticket.requester.email) {
+        sendStatusChangeEmail(
+          client,
+          updated,
+          ticket.requester.email,
+          oldStatus,
+          currentUserName
+        ).catch((e) => console.error("Failed to send status change email:", e));
+      }
     } catch (e) {
       console.error("Failed to update ticket:", e);
     } finally {

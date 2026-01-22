@@ -221,3 +221,249 @@ function escapeHtml(text: string): string {
   };
   return text.replace(/[&<>"']/g, (char) => map[char]);
 }
+
+// ============================================
+// General Ticket Notification Emails
+// ============================================
+
+// Generate new ticket notification email HTML
+function generateNewTicketEmail(
+  ticket: Ticket,
+  recipientName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">New Ticket Assigned</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p>Hi ${escapeHtml(recipientName)},</p>
+      <p>A new support ticket has been assigned to you.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p><span class="label">Priority:</span> ${ticket.priority}</p>
+        <p><span class="label">Category:</span> ${ticket.category}</p>
+        <p><span class="label">Department:</span> ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}</p>
+        <p><span class="label">Requester:</span> ${escapeHtml(ticket.requester.displayName)}</p>
+        ${ticket.location ? `<p><span class="label">Location:</span> ${escapeHtml(ticket.location)}</p>` : ""}
+        ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${escapeHtml(ticket.description.substring(0, 500))}${ticket.description.length > 500 ? "..." : ""}</p>` : ""}
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Generate ticket assignment notification email HTML
+function generateAssignmentEmail(
+  ticket: Ticket,
+  recipientName: string,
+  assignedByName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">Ticket Assigned to You</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p>Hi ${escapeHtml(recipientName)},</p>
+      <p><strong>${escapeHtml(assignedByName)}</strong> has assigned you to a support ticket.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p><span class="label">Priority:</span> ${ticket.priority}</p>
+        <p><span class="label">Status:</span> ${ticket.status}</p>
+        <p><span class="label">Requester:</span> ${escapeHtml(ticket.requester.displayName)}</p>
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Generate new comment notification email HTML
+function generateCommentEmail(
+  ticket: Ticket,
+  commenterName: string,
+  commentPreview: string,
+  recipientIsRequester: boolean
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+  const headline = recipientIsRequester
+    ? "New Update on Your Ticket"
+    : "New Comment on Ticket";
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">${headline}</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p><strong>${escapeHtml(commenterName)}</strong> added a comment to ticket #${ticket.id}.</p>
+
+      <div class="ticket-info">
+        <h3>${escapeHtml(ticket.title)}</h3>
+        <p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <span class="label">Comment:</span><br>
+          ${escapeHtml(commentPreview)}${commentPreview.length >= 300 ? "..." : ""}
+        </p>
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Full Conversation</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Generate status change notification email HTML
+function generateStatusChangeEmail(
+  ticket: Ticket,
+  oldStatus: string,
+  changedByName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  const statusColors: Record<string, string> = {
+    "New": "#3b82f6",
+    "In Progress": "#10b981",
+    "On Hold": "#f59e0b",
+    "Resolved": "#059669",
+    "Closed": "#64748b",
+  };
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">Ticket Status Updated</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p>The status of your support ticket has been updated by <strong>${escapeHtml(changedByName)}</strong>.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p style="margin: 16px 0; text-align: center;">
+          <span style="padding: 4px 12px; border-radius: 4px; background: #f3f4f6; color: #6b7280;">${escapeHtml(oldStatus)}</span>
+          <span style="margin: 0 8px;">→</span>
+          <span style="padding: 4px 12px; border-radius: 4px; background: ${statusColors[ticket.status] || "#3b82f6"}; color: white;">${ticket.status}</span>
+        </p>
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Send notification when a new ticket is created with an assignee
+export async function sendNewTicketEmail(
+  client: Client,
+  ticket: Ticket,
+  assigneeEmail: string,
+  assigneeName: string
+): Promise<void> {
+  const subject = `[New Ticket] #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generateNewTicketEmail(ticket, assigneeName);
+  await sendEmail(client, assigneeEmail, subject, htmlContent);
+}
+
+// Send notification when a ticket is assigned to someone
+export async function sendAssignmentEmail(
+  client: Client,
+  ticket: Ticket,
+  assigneeEmail: string,
+  assigneeName: string,
+  assignedByName: string
+): Promise<void> {
+  const subject = `[Assigned to You] Ticket #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generateAssignmentEmail(ticket, assigneeName, assignedByName);
+  await sendEmail(client, assigneeEmail, subject, htmlContent);
+}
+
+// Send notification when a comment is added (to requester and/or assignee)
+export async function sendCommentEmail(
+  client: Client,
+  ticket: Ticket,
+  recipientEmail: string,
+  commenterName: string,
+  commentText: string,
+  recipientIsRequester: boolean
+): Promise<void> {
+  const subject = recipientIsRequester
+    ? `[Update] Ticket #${ticket.id}: ${ticket.title}`
+    : `[New Comment] Ticket #${ticket.id}: ${ticket.title}`;
+  const preview = commentText.substring(0, 300);
+  const htmlContent = generateCommentEmail(ticket, commenterName, preview, recipientIsRequester);
+  await sendEmail(client, recipientEmail, subject, htmlContent);
+}
+
+// Send notification when ticket status changes (to requester)
+export async function sendStatusChangeEmail(
+  client: Client,
+  ticket: Ticket,
+  requesterEmail: string,
+  oldStatus: string,
+  changedByName: string
+): Promise<void> {
+  const subject = `[${ticket.status}] Ticket #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generateStatusChangeEmail(ticket, oldStatus, changedByName);
+  await sendEmail(client, requesterEmail, subject, htmlContent);
+}

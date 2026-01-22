@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { getGraphClient, createTicket, CreateTicketData } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, getUserByEmail } from "@/lib/graphClient";
+import { sendNewTicketEmail } from "@/lib/emailService";
 import {
   getProblemTypes,
   getProblemTypeSubs,
@@ -136,6 +137,24 @@ export default function NewTicketPage() {
         { ...formData, assigneeEmail: assigneeEmail || undefined },
         requesterEmail
       );
+
+      // Send email notification to assignee if there is one
+      if (assigneeEmail) {
+        try {
+          const assignee = await getUserByEmail(client, assigneeEmail);
+          if (assignee) {
+            await sendNewTicketEmail(
+              client,
+              newTicket,
+              assigneeEmail,
+              assignee.displayName
+            );
+          }
+        } catch (emailError) {
+          // Don't fail the ticket creation if email fails
+          console.error("Failed to send new ticket email:", emailError);
+        }
+      }
 
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);

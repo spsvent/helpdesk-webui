@@ -1,5 +1,7 @@
-// Auto-assignment configuration
-// Maps department/category combinations to default assignees
+// Auto-assignment configuration - FALLBACK ONLY
+// This file contains fallback rules used when SharePoint AutoAssign list is unavailable.
+// For production, configure the AutoAssign SharePoint list to avoid exposing emails in code.
+// See autoAssignConfigService.ts for the SharePoint-based configuration.
 
 export interface AssignmentRule {
   // Match conditions (all must match if specified)

@@ -14,7 +14,7 @@ import {
   deleteAttachment,
   downloadAttachment,
 } from "@/lib/graphClient";
-import { sendApprovalRequestEmail, sendDecisionEmail } from "@/lib/emailService";
+import { sendApprovalRequestEmail, sendDecisionEmail, sendCommentEmail } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
@@ -145,6 +145,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     if (!accounts[0] || !text.trim()) return;
 
     setSubmitting(true);
+    const commenterEmail = accounts[0].username;
+    const commenterName = accounts[0].name || accounts[0].username;
+
     try {
       const client = getGraphClient(instance, accounts[0]);
       const newComment = await addComment(
@@ -154,6 +157,34 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         isInternal
       );
       setComments((prev) => [...prev, newComment]);
+
+      // Send email notifications for non-internal comments
+      if (!isInternal) {
+        // Notify requester if commenter is not the requester
+        if (ticket.requester.email && ticket.requester.email !== commenterEmail) {
+          sendCommentEmail(
+            client,
+            ticket,
+            ticket.requester.email,
+            commenterName,
+            text,
+            true // recipientIsRequester
+          ).catch((e) => console.error("Failed to send comment email to requester:", e));
+        }
+
+        // Notify assignee if there is one and they're not the commenter
+        const assigneeEmail = ticket.assignedTo?.email;
+        if (assigneeEmail && assigneeEmail !== commenterEmail && assigneeEmail !== ticket.requester.email) {
+          sendCommentEmail(
+            client,
+            ticket,
+            assigneeEmail,
+            commenterName,
+            text,
+            false // recipientIsRequester
+          ).catch((e) => console.error("Failed to send comment email to assignee:", e));
+        }
+      }
     } catch (e) {
       console.error("Failed to add comment:", e);
     } finally {

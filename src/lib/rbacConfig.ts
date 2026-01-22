@@ -1,11 +1,15 @@
-// RBAC Configuration - Role-Based Access Control settings
-// Maps Entra ID groups to departments and permissions
+// RBAC Configuration - Role-Based Access Control settings - FALLBACK ONLY
+// This file contains fallback configuration used when SharePoint RBACGroups list is unavailable.
+// For production, configure the RBACGroups SharePoint list to avoid exposing emails in code.
+// See rbacConfigService.ts for the SharePoint-based configuration.
 
-// Hardcoded admin emails (always have full access)
-export const ADMIN_EMAILS = [
-  "admin@skyparksv.onmicrosoft.com",
-  "jnunn@skyparksantasvillage.com",
-];
+// Admin emails from environment variable (comma-separated)
+// Fallback to empty array if not configured - rely on group membership instead
+const adminEmailsEnv = process.env.NEXT_PUBLIC_ADMIN_EMAILS || "";
+export const ADMIN_EMAILS = adminEmailsEnv
+  .split(",")
+  .map((email) => email.trim())
+  .filter((email) => email.length > 0);
 
 // Admin group - members have full access
 export const ADMIN_GROUP_ID = "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"; // GeneralManagers
