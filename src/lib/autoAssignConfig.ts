@@ -15,6 +15,8 @@ export interface AssignmentRule {
   assignTo: string;
   // Optional: SharePoint lookup ID (faster if known)
   assignToLookupId?: number;
+  // Optional: Entra ID group ID for assignee preview (when email doesn't resolve to group)
+  groupId?: string;
 }
 
 // Auto-assignment rules - first matching rule wins
@@ -47,16 +49,18 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
     assignTo: "itav@skyparksantasvillage.com",
   },
 
-  // Operations assignments (placeholder - update with actual users)
+  // Operations assignments
   {
     department: "Operations",
     subCategory: "Dangerous Condition",
     priority: "Urgent",
     assignTo: "operations@skyparksantasvillage.com",
+    groupId: "12c1b657-305b-4fb3-8534-bcf1fe5cd326",
   },
   {
     department: "Operations",
     assignTo: "operations@skyparksantasvillage.com",
+    groupId: "12c1b657-305b-4fb3-8534-bcf1fe5cd326",
   },
 
   // Grounds Keeping assignments
@@ -81,12 +85,20 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
   {
     department: "HR",
     assignTo: "hr@skyparksantasvillage.com",
+    groupId: "bcd1cb4f-d182-4f0e-8ace-fdee41e005f8",
   },
 
   // Customer Service assignments
   {
     department: "Customer Service",
     assignTo: "guestservices@skyparksantasvillage.com",
+  },
+
+  // Inventory assignments
+  {
+    department: "Inventory",
+    assignTo: "inventory@skyparksantasvillage.com",
+    groupId: "3c9e89ce-83dd-4c31-a884-01404b81898e",
   },
 ];
 
@@ -128,4 +140,20 @@ export function getSuggestedAssignee(
 ): string | null {
   const rule = findAssignmentRule(department, subCategory, specificType, category, priority);
   return rule?.assignTo || null;
+}
+
+/**
+ * Get the suggested assignee with group ID for preview lookups
+ * Returns both email and optional groupId for Entra lookups
+ */
+export function getSuggestedAssigneeWithGroup(
+  department: string,
+  subCategory?: string,
+  specificType?: string,
+  category?: "Request" | "Problem",
+  priority?: "Low" | "Normal" | "High" | "Urgent"
+): { email: string; groupId?: string } | null {
+  const rule = findAssignmentRule(department, subCategory, specificType, category, priority);
+  if (!rule) return null;
+  return { email: rule.assignTo, groupId: rule.groupId };
 }

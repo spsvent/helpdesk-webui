@@ -154,7 +154,7 @@ export default function BulkActionToolbar({
             Set Status
           </button>
           {showStatusMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-border py-1 z-50 min-w-[140px]">
+            <div className="absolute top-full left-0 mt-1 bg-bg-card rounded-lg shadow-lg border border-border py-1 z-50 min-w-[140px]">
               {STATUS_OPTIONS.map((status) => (
                 <button
                   key={status}
@@ -181,7 +181,7 @@ export default function BulkActionToolbar({
             Set Priority
           </button>
           {showPriorityMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-border py-1 z-50 min-w-[120px]">
+            <div className="absolute top-full left-0 mt-1 bg-bg-card rounded-lg shadow-lg border border-border py-1 z-50 min-w-[120px]">
               {PRIORITY_OPTIONS.map((priority) => (
                 <button
                   key={priority}
@@ -208,7 +208,7 @@ export default function BulkActionToolbar({
             Reassign
           </button>
           {showAssignMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-border py-2 z-50 min-w-[250px]">
+            <div className="absolute top-full left-0 mt-1 bg-bg-card rounded-lg shadow-lg border border-border py-2 z-50 min-w-[250px]">
               <div className="px-2 pb-2">
                 <input
                   type="text"

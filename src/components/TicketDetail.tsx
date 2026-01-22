@@ -323,7 +323,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Ticket header */}
-      <div className="bg-white border-b border-border px-6 py-4">
+      <div className="bg-bg-card border-b border-border px-6 py-4">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -379,7 +379,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
           {/* Comment input at bottom */}
           {canCommentOnThisTicket ? (
-            <div className="border-t border-border bg-white p-4">
+            <div className="border-t border-border bg-bg-card p-4">
               <CommentInput
                 onSubmit={handleAddComment}
                 disabled={submitting}
@@ -401,7 +401,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
         {/* Details sidebar */}
         <aside
-          className="border-l border-border bg-white overflow-y-auto scroll-container shrink-0"
+          className="border-l border-border bg-bg-card overflow-y-auto scroll-container shrink-0"
           style={{ width: sidebarWidth }}
         >
           <DetailsPanel

@@ -3,6 +3,7 @@
 import { memo, useCallback } from "react";
 import { Ticket } from "@/types/ticket";
 import { formatRelativeDate } from "@/lib/dateUtils";
+import ApprovalStatusBadge from "./ApprovalStatusBadge";
 
 interface TicketListProps {
   tickets: Ticket[];
@@ -110,10 +111,13 @@ function TicketList({
               )}
             </div>
 
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className={getStatusBadgeClass(ticket.status)}>
                 {ticket.status}
               </span>
+              {ticket.approvalStatus && ticket.approvalStatus !== "None" && (
+                <ApprovalStatusBadge status={ticket.approvalStatus} size="sm" />
+              )}
               <span className="text-xs text-text-secondary">
                 {ticket.problemType}
               </span>

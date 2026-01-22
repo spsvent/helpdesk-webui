@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { getGraphClient, createTicket, CreateTicketData, getUserByEmail } from "@/lib/graphClient";
-import { sendNewTicketEmail } from "@/lib/emailService";
+import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
   getProblemTypes,
@@ -16,7 +16,9 @@ import {
   hasSubCategories,
   hasSub2Categories,
 } from "@/lib/categoryConfig";
-import { getSuggestedAssignee } from "@/lib/autoAssignConfig";
+import { getSuggestedAssigneeWithGroup } from "@/lib/autoAssignConfig";
+import { suggestCategory, getSuggestionMessage } from "@/lib/categorySuggestion";
+import AssigneePreview from "@/components/AssigneePreview";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -52,6 +54,29 @@ export default function NewTicketPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUrgentTooltip, setShowUrgentTooltip] = useState(false);
+  const [categorySuggestion, setCategorySuggestion] = useState<{
+    category: "Problem" | "Request" | null;
+    message: string | null;
+    dismissed: boolean;
+  }>({ category: null, message: null, dismissed: false });
+
+  // Compute suggested assignee based on current form selections
+  const suggestedAssignee = useMemo(() => {
+    return getSuggestedAssigneeWithGroup(
+      formData.problemType,
+      formData.problemTypeSub || undefined,
+      formData.problemTypeSub2 || undefined,
+      formData.category
+    );
+  }, [formData.problemType, formData.problemTypeSub, formData.problemTypeSub2, formData.category]);
+
+  // Create Graph client for assignee preview lookup
+  const graphClient = useMemo(() => {
+    if (accounts[0]) {
+      return getGraphClient(instance, accounts[0]);
+    }
+    return null;
+  }, [instance, accounts]);
 
   // Update sub-category options when problemType changes
   useEffect(() => {
@@ -79,6 +104,30 @@ export default function NewTicketPage() {
       setProblemTypeSub2s([]);
     }
   }, [formData.problemType, formData.problemTypeSub]);
+
+  // Analyze title + description for category suggestion
+  useEffect(() => {
+    const combinedText = `${formData.title} ${formData.description}`;
+    if (combinedText.trim().length < 10) {
+      // Not enough text to analyze
+      setCategorySuggestion({ category: null, message: null, dismissed: false });
+      return;
+    }
+
+    const result = suggestCategory(combinedText);
+    const message = getSuggestionMessage(result);
+
+    // Only show suggestion if it differs from current selection and wasn't dismissed
+    if (result.suggestedCategory && result.suggestedCategory !== formData.category) {
+      setCategorySuggestion((prev) => ({
+        category: result.suggestedCategory,
+        message,
+        dismissed: prev.dismissed && prev.category === result.suggestedCategory,
+      }));
+    } else {
+      setCategorySuggestion({ category: null, message: null, dismissed: false });
+    }
+  }, [formData.title, formData.description, formData.category]);
 
   const handleLogin = async () => {
     try {
@@ -126,12 +175,13 @@ export default function NewTicketPage() {
       const requesterEmail = accounts[0]?.username;
 
       // Get auto-assignment based on department/category
-      const assigneeEmail = getSuggestedAssignee(
+      const assigneeResult = getSuggestedAssigneeWithGroup(
         formData.problemType,
         formData.problemTypeSub || undefined,
         formData.problemTypeSub2 || undefined,
         formData.category
       );
+      const assigneeEmail = assigneeResult?.email || null;
 
       const newTicket = await createTicket(
         client,
@@ -159,6 +209,17 @@ export default function NewTicketPage() {
 
       // Send Teams notification (fire-and-forget, only for Normal+ priority)
       sendNewTicketTeamsNotification(client, newTicket);
+
+      // For Request tickets, send approval notification to admins/managers
+      if (formData.category === "Request") {
+        try {
+          const requesterName = accounts[0]?.name || accounts[0]?.username || "Unknown User";
+          await sendApprovalRequestEmail(client, newTicket, requesterName);
+        } catch (approvalEmailError) {
+          // Don't fail the ticket creation if approval email fails
+          console.error("Failed to send approval request email:", approvalEmailError);
+        }
+      }
 
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);
@@ -202,7 +263,7 @@ export default function NewTicketPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-subtle">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+        <div className="bg-bg-card p-8 rounded-lg shadow-lg text-center max-w-md">
           <h1 className="text-2xl font-bold text-text-primary mb-2">
             Submit a Support Ticket
           </h1>
@@ -226,7 +287,7 @@ export default function NewTicketPage() {
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
       {/* Header */}
-      <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between">
+      <header className="bg-bg-card border-b border-border px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             href="/"
@@ -248,7 +309,7 @@ export default function NewTicketPage() {
       {/* Main content */}
       <main className="flex-1 p-8">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+          <div className="bg-bg-card rounded-lg shadow-sm border border-border p-6">
             <h2 className="text-lg font-semibold text-text-primary mb-6">
               Describe Your Issue
             </h2>
@@ -305,6 +366,51 @@ export default function NewTicketPage() {
                 <label className="block text-sm font-medium text-text-primary mb-2">
                   Category <span className="text-red-500">*</span>
                 </label>
+
+                {/* Smart Category Suggestion */}
+                {categorySuggestion.category && categorySuggestion.message && !categorySuggestion.dismissed && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                      />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="text-sm text-amber-800">
+                        <strong>Suggestion:</strong> {categorySuggestion.message}
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, category: categorySuggestion.category! }));
+                            setCategorySuggestion({ category: null, message: null, dismissed: false });
+                          }}
+                          className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+                        >
+                          Switch to {categorySuggestion.category}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCategorySuggestion((prev) => ({ ...prev, dismissed: true }))}
+                          className="px-3 py-1 text-xs font-medium text-amber-700 hover:text-amber-900 transition-colors"
+                        >
+                          Keep {formData.category}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label
                     className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -359,8 +465,11 @@ export default function NewTicketPage() {
                 </div>
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-xs text-blue-800">
-                    <strong>Note:</strong> Requests may require manager approval before being processed.
-                    Problems are routed directly to support staff.
+                    <strong>Note:</strong> {formData.category === "Request" ? (
+                      <>Requests require manager approval before support staff can see them. You&apos;ll be notified when approved.</>
+                    ) : (
+                      <>Problems are routed directly to support staff and will be addressed promptly.</>
+                    )}
                   </p>
                 </div>
               </div>
@@ -384,7 +493,7 @@ export default function NewTicketPage() {
                     name="problemType"
                     value={formData.problemType}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-bg-card"
                   >
                     {getProblemTypes().map((opt) => (
                       <option key={opt} value={opt}>
@@ -408,7 +517,7 @@ export default function NewTicketPage() {
                       name="problemTypeSub"
                       value={formData.problemTypeSub}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
+                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-bg-card"
                       required
                     >
                       {problemTypeSubs.map((opt) => (
@@ -434,7 +543,7 @@ export default function NewTicketPage() {
                       name="problemTypeSub2"
                       value={formData.problemTypeSub2}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-white"
+                      className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-bg-card"
                     >
                       <option value="">Select...</option>
                       {problemTypeSub2s.map((opt) => (
@@ -445,6 +554,13 @@ export default function NewTicketPage() {
                     </select>
                   </div>
                 )}
+
+                {/* Assignee Preview */}
+                <AssigneePreview
+                  assigneeEmail={suggestedAssignee?.email || null}
+                  client={graphClient}
+                  groupId={suggestedAssignee?.groupId}
+                />
               </div>
 
               {/* Priority */}

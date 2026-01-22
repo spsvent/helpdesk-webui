@@ -91,6 +91,36 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
   },
   HR: {},
   "Customer Service": {},
+  Inventory: {
+    "Stock Issues": [
+      "Low Stock Alert",
+      "Out of Stock",
+      "Overstock/Excess",
+      "Damaged Goods",
+      "Expired Items",
+    ],
+    "Receiving": [
+      "Shipment Arrival",
+      "Missing Items",
+      "Incorrect Items",
+      "Damaged in Transit",
+    ],
+    "Stock Transfer": [
+      "Location Transfer Request",
+      "Inter-Department Request",
+    ],
+    "Counting & Audits": [
+      "Cycle Count Request",
+      "Discrepancy Found",
+      "Audit Support",
+    ],
+    "Equipment & Supplies": [
+      "Warehouse Equipment Issue",
+      "Storage Issue",
+      "Supply Request",
+    ],
+    Other: [],
+  },
   Other: {},
 };
 

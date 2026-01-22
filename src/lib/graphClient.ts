@@ -203,6 +203,13 @@ export async function createTicket(
     fields.OriginalAssignedTo = ticketData.assigneeEmail;
   }
 
+  // Request Approval Gate: Request tickets automatically require approval
+  // Problem tickets go through without approval (existing behavior)
+  if (ticketData.category === "Request") {
+    fields.ApprovalStatus = "Pending";
+    fields.ApprovalRequestedDate = new Date().toISOString();
+  }
+
   // Note: Requester is automatically set to the authenticated user by SharePoint (Author/createdBy field)
   // The requesterEmail parameter is kept for potential future use (e.g., submitting on behalf of someone)
 

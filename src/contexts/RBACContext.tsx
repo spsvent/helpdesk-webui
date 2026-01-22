@@ -21,6 +21,7 @@ import {
   getGroupMemberEmails,
   canRequestApproval as canRequestApprovalService,
   canApproveTickets,
+  isVisibleWithApprovalGate,
 } from "@/lib/rbacService";
 import { UserPermissions, DEFAULT_PERMISSIONS } from "@/types/rbac";
 import { Ticket } from "@/types/ticket";
@@ -41,6 +42,7 @@ interface RBACContextValue {
   // Approval workflow helpers
   canRequestApproval: (ticket: Ticket) => boolean;
   canApprove: () => boolean;
+  isVisibleWithApproval: (ticket: Ticket) => boolean;
 }
 
 const RBACContext = createContext<RBACContextValue>({
@@ -55,6 +57,7 @@ const RBACContext = createContext<RBACContextValue>({
   isOwn: () => false,
   canRequestApproval: () => false,
   canApprove: () => false,
+  isVisibleWithApproval: () => true,
 });
 
 export function useRBAC() {
@@ -161,6 +164,11 @@ export function RBACProvider({ children }: RBACProviderProps) {
     [permissions]
   );
 
+  const isVisibleWithApproval = useCallback(
+    (ticket: Ticket) => isVisibleWithApprovalGate(permissions, ticket),
+    [permissions]
+  );
+
   const value: RBACContextValue = {
     permissions,
     loading,
@@ -173,6 +181,7 @@ export function RBACProvider({ children }: RBACProviderProps) {
     isOwn,
     canRequestApproval,
     canApprove,
+    isVisibleWithApproval,
   };
 
   return <RBACContext.Provider value={value}>{children}</RBACContext.Provider>;

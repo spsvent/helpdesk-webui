@@ -413,3 +413,41 @@ export function canRequestApproval(
 export function canApproveTickets(permissions: UserPermissions): boolean {
   return permissions.role === "admin";
 }
+
+/**
+ * Check if a ticket should be visible based on approval gate rules
+ * - Request tickets with pending approval are hidden from support staff
+ * - Admins see all tickets
+ * - Users see their own tickets regardless of approval status
+ */
+export function isVisibleWithApprovalGate(
+  permissions: UserPermissions,
+  ticket: Ticket
+): boolean {
+  // Admins always see all tickets
+  if (permissions.role === "admin") {
+    return true;
+  }
+
+  // Regular users see their own tickets regardless of approval status
+  if (permissions.role === "user") {
+    // If it's their own ticket, they can see it
+    if (isOwnTicket(permissions, ticket)) {
+      return true;
+    }
+    // For non-own tickets (group visibility), apply same rules as support
+  }
+
+  // Support staff (and users viewing non-own tickets):
+  // Hide Request tickets that are pending approval
+  if (ticket.category === "Request" && ticket.approvalStatus === "Pending") {
+    // Exception: Users can see their own pending Request tickets
+    if (permissions.role === "user" && isOwnTicket(permissions, ticket)) {
+      return true;
+    }
+    return false;
+  }
+
+  // All other tickets are visible
+  return true;
+}

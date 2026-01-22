@@ -15,13 +15,14 @@ import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
+import DarkModeToggle from "@/components/DarkModeToggle";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const searchParams = useSearchParams();
-  const { permissions, loading: rbacLoading, canView, canApprove } = useRBAC();
+  const { permissions, loading: rbacLoading, canView, canApprove, isVisibleWithApproval } = useRBAC();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,15 +95,22 @@ export default function Home() {
     }
   }, [accounts, instance, archivedLoaded]);
 
-  // Filter tickets based on RBAC permissions
+  // Filter tickets based on RBAC permissions and approval gate
   const rbacFilteredTickets = useMemo(() => {
-    if (!permissions || permissions.canSeeAllTickets) {
-      // Admins and support staff see all tickets
-      return tickets;
+    let filtered = tickets;
+
+    // First, apply basic RBAC visibility
+    if (permissions && !permissions.canSeeAllTickets) {
+      // Regular users only see tickets they have access to
+      filtered = filtered.filter((ticket) => canView(ticket));
     }
-    // Regular users only see tickets they have access to
-    return tickets.filter((ticket) => canView(ticket));
-  }, [tickets, permissions, canView]);
+
+    // Then, apply approval gate (hides pending Request tickets from support staff)
+    // Admins see all, users see their own, support staff don't see pending Requests
+    filtered = filtered.filter((ticket) => isVisibleWithApproval(ticket));
+
+    return filtered;
+  }, [tickets, permissions, canView, isVisibleWithApproval]);
 
   // Apply user filters and sort on top of RBAC filtering
   const filteredAndSortedTickets = useMemo(() => {
@@ -274,7 +282,7 @@ export default function Home() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-subtle">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+        <div className="bg-bg-card p-8 rounded-lg shadow-lg text-center max-w-md">
           <h1 className="text-2xl font-bold text-text-primary mb-2">
             SkyPark Help Desk
           </h1>
@@ -295,7 +303,7 @@ export default function Home() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
+      <header className="bg-bg-card border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold text-text-primary">
             SkyPark Help Desk
@@ -309,6 +317,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
+          <DarkModeToggle />
           <Link
             href="/help"
             className="text-sm text-text-secondary hover:text-text-primary"
@@ -350,7 +359,7 @@ export default function Home() {
       <div className="flex-1 flex min-h-0">
         {/* Ticket list sidebar */}
         <aside
-          className="border-r border-border bg-white overflow-hidden flex flex-col shrink-0"
+          className="border-r border-border bg-bg-card overflow-hidden flex flex-col shrink-0"
           style={{ width: sidebarWidth }}
         >
           {/* Filters */}

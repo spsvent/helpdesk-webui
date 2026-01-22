@@ -62,6 +62,59 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "dark-mode",
+    title: "Dark Mode",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Help Desk supports dark mode to reduce eye strain in low-light environments.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Switching Color Modes
+        </h4>
+        <p>
+          Click the color mode toggle button in the header (next to the Help link) to cycle through modes:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>System (monitor icon):</strong> Automatically follows your device&apos;s light/dark preference
+          </li>
+          <li>
+            <strong>Light (sun icon):</strong> Always use light mode
+          </li>
+          <li>
+            <strong>Dark (moon icon):</strong> Always use dark mode
+          </li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Your color mode preference is saved automatically and will persist across sessions.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Seasonal Themes
+        </h4>
+        <p>
+          The Help Desk features two color themes that change automatically based on the season:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Forest Adventure:</strong> Default green theme (most of the year)
+          </li>
+          <li>
+            <strong>Santa&apos;s Village:</strong> Festive red theme (November 1 - January 7)
+          </li>
+        </ul>
+        <p className="mt-2">
+          Both themes support light and dark modes.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: "submitting-tickets",
     title: "Submitting a New Ticket",
     content: (
@@ -86,7 +139,45 @@ const helpSections: HelpSection[] = [
           <p><strong>Category</strong>: Select &quot;Request&quot; for new features/access, or &quot;Problem&quot; for something broken</p>
           <p><strong>Department</strong>: Which team should handle this (Tech, Operations, HR, etc.)</p>
           <p><strong>Priority</strong>: How urgent is this issue (see Priority Levels below)</p>
-          <p><strong>Location</strong> (optional): Where the issue is occurring</p>
+          <p><strong>Location</strong> (required): Where the issue is occurring</p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Smart Category Suggestions
+        </h4>
+        <p>
+          As you type your title and description, the system will analyze your text and
+          may suggest a category based on keywords:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Problem keywords:</strong> &quot;broken&quot;, &quot;not working&quot;, &quot;error&quot;, &quot;crashed&quot;, &quot;down&quot;, etc.
+          </li>
+          <li>
+            <strong>Request keywords:</strong> &quot;need&quot;, &quot;new&quot;, &quot;install&quot;, &quot;access&quot;, &quot;permission&quot;, etc.
+          </li>
+        </ul>
+        <p className="mt-2">
+          If the system detects a mismatch, an amber suggestion box will appear. You can
+          click &quot;Switch to [Category]&quot; to accept the suggestion, or &quot;Keep [Category]&quot; to dismiss it.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Assignee Preview
+        </h4>
+        <p>
+          After selecting a department, you&apos;ll see a preview of who will be assigned to your ticket.
+          This shows:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>The job title(s) of the person or team who will handle your ticket</li>
+          <li>If assigned to a group, all team members and their job titles are listed</li>
+        </ul>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-3">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> The assignee preview updates automatically as you change
+            department selections, so you always know who will receive your ticket.
+          </p>
         </div>
 
         <ol className="list-decimal list-inside space-y-2 ml-4" start={3}>
@@ -1556,7 +1647,7 @@ export default function HelpPage() {
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
       {/* Header */}
-      <header className="bg-white border-b border-border px-6 py-3 flex items-center justify-between">
+      <header className="bg-bg-card border-b border-border px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             href="/"
@@ -1573,7 +1664,7 @@ export default function HelpPage() {
       {/* Main content */}
       <div className="flex-1 flex">
         {/* Navigation sidebar */}
-        <aside className="w-64 border-r border-border bg-white overflow-y-auto">
+        <aside className="w-64 border-r border-border bg-bg-card overflow-y-auto">
           <nav className="p-4">
             <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
               Topics

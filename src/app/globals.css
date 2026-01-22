@@ -74,6 +74,76 @@
   --color-scrollbar: #DDD0C4;
 }
 
+/* ============================================
+   Dark Mode Variants
+   ============================================ */
+
+/* Forest Adventure Dark Mode */
+.theme-forest.dark {
+  /* Primary: Lighter green for dark backgrounds */
+  --color-brand-primary: #4A7C23;
+  --color-brand-primary-light: #5C9A2D;
+  --color-brand-primary-dark: #3D6A1C;
+
+  /* Secondary: Lighter brown */
+  --color-brand-secondary: #A67C52;
+
+  /* Accent: Brighter gold */
+  --color-brand-accent: #E8BC5E;
+
+  /* Status colors - brighter for dark mode */
+  --color-brand-green: #48D89A;
+  --color-brand-yellow: #FFC233;
+  --color-brand-red: #F56565;
+
+  /* Text - light text for dark backgrounds */
+  --color-text-primary: #E8F0E0;
+  --color-text-secondary: #A8B89A;
+
+  /* Backgrounds - dark */
+  --color-bg-subtle: #1A1F16;
+  --color-bg-card: #252B20;
+
+  /* Border */
+  --color-border: #3A4232;
+
+  /* Scrollbar */
+  --color-scrollbar: #4A5440;
+}
+
+/* Santa's Village Dark Mode */
+.theme-santa.dark {
+  /* Primary: Brighter red for dark backgrounds */
+  --color-brand-primary: #D4364A;
+  --color-brand-primary-light: #E8495D;
+  --color-brand-primary-dark: #B22234;
+
+  /* Secondary: Brighter green */
+  --color-brand-secondary: #2D8B5A;
+
+  /* Accent: Brighter gold */
+  --color-brand-accent: #F0C850;
+
+  /* Status colors - brighter for dark mode */
+  --color-brand-green: #2D8B5A;
+  --color-brand-yellow: #FFE033;
+  --color-brand-red: #E8495D;
+
+  /* Text - light text for dark backgrounds */
+  --color-text-primary: #FDF0E8;
+  --color-text-secondary: #C9B8A8;
+
+  /* Backgrounds - warm dark */
+  --color-bg-subtle: #1F1815;
+  --color-bg-card: #2A2220;
+
+  /* Border */
+  --color-border: #4A3830;
+
+  /* Scrollbar */
+  --color-scrollbar: #5A4840;
+}
+
 /* Custom styles for helpdesk UI */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
@@ -102,16 +172,18 @@ body {
 }
 
 .badge-on-hold {
-  @apply bg-gray-100 text-gray-800;
+  background-color: color-mix(in srgb, var(--color-text-secondary) 15%, var(--color-bg-card));
+  color: var(--color-text-secondary);
 }
 
 .badge-resolved {
-  background-color: color-mix(in srgb, var(--color-brand-green) 12%, white);
+  background-color: color-mix(in srgb, var(--color-brand-green) 12%, var(--color-bg-card));
   color: var(--color-brand-green);
 }
 
 .badge-closed {
-  @apply bg-slate-100 text-slate-800;
+  background-color: color-mix(in srgb, var(--color-text-secondary) 10%, var(--color-bg-card));
+  color: var(--color-text-secondary);
 }
 
 /* Priority badges */

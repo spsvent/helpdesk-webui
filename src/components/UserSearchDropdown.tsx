@@ -135,7 +135,7 @@ export default function UserSearchDropdown({
     <div ref={containerRef} className="relative">
       {/* Selected user or search input */}
       {value && !isOpen ? (
-        <div className="flex items-center gap-2 p-2 border border-border rounded-lg bg-white">
+        <div className="flex items-center gap-2 p-2 border border-border rounded-lg bg-bg-card">
           <UserAvatar name={value.displayName} size="sm" />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate">{value.displayName}</div>
@@ -183,7 +183,7 @@ export default function UserSearchDropdown({
 
       {/* Dropdown results */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {searchQuery.length < 2 ? (
             <div className="p-3 text-sm text-text-secondary text-center">
               Type at least 2 characters to search
