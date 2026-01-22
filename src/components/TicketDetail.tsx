@@ -128,7 +128,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       setAttachmentsLoading(true);
       try {
         const client = getGraphClient(instance, accounts[0]);
-        const ticketAttachments = await getAttachments(client, ticket.id);
+        const ticketAttachments = await getAttachments(client, ticket.id, instance, accounts[0]);
         setAttachments(ticketAttachments);
       } catch (e) {
         console.error("Failed to fetch attachments:", e);
@@ -198,7 +198,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const attachment = await uploadAttachment(client, ticket.id, file);
+      const attachment = await uploadAttachment(client, ticket.id, file, instance, accounts[0]);
       if (attachment) {
         setAttachments((prev) => [...prev, attachment]);
         return true;
@@ -216,7 +216,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const success = await deleteAttachment(client, ticket.id, filename);
+      const success = await deleteAttachment(client, ticket.id, filename, instance, accounts[0]);
       if (success) {
         setAttachments((prev) => prev.filter((a) => a.name !== filename));
       }
@@ -231,7 +231,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const blob = await downloadAttachment(client, ticket.id, filename);
+      const blob = await downloadAttachment(client, ticket.id, filename, instance, accounts[0]);
       if (blob) {
         // Create a download link and trigger it
         const url = URL.createObjectURL(blob);

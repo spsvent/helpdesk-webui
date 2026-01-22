@@ -15,6 +15,9 @@ const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const TICKETS_LIST_ID = process.env.NEXT_PUBLIC_TICKETS_LIST_ID || "";
 const COMMENTS_LIST_ID = process.env.NEXT_PUBLIC_COMMENTS_LIST_ID || "";
 
+// SharePoint site URL for REST API calls (attachments)
+const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
+
 // Create authenticated Graph client
 export function getGraphClient(
   msalInstance: IPublicClientApplication,
@@ -568,11 +571,55 @@ export async function updateTicketFields(
 // File Attachment Functions
 // ============================================
 
-// Get all attachments for a ticket
+// Get all attachments for a ticket using SharePoint REST API
 export async function getAttachments(
   client: Client,
-  ticketId: string
+  ticketId: string,
+  msalInstance?: IPublicClientApplication,
+  account?: AccountInfo
 ): Promise<Attachment[]> {
+  // If MSAL instance provided, use SharePoint REST API
+  if (msalInstance && account) {
+    try {
+      const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...graphScopes,
+        account,
+      });
+
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles`;
+
+      const response = await fetch(spRestUrl, {
+        headers: {
+          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Accept": "application/json;odata=verbose",
+        },
+      });
+
+      if (!response.ok) {
+        // Attachments may not be enabled on this list - return empty array silently
+        if (response.status === 404 || response.status === 400) {
+          return [];
+        }
+        throw new Error(`SharePoint REST API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return (data.d?.results || []).map((att: Record<string, unknown>) => ({
+        name: att.FileName as string,
+        contentType: "application/octet-stream",
+        size: 0, // SharePoint REST API doesn't return size in this endpoint
+        contentUrl: att.ServerRelativeUrl as string || "",
+      }));
+    } catch (error) {
+      // Only log if it's a real error, not expected "no attachments" scenarios
+      if (error instanceof Error && !error.message.includes("404") && !error.message.includes("400")) {
+        console.error("Failed to get attachments:", error);
+      }
+      return [];
+    }
+  }
+
+  // Fallback: try Graph API (may not work for SharePoint list attachments)
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
 
   try {
@@ -583,31 +630,74 @@ export async function getAttachments(
       size: att.size as number || 0,
       contentUrl: att.contentUrl as string || "",
     }));
-  } catch (error) {
-    console.error("Failed to get attachments:", error);
+  } catch {
+    // Graph API doesn't support list item attachments - this is expected
     return [];
   }
 }
 
-// Upload an attachment to a ticket
+// Upload an attachment to a ticket using SharePoint REST API
 export async function uploadAttachment(
   client: Client,
   ticketId: string,
-  file: File
+  file: File,
+  msalInstance?: IPublicClientApplication,
+  account?: AccountInfo
 ): Promise<Attachment | null> {
+  // Sanitize filename
+  const sanitizedName = file.name.replace(/[#%&*:<>?\/\\|]/g, "_");
+
+  // If MSAL instance provided, use SharePoint REST API
+  if (msalInstance && account) {
+    try {
+      const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...graphScopes,
+        account,
+      });
+
+      const arrayBuffer = await file.arrayBuffer();
+
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/add(FileName='${encodeURIComponent(sanitizedName)}')`;
+
+      const response = await fetch(spRestUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Accept": "application/json;odata=verbose",
+          "Content-Type": "application/octet-stream",
+        },
+        body: arrayBuffer,
+      });
+
+      if (!response.ok) {
+        throw new Error(`SharePoint REST API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        name: data.d?.FileName || sanitizedName,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+        contentUrl: data.d?.ServerRelativeUrl || "",
+      };
+    } catch (error) {
+      console.error("Failed to upload attachment:", error);
+      return null;
+    }
+  }
+
+  // Fallback: try Graph API (may not work)
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
 
   try {
-    // Read file as array buffer
     const arrayBuffer = await file.arrayBuffer();
 
-    // Upload the attachment
     const response = await client
       .api(endpoint)
       .header("Content-Type", "application/json")
       .post({
         "@odata.type": "#microsoft.graph.attachment",
-        name: file.name,
+        name: sanitizedName,
         contentBytes: arrayBufferToBase64(arrayBuffer),
       });
 
@@ -655,12 +745,41 @@ export async function uploadAttachmentDirect(
   }
 }
 
-// Delete an attachment from a ticket
+// Delete an attachment from a ticket using SharePoint REST API
 export async function deleteAttachment(
   client: Client,
   ticketId: string,
-  filename: string
+  filename: string,
+  msalInstance?: IPublicClientApplication,
+  account?: AccountInfo
 ): Promise<boolean> {
+  // If MSAL instance provided, use SharePoint REST API
+  if (msalInstance && account) {
+    try {
+      const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...graphScopes,
+        account,
+      });
+
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')`;
+
+      const response = await fetch(spRestUrl, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Accept": "application/json;odata=verbose",
+          "X-HTTP-Method": "DELETE",
+        },
+      });
+
+      return response.ok || response.status === 404; // 404 means already deleted
+    } catch (error) {
+      console.error("Failed to delete attachment:", error);
+      return false;
+    }
+  }
+
+  // Fallback: try Graph API (may not work)
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}`;
 
   try {
@@ -672,12 +791,42 @@ export async function deleteAttachment(
   }
 }
 
-// Download an attachment (returns blob)
+// Download an attachment (returns blob) using SharePoint REST API
 export async function downloadAttachment(
   client: Client,
   ticketId: string,
-  filename: string
+  filename: string,
+  msalInstance?: IPublicClientApplication,
+  account?: AccountInfo
 ): Promise<Blob | null> {
+  // If MSAL instance provided, use SharePoint REST API
+  if (msalInstance && account) {
+    try {
+      const tokenResponse = await msalInstance.acquireTokenSilent({
+        ...graphScopes,
+        account,
+      });
+
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')/$value`;
+
+      const response = await fetch(spRestUrl, {
+        headers: {
+          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`SharePoint REST API error: ${response.status}`);
+      }
+
+      return await response.blob();
+    } catch (error) {
+      console.error("Failed to download attachment:", error);
+      return null;
+    }
+  }
+
+  // Fallback: try Graph API (may not work)
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}/$value`;
 
   try {
