@@ -204,7 +204,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
           <p className="mt-4 text-text-secondary">Authenticating...</p>
         </div>
       </div>
@@ -224,7 +224,7 @@ export default function Home() {
           </p>
           <button
             onClick={handleLogin}
-            className="bg-brand-blue hover:bg-brand-blue-light text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="bg-brand-primary hover:bg-brand-primary-light text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
             Sign in with Microsoft
           </button>
@@ -243,7 +243,7 @@ export default function Home() {
           </h1>
           <Link
             href="/new"
-            className="px-4 py-1.5 bg-brand-blue text-white text-sm rounded-lg font-medium hover:bg-brand-blue-light transition-colors"
+            className="px-4 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors"
           >
             + New Ticket
           </Link>
@@ -303,6 +303,7 @@ export default function Home() {
             archivedLoaded={archivedLoaded}
             loadingArchived={loadingArchived}
             onLoadArchived={loadArchivedTickets}
+            tickets={rbacFilteredTickets}
           />
 
           {/* Ticket List */}
@@ -321,7 +322,7 @@ export default function Home() {
                 <p className="text-sm text-text-secondary mb-4">{error}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="text-sm text-brand-blue hover:underline"
+                  className="text-sm text-brand-primary hover:underline"
                 >
                   Try again
                 </button>
@@ -343,7 +344,7 @@ export default function Home() {
         {/* Resize handle */}
         <div
           onMouseDown={startResizing}
-          className="w-1 cursor-col-resize hover:bg-brand-blue/30 active:bg-brand-blue/50 transition-colors shrink-0"
+          className="w-1 cursor-col-resize hover:bg-brand-primary/30 active:bg-brand-primary/50 transition-colors shrink-0"
           title="Drag to resize"
         />
 

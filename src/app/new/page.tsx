@@ -25,47 +25,7 @@ const PRIORITY_OPTIONS = [
   { value: "Urgent", label: "Urgent", description: "Drop everything - full company resources, critical business impact" },
 ] as const;
 
-const LOCATION_OPTIONS = [
-  "Admin Office",
-  "Admissions",
-  "Adventure Center",
-  "Adventure Zipline",
-  "Arrow's Adventure",
-  "B-Rail",
-  "Bike Park",
-  "Billy's BBQ House",
-  "Birthday Room - Enchanted Forest",
-  "Bridal Suite",
-  "Campground",
-  "CoachWorks",
-  "Creekside",
-  "Fantasy Forest",
-  "Frozen Falls",
-  "Gingerbread House Bakery",
-  "Kringle's Coffee & Gifts",
-  "Magic Tree Bouldering Room",
-  "Merry Moments Photo Shoppe",
-  "Park Wide",
-  "Pedal Pub",
-  "Royal Encampment at Sky Trading",
-  "Safety/Security",
-  "Santa's House",
-  "Santa's Village Mining Co",
-  "Santa's Workshop",
-  "Serrano Archery Range",
-  "Silver Bells Arena",
-  "Silver Bells Arena Concessions",
-  "Sky Trading Co",
-  "St. Nick's Patio and Grille",
-  "Terrace",
-  "The Lunchbox",
-  "Top of the World",
-  "Toy Test Track",
-  "Village Green Breakroom",
-  "Zipline",
-  "Other",
-  "N/A",
-] as const;
+import { LOCATION_OPTIONS } from "@/lib/locationConfig";
 
 export default function NewTicketPage() {
   const router = useRouter();

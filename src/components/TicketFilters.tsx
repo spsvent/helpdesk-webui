@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   TicketFilters,
   STATUS_OPTIONS,
@@ -15,6 +15,7 @@ import {
 import { Ticket } from "@/types/ticket";
 import { getActiveFilterCount } from "@/lib/filterUtils";
 import { getProblemTypes, getProblemTypeSubs, getProblemTypeSub2s } from "@/lib/categoryConfig";
+import { getLocations } from "@/lib/locationConfig";
 
 interface TicketFiltersProps {
   filters: TicketFilters;
@@ -24,6 +25,7 @@ interface TicketFiltersProps {
   archivedLoaded: boolean;
   loadingArchived: boolean;
   onLoadArchived: () => void;
+  tickets: Ticket[];  // For extracting unique assignees
 }
 
 export default function TicketFiltersComponent({
@@ -34,6 +36,7 @@ export default function TicketFiltersComponent({
   archivedLoaded,
   loadingArchived,
   onLoadArchived,
+  tickets,
 }: TicketFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -50,6 +53,33 @@ export default function TicketFiltersComponent({
   }, [searchInput, filters, onFiltersChange]);
 
   const activeFilterCount = getActiveFilterCount(filters);
+
+  // Extract unique assignees from tickets
+  const uniqueAssignees = useMemo(() => {
+    const assigneeMap = new Map<string, string>();
+    tickets.forEach((ticket) => {
+      if (ticket.assignedTo?.email) {
+        const email = ticket.assignedTo.email.toLowerCase();
+        if (!assigneeMap.has(email)) {
+          assigneeMap.set(email, ticket.assignedTo.displayName || ticket.originalAssignedTo || email);
+        }
+      }
+    });
+    return Array.from(assigneeMap.entries())
+      .map(([email, name]) => ({ email, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tickets]);
+
+  // Extract unique locations from tickets
+  const uniqueLocations = useMemo(() => {
+    const locationSet = new Set<string>();
+    tickets.forEach((ticket) => {
+      if (ticket.location) {
+        locationSet.add(ticket.location);
+      }
+    });
+    return Array.from(locationSet).sort();
+  }, [tickets]);
 
   // Toggle status in multi-select
   const toggleStatus = useCallback(
@@ -141,6 +171,8 @@ export default function TicketFiltersComponent({
     filters.priority.length > 0 ||
     filters.problemType !== null ||
     filters.category !== null ||
+    filters.assignee !== null ||
+    filters.location !== null ||
     filters.dateRange !== "all" ||
     // Check if status differs from default
     JSON.stringify([...filters.status].sort()) !== JSON.stringify([...DEFAULT_FILTERS.status].sort());
@@ -178,7 +210,7 @@ export default function TicketFiltersComponent({
             placeholder="Search tickets..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+            className="w-full pl-9 pr-8 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
           />
           {searchInput && (
             <button
@@ -201,7 +233,7 @@ export default function TicketFiltersComponent({
               title={PRESET_VIEWS[preset].description}
               className={`px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors ${
                 activePreset === preset
-                  ? "bg-brand-blue text-white"
+                  ? "bg-brand-primary text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -211,7 +243,7 @@ export default function TicketFiltersComponent({
         </div>
 
         {/* Sort and Filter Toggle Row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {/* Sort Dropdown */}
           <select
             value={filters.sort}
@@ -219,7 +251,7 @@ export default function TicketFiltersComponent({
               setActivePreset("default"); // Clear preset when manually changing sort
               onFiltersChange({ ...filters, sort: e.target.value as TicketFilters["sort"] });
             }}
-            className="flex-1 text-sm px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+            className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary min-w-0"
           >
             {SORT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -231,9 +263,9 @@ export default function TicketFiltersComponent({
           {/* Filter Toggle Button with Arrow */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs border rounded-lg transition-colors shrink-0 ${
               showFilters || activeFilterCount > 0
-                ? "bg-brand-blue text-white border-brand-blue"
+                ? "bg-brand-primary text-white border-brand-primary"
                 : "border-border hover:bg-gray-50"
             }`}
           >
@@ -247,7 +279,7 @@ export default function TicketFiltersComponent({
             </svg>
             Filters
             {activeFilterCount > 0 && (
-              <span className="bg-white text-brand-blue text-xs font-bold px-1.5 py-0.5 rounded-full">
+              <span className="bg-white text-brand-primary text-xs font-bold px-1.5 py-0.5 rounded-full">
                 {activeFilterCount}
               </span>
             )}
@@ -279,7 +311,7 @@ export default function TicketFiltersComponent({
                   onClick={() => toggleStatus(status)}
                   className={`px-2 py-1 text-xs rounded-full border transition-colors ${
                     filters.status.includes(status)
-                      ? "bg-brand-blue text-white border-brand-blue"
+                      ? "bg-brand-primary text-white border-brand-primary"
                       : "border-gray-300 hover:bg-gray-100"
                   }`}
                 >
@@ -305,7 +337,7 @@ export default function TicketFiltersComponent({
                         ? "bg-red-600 text-white border-red-600"
                         : priority === "High"
                         ? "bg-orange-500 text-white border-orange-500"
-                        : "bg-brand-blue text-white border-brand-blue"
+                        : "bg-brand-primary text-white border-brand-primary"
                       : "border-gray-300 hover:bg-gray-100"
                   }`}
                 >
@@ -324,7 +356,7 @@ export default function TicketFiltersComponent({
               <select
                 value={filters.problemType || ""}
                 onChange={(e) => handleProblemTypeChange(e.target.value)}
-                className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
               >
                 <option value="">All</option>
                 {getProblemTypes().map((type) => (
@@ -338,7 +370,7 @@ export default function TicketFiltersComponent({
                 <select
                   value={filters.problemTypeSub || ""}
                   onChange={(e) => handleProblemTypeSubChange(e.target.value)}
-                  className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                 >
                   <option value="">All</option>
                   {problemTypeSubs.map((sub) => (
@@ -353,7 +385,7 @@ export default function TicketFiltersComponent({
                 <select
                   value={filters.problemTypeSub2 || ""}
                   onChange={(e) => handleProblemTypeSub2Change(e.target.value)}
-                  className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                 >
                   <option value="">All</option>
                   {problemTypeSub2s.map((sub2) => (
@@ -376,7 +408,7 @@ export default function TicketFiltersComponent({
                 onClick={() => onFiltersChange({ ...filters, category: null })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === null
-                    ? "bg-brand-blue text-white border-brand-blue"
+                    ? "bg-brand-primary text-white border-brand-primary"
                     : "border-gray-300 hover:bg-gray-100"
                 }`}
               >
@@ -386,7 +418,7 @@ export default function TicketFiltersComponent({
                 onClick={() => onFiltersChange({ ...filters, category: "Request" })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Request"
-                    ? "bg-brand-blue text-white border-brand-blue"
+                    ? "bg-brand-primary text-white border-brand-primary"
                     : "border-gray-300 hover:bg-gray-100"
                 }`}
               >
@@ -396,7 +428,7 @@ export default function TicketFiltersComponent({
                 onClick={() => onFiltersChange({ ...filters, category: "Problem" })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Problem"
-                    ? "bg-brand-blue text-white border-brand-blue"
+                    ? "bg-brand-primary text-white border-brand-primary"
                     : "border-gray-300 hover:bg-gray-100"
                 }`}
               >
@@ -404,6 +436,52 @@ export default function TicketFiltersComponent({
               </button>
             </div>
           </div>
+
+          {/* Assignee Filter */}
+          {uniqueAssignees.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                Assignee
+              </label>
+              <select
+                value={filters.assignee || ""}
+                onChange={(e) =>
+                  onFiltersChange({ ...filters, assignee: e.target.value || null })
+                }
+                className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              >
+                <option value="">All Assignees</option>
+                {uniqueAssignees.map((assignee) => (
+                  <option key={assignee.email} value={assignee.email}>
+                    {assignee.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Location Filter */}
+          {uniqueLocations.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                Location
+              </label>
+              <select
+                value={filters.location || ""}
+                onChange={(e) =>
+                  onFiltersChange({ ...filters, location: e.target.value || null })
+                }
+                className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              >
+                <option value="">All Locations</option>
+                {uniqueLocations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Date Range */}
           <div>
@@ -418,7 +496,7 @@ export default function TicketFiltersComponent({
                   dateRange: e.target.value as TicketFilters["dateRange"],
                 })
               }
-              className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+              className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             >
               {DATE_RANGE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>

@@ -16,6 +16,8 @@ export interface TicketFilters {
   problemTypeSub: string | null;   // Level 2: Sub-category
   problemTypeSub2: string | null;  // Level 3: Specific type
   category: Ticket["category"] | null;
+  assignee: string | null;         // Filter by assignee email
+  location: string | null;         // Filter by location
   dateRange: DateRange;
   sort: SortOption;
 }
@@ -29,6 +31,8 @@ export const DEFAULT_FILTERS: TicketFilters = {
   problemTypeSub: null,
   problemTypeSub2: null,
   category: null,
+  assignee: null,
+  location: null,
   dateRange: "all",
   sort: "default",
 };
@@ -42,6 +46,8 @@ export const EMPTY_FILTERS: TicketFilters = {
   problemTypeSub: null,
   problemTypeSub2: null,
   category: null,
+  assignee: null,
+  location: null,
   dateRange: "all",
   sort: "recent",
 };

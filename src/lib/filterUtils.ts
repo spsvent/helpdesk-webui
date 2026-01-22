@@ -8,14 +8,22 @@ import { TicketFilters, SortOption, DateRange, DEFAULT_FILTERS } from "@/types/f
  */
 export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket[] {
   return tickets.filter((ticket) => {
-    // Search filter (title, description, requester)
+    // Search filter (title, description, requester, assignee, ticket ID, location)
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       const matchesSearch =
         ticket.title.toLowerCase().includes(searchLower) ||
         ticket.description.toLowerCase().includes(searchLower) ||
         ticket.requester.displayName.toLowerCase().includes(searchLower) ||
-        (ticket.originalRequester?.toLowerCase().includes(searchLower) ?? false);
+        (ticket.originalRequester?.toLowerCase().includes(searchLower) ?? false) ||
+        // Search by ticket ID (with or without # prefix)
+        ticket.id === searchLower.replace(/^#/, "") ||
+        ticket.id.includes(searchLower.replace(/^#/, "")) ||
+        // Search by assignee name
+        (ticket.assignedTo?.displayName?.toLowerCase().includes(searchLower) ?? false) ||
+        (ticket.originalAssignedTo?.toLowerCase().includes(searchLower) ?? false) ||
+        // Search by location
+        (ticket.location?.toLowerCase().includes(searchLower) ?? false);
       if (!matchesSearch) return false;
     }
 
@@ -42,6 +50,19 @@ export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket
 
     // Category filter
     if (filters.category && ticket.category !== filters.category) {
+      return false;
+    }
+
+    // Assignee filter
+    if (filters.assignee) {
+      const assigneeEmail = ticket.assignedTo?.email?.toLowerCase() || "";
+      if (assigneeEmail !== filters.assignee.toLowerCase()) {
+        return false;
+      }
+    }
+
+    // Location filter
+    if (filters.location && ticket.location !== filters.location) {
       return false;
     }
 
@@ -148,6 +169,8 @@ export function getActiveFilterCount(filters: TicketFilters): number {
   if (filters.problemTypeSub) count++;
   if (filters.problemTypeSub2) count++;
   if (filters.category) count++;
+  if (filters.assignee) count++;
+  if (filters.location) count++;
   if (filters.dateRange !== "all") count++;
 
   return count;

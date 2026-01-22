@@ -4,7 +4,7 @@
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | **Search & Filtering** | 🟡 In Progress | Basic filtering exists, needs full-text search |
+| 1 | **Search & Filtering** | ✅ Complete | Full search (ID, title, desc, requester, assignee, location) + filters |
 | 2 | **File Attachments** | ⬜ Planned | Upload files to tickets via SharePoint |
 | 3 | **Old Ticket Migration** | ⬜ Planned | Import historical tickets from previous system |
 | 4 | **Email Notifications** | ⬜ Planned | Notify on updates, comments, assignments |
@@ -20,18 +20,22 @@
 
 ## Feature Details
 
-### 1. Search & Filtering 🟡
-**Status:** Partially complete
+### 1. Search & Filtering ✅
+**Status:** Complete
 
-**Current:**
-- Filter by status (All, Open, My Tickets)
-- Sort by date
-
-**Needed:**
-- Full-text search across title/description
-- Filter by department, priority, assignee
-- Date range filtering
-- Save filter presets
+**Implemented:**
+- Full-text search across title, description, requester, assignee, location
+- Search by ticket ID (with or without # prefix)
+- Filter by status (multi-select)
+- Filter by priority (multi-select)
+- Filter by department (cascading: Dept → Sub → Specific)
+- Filter by category (Request/Problem)
+- Filter by assignee (dropdown of active assignees)
+- Filter by location (dropdown of locations with tickets)
+- Date range filtering (Today, Week, Month, All)
+- Sort options (Smart, Priority, Newest, Oldest)
+- Preset views (Active, By Priority, All, Open Only)
+- Load archived tickets (90+ days old)
 
 ---
 
