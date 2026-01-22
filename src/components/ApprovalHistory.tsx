@@ -34,9 +34,9 @@ export default function ApprovalHistory({ ticket }: ApprovalHistoryProps) {
         {/* Request Entry */}
         {hasRequest && (
           <div className="flex items-start gap-3 text-sm">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-primary/15 flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-blue-600"
+                className="w-4 h-4 text-brand-primary"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

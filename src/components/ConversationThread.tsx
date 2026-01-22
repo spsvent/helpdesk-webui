@@ -65,7 +65,7 @@ function CommentCard({
               {formatTimestamp(timestamp)}
             </span>
             {isDescription && (
-              <span className="badge bg-blue-100 text-blue-800">
+              <span className="badge bg-brand-primary/15 text-brand-primary">
                 Description
               </span>
             )}

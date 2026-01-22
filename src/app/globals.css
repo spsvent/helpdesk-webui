@@ -2,10 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   SkyPark Help Desk Theme System
+   - Forest Adventure: Default theme (most of year)
+   - Santa's Village: Nov 1 - Jan 7
+   ============================================ */
+
+/* Forest Adventure Theme (Default) */
+:root, .theme-forest {
+  /* Primary: Deep forest green */
+  --color-brand-primary: #2D5016;
+  --color-brand-primary-light: #4A7C23;
+  --color-brand-primary-dark: #1E3610;
+
+  /* Secondary: Earthy brown */
+  --color-brand-secondary: #8B5E3C;
+
+  /* Accent: Golden amber */
+  --color-brand-accent: #D4A853;
+
+  /* Status colors */
+  --color-brand-green: #36B37E;
+  --color-brand-yellow: #FFAB00;
+  --color-brand-red: #E53E3E;
+
+  /* Text */
+  --color-text-primary: #1A2E05;
+  --color-text-secondary: #4A5D3A;
+
+  /* Backgrounds */
+  --color-bg-subtle: #F5F7F2;
+  --color-bg-card: #FFFFFF;
+
+  /* Border */
+  --color-border: #D4DBC8;
+
+  /* Scrollbar */
+  --color-scrollbar: #C4CDB8;
+}
+
+/* Santa's Village Theme (Holiday Season) */
+.theme-santa {
+  /* Primary: Classic Christmas red */
+  --color-brand-primary: #B22234;
+  --color-brand-primary-light: #D4364A;
+  --color-brand-primary-dark: #8B1A28;
+
+  /* Secondary: Holly green */
+  --color-brand-secondary: #165B33;
+
+  /* Accent: Warm gold */
+  --color-brand-accent: #D4AF37;
+
+  /* Status colors */
+  --color-brand-green: #165B33;
+  --color-brand-yellow: #FFD700;
+  --color-brand-red: #B22234;
+
+  /* Text */
+  --color-text-primary: #2D1810;
+  --color-text-secondary: #5C4033;
+
+  /* Backgrounds - warm snow white */
+  --color-bg-subtle: #FDF8F5;
+  --color-bg-card: #FFFEFA;
+
+  /* Border */
+  --color-border: #E8DDD4;
+
+  /* Scrollbar */
+  --color-scrollbar: #DDD0C4;
+}
+
 /* Custom styles for helpdesk UI */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-  color: #172B4D;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-subtle);
 }
 
 /* Status badges */
@@ -14,15 +87,18 @@ body {
 }
 
 .badge-new {
-  @apply bg-blue-100 text-blue-800;
+  background-color: color-mix(in srgb, var(--color-brand-primary) 15%, white);
+  color: var(--color-brand-primary-dark);
 }
 
 .badge-in-progress {
-  @apply bg-green-100 text-green-800;
+  background-color: color-mix(in srgb, var(--color-brand-green) 15%, white);
+  color: var(--color-brand-green);
 }
 
 .badge-pending {
-  @apply bg-yellow-100 text-yellow-800;
+  background-color: color-mix(in srgb, var(--color-brand-yellow) 20%, white);
+  color: #92640D;
 }
 
 .badge-on-hold {
@@ -30,7 +106,8 @@ body {
 }
 
 .badge-resolved {
-  @apply bg-emerald-100 text-emerald-800;
+  background-color: color-mix(in srgb, var(--color-brand-green) 12%, white);
+  color: var(--color-brand-green);
 }
 
 .badge-closed {
@@ -39,36 +116,42 @@ body {
 
 /* Priority badges */
 .priority-normal {
-  @apply text-gray-600;
+  color: var(--color-text-secondary);
 }
 
 .priority-urgent {
-  @apply text-red-600 font-semibold;
+  color: var(--color-brand-red);
+  @apply font-semibold;
 }
 
 /* Comment cards */
 .comment-card {
-  @apply bg-white rounded-lg border border-border p-4 mb-3;
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border);
+  @apply rounded-lg border p-4 mb-3;
 }
 
 .comment-card-internal {
-  @apply bg-yellow-50 border-yellow-200;
+  background-color: color-mix(in srgb, var(--color-brand-yellow) 10%, white);
+  border-color: color-mix(in srgb, var(--color-brand-yellow) 30%, white);
 }
 
 .comment-card-description {
-  @apply bg-blue-50 border-blue-200;
+  background-color: color-mix(in srgb, var(--color-brand-primary) 8%, white);
+  border-color: color-mix(in srgb, var(--color-brand-primary) 20%, white);
 }
 
 /* User avatar */
 .avatar {
-  @apply w-8 h-8 rounded-full bg-brand-blue text-white flex items-center justify-center text-sm font-medium;
+  background-color: var(--color-brand-primary);
+  @apply w-8 h-8 rounded-full text-white flex items-center justify-center text-sm font-medium;
 }
 
 /* Scrollable container */
 .scroll-container {
   @apply overflow-y-auto;
   scrollbar-width: thin;
-  scrollbar-color: #DFE1E6 transparent;
+  scrollbar-color: var(--color-scrollbar) transparent;
 }
 
 .scroll-container::-webkit-scrollbar {
@@ -80,6 +163,32 @@ body {
 }
 
 .scroll-container::-webkit-scrollbar-thumb {
-  background-color: #DFE1E6;
+  background-color: var(--color-scrollbar);
   border-radius: 3px;
+}
+
+/* Primary button styling */
+.btn-primary {
+  background-color: var(--color-brand-primary);
+  color: white;
+  @apply px-4 py-2 rounded-lg font-medium transition-colors;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-brand-primary-light);
+}
+
+.btn-primary:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+/* Focus ring using theme color */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-subtle), 0 0 0 4px var(--color-brand-primary);
+}
+
+/* Theme transition for smooth switching */
+* {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }

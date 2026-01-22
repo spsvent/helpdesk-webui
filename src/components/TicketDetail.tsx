@@ -24,23 +24,23 @@ interface TicketDetailProps {
 
 function getStatusBadgeClass(status: Ticket["status"]): string {
   const classes: Record<Ticket["status"], string> = {
-    "New": "bg-blue-500",
-    "In Progress": "bg-green-500",
-    "On Hold": "bg-yellow-500",
+    "New": "bg-brand-primary",
+    "In Progress": "bg-brand-green",
+    "On Hold": "bg-brand-yellow",
     "Resolved": "bg-emerald-500",
     "Closed": "bg-slate-500",
   };
-  return `${classes[status] || "bg-blue-500"} text-white`;
+  return `${classes[status] || "bg-brand-primary"} text-white`;
 }
 
 function getPriorityClass(priority: Ticket["priority"]): string {
   const classes: Record<Ticket["priority"], string> = {
-    "Low": "text-gray-500",
-    "Normal": "text-blue-600",
+    "Low": "text-text-secondary",
+    "Normal": "text-brand-primary",
     "High": "text-orange-600 font-semibold",
-    "Urgent": "text-red-600 font-bold",
+    "Urgent": "text-brand-red font-bold",
   };
-  return classes[priority] || "text-blue-600";
+  return classes[priority] || "text-brand-primary";
 }
 
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {

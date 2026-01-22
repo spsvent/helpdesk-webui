@@ -5,6 +5,7 @@ import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication, EventType, AuthenticationResult } from "@azure/msal-browser";
 import { msalConfig } from "@/lib/msalConfig";
 import { RBACProvider } from "@/contexts/RBACContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -66,8 +67,8 @@ export default function RootLayout({
         <body className="bg-bg-subtle min-h-screen">
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-500">Loading...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
+              <p className="mt-4 text-text-secondary">Loading...</p>
             </div>
           </div>
         </body>
@@ -82,11 +83,13 @@ export default function RootLayout({
         <title>SkyPark Help Desk</title>
       </head>
       <body className="bg-bg-subtle min-h-screen">
-        <MsalProvider instance={msalInstance}>
-          <RBACProvider>
-            {children}
-          </RBACProvider>
-        </MsalProvider>
+        <ThemeProvider>
+          <MsalProvider instance={msalInstance}>
+            <RBACProvider>
+              {children}
+            </RBACProvider>
+          </MsalProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -204,7 +204,7 @@ export default function UserSearchDropdown({
                   onClick={() => handleSelectUser(user)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={`flex items-center gap-3 p-2 cursor-pointer ${
-                    index === highlightedIndex ? "bg-blue-50" : "hover:bg-gray-50"
+                    index === highlightedIndex ? "bg-brand-primary/10" : "hover:bg-bg-subtle"
                   }`}
                 >
                   <UserAvatar name={user.displayName} size="sm" />

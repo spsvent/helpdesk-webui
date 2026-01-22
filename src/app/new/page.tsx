@@ -436,8 +436,8 @@ export default function NewTicketPage() {
                       key={opt.value}
                       className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
                         formData.priority === opt.value
-                          ? "border-brand-blue bg-blue-50"
-                          : "border-border hover:bg-gray-50"
+                          ? "border-brand-primary bg-brand-primary/10"
+                          : "border-border hover:bg-bg-subtle"
                       }`}
                     >
                       <input

@@ -63,7 +63,7 @@ function TicketList({ tickets, selectedId, onSelect }: TicketListProps) {
           key={ticket.id}
           onClick={() => onSelect(ticket)}
           className={`w-full text-left p-4 hover:bg-bg-subtle transition-colors ${
-            selectedId === ticket.id ? "bg-blue-50 border-l-4 border-brand-blue" : ""
+            selectedId === ticket.id ? "bg-brand-primary/10 border-l-4 border-brand-primary" : ""
           }`}
         >
           <div className="flex items-start justify-between gap-2 mb-1">

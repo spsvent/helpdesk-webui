@@ -8,15 +8,16 @@ interface UserAvatarProps {
 
 // Generate a consistent color based on the name
 function getAvatarColor(name: string): string {
+  // Theme-complementary colors that work with both Forest and Santa themes
   const colors = [
-    "bg-blue-500",
-    "bg-green-500",
-    "bg-purple-500",
-    "bg-pink-500",
-    "bg-indigo-500",
-    "bg-teal-500",
-    "bg-orange-500",
-    "bg-cyan-500",
+    "bg-brand-primary",
+    "bg-emerald-600",
+    "bg-purple-600",
+    "bg-rose-600",
+    "bg-indigo-600",
+    "bg-teal-600",
+    "bg-amber-600",
+    "bg-cyan-600",
   ];
 
   let hash = 0;

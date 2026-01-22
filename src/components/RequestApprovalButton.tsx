@@ -43,8 +43,8 @@ export default function RequestApprovalButton({
 
   if (showConfirm) {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded p-3">
-        <p className="text-xs text-blue-800 mb-2">
+      <div className="bg-brand-primary/10 border border-brand-primary/20 rounded p-3">
+        <p className="text-xs text-brand-primary-dark mb-2">
           {isReRequest
             ? "Request a new approval for this ticket?"
             : "Notify General Managers to review this ticket?"}

@@ -8,16 +8,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Jira-inspired color palette
-        'brand-blue': '#0052CC',
-        'brand-blue-light': '#4C9AFF',
-        'brand-green': '#36B37E',
-        'brand-yellow': '#FFAB00',
-        'brand-red': '#FF5630',
-        'text-primary': '#172B4D',
-        'text-secondary': '#5E6C84',
-        'bg-subtle': '#F4F5F7',
-        'border': '#DFE1E6',
+        // Theme-aware colors using CSS variables
+        'brand-primary': 'var(--color-brand-primary)',
+        'brand-primary-light': 'var(--color-brand-primary-light)',
+        'brand-primary-dark': 'var(--color-brand-primary-dark)',
+        'brand-secondary': 'var(--color-brand-secondary)',
+        'brand-accent': 'var(--color-brand-accent)',
+        'brand-green': 'var(--color-brand-green)',
+        'brand-yellow': 'var(--color-brand-yellow)',
+        'brand-red': 'var(--color-brand-red)',
+        'text-primary': 'var(--color-text-primary)',
+        'text-secondary': 'var(--color-text-secondary)',
+        'bg-subtle': 'var(--color-bg-subtle)',
+        'bg-card': 'var(--color-bg-card)',
+        'border': 'var(--color-border)',
+        // Legacy aliases for compatibility
+        'brand-blue': 'var(--color-brand-primary)',
+        'brand-blue-light': 'var(--color-brand-primary-light)',
       },
     },
   },
