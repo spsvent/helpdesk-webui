@@ -1,6 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
-import { graphScopes } from "./msalConfig";
+import { graphScopes, sharepointScopes } from "./msalConfig";
 import {
   Ticket,
   Comment,
@@ -581,8 +581,9 @@ export async function getAttachments(
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
+      // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...graphScopes,
+        ...sharepointScopes,
         account,
       });
 
@@ -650,8 +651,9 @@ export async function uploadAttachment(
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
+      // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...graphScopes,
+        ...sharepointScopes,
         account,
       });
 
@@ -756,8 +758,9 @@ export async function deleteAttachment(
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
+      // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...graphScopes,
+        ...sharepointScopes,
         account,
       });
 
@@ -802,8 +805,9 @@ export async function downloadAttachment(
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
+      // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...graphScopes,
+        ...sharepointScopes,
         account,
       });
 

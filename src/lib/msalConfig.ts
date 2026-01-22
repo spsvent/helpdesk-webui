@@ -53,6 +53,15 @@ export const graphScopes = {
   ],
 };
 
+// Scopes for SharePoint REST API (needed for list item attachments)
+// SharePoint REST API requires a token with SharePoint audience, not Graph
+const SHAREPOINT_HOSTNAME = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL?.match(/https:\/\/([^/]+)/)?.[1] || "skyparksv.sharepoint.com";
+export const sharepointScopes = {
+  scopes: [
+    `https://${SHAREPOINT_HOSTNAME}/AllSites.Write`,
+  ],
+};
+
 // Graph API endpoints
 export const graphConfig = {
   graphMeEndpoint: "https://graph.microsoft.com/v1.0/me",
