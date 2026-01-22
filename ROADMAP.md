@@ -6,7 +6,7 @@
 |---|---------|--------|-------|
 | 1 | **Search & Filtering** | ✅ Complete | Full search (ID, title, desc, requester, assignee, location) + filters |
 | 2 | **File Attachments** | ✅ Complete | Upload/download/delete via SharePoint list attachments |
-| 3 | **Old Ticket Migration** | ⬜ Planned | Import historical tickets from previous system |
+| 3 | **Old Ticket Migration** | ✅ Complete | PowerShell scripts migrate from Plumsail supportdesk |
 | 4 | **Email Notifications** | ✅ Complete | Notify on ticket create, assignments, comments, status changes |
 | 5 | **Bulk Actions** | ⬜ Planned | Admin-only: close/reassign multiple tickets |
 | 6 | **Dashboard** | ⬜ Planned | Analytics, ticket counts, response times |
@@ -59,17 +59,30 @@
 
 ---
 
-### 3. Old Ticket Migration ⬜
-**Status:** Planned
+### 3. Old Ticket Migration ✅
+**Status:** Complete
 
-**Approach:**
-- PowerShell script to import from source system
-- Map old fields to new SharePoint schema
-- Preserve timestamps, comments, attachments
-- Mark as "Migrated" for audit trail
+**Source System:** Plumsail supportdesk at `/sites/supportdesk`
 
-**Source systems to support:**
-- TBD (Excel? Previous ticketing system?)
+**Scripts (in parent directory):**
+- `05c-discover-migration-sources.ps1` - Catalog source schemas
+- `06-migrate-tickets.ps1` - Migrate tickets with field transformations
+- `07-migrate-comments.ps1` - Migrate comments linked to tickets
+
+**Field Mappings:**
+- Category: Question→Request, Incident→Problem
+- Status: Pending→On Hold, Solved→Resolved, etc.
+- ProblemType: All old types→Tech (IT-focused legacy system)
+- Location: Various renames/merges
+
+**Preserved Data:**
+- Original timestamps (Created/Modified)
+- Original authors via `OriginalRequester`, `OriginalAssignedTo`, `OriginalAuthor` fields
+- Legacy ticket URL for reference
+
+**Web UI Support:**
+- Types include `originalRequester`, `originalAssignedTo` for migrated tickets
+- Comments include `originalAuthor`, `originalCreated` for migrated comments
 
 ---
 
