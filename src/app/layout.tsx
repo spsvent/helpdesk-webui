@@ -59,6 +59,10 @@ export default function RootLayout({
   if (!isInitialized) {
     return (
       <html lang="en">
+        <head>
+          <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+          <title>SkyPark Help Desk</title>
+        </head>
         <body className="bg-bg-subtle min-h-screen">
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
@@ -73,6 +77,10 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <title>SkyPark Help Desk</title>
+      </head>
       <body className="bg-bg-subtle min-h-screen">
         <MsalProvider instance={msalInstance}>
           <RBACProvider>
