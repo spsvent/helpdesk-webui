@@ -14,6 +14,7 @@ import {
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const TICKETS_LIST_ID = process.env.NEXT_PUBLIC_TICKETS_LIST_ID || "";
 const COMMENTS_LIST_ID = process.env.NEXT_PUBLIC_COMMENTS_LIST_ID || "";
+const AUTO_ASSIGN_LIST_ID = process.env.NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID || "";
 
 // SharePoint site URL for REST API calls (attachments)
 const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
@@ -895,4 +896,242 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+// ============================================
+// Auto-Assign Rules CRUD Operations
+// ============================================
+
+export interface AutoAssignRuleData {
+  id: string;
+  title?: string;
+  department?: string;
+  subCategory?: string;
+  specificType?: string;
+  category?: "Request" | "Problem";
+  priority?: "Low" | "Normal" | "High" | "Urgent";
+  assignToEmail: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+interface SharePointAutoAssignItem {
+  id: string;
+  fields: {
+    Title?: string;
+    Department?: string;
+    SubCategory?: string;
+    SpecificType?: string;
+    Category?: string;
+    Priority?: string;
+    AssignToEmail: string;
+    SortOrder?: number;
+    IsActive?: boolean;
+  };
+}
+
+// Get all auto-assign rules
+export async function getAutoAssignRules(client: Client): Promise<AutoAssignRuleData[]> {
+  if (!AUTO_ASSIGN_LIST_ID) {
+    throw new Error("Auto-Assign list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${AUTO_ASSIGN_LIST_ID}/items?$expand=fields&$top=500`;
+  const response = await client.api(endpoint).get();
+
+  const rules: AutoAssignRuleData[] = (response.value || []).map((item: SharePointAutoAssignItem) => ({
+    id: item.id,
+    title: item.fields.Title,
+    department: item.fields.Department,
+    subCategory: item.fields.SubCategory,
+    specificType: item.fields.SpecificType,
+    category: item.fields.Category as AutoAssignRuleData["category"],
+    priority: item.fields.Priority as AutoAssignRuleData["priority"],
+    assignToEmail: item.fields.AssignToEmail || "",
+    sortOrder: item.fields.SortOrder ?? 100,
+    isActive: item.fields.IsActive !== false,
+  }));
+
+  // Sort by sortOrder
+  rules.sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return rules;
+}
+
+// Create a new auto-assign rule
+export async function createAutoAssignRule(
+  client: Client,
+  rule: Omit<AutoAssignRuleData, "id">
+): Promise<AutoAssignRuleData> {
+  if (!AUTO_ASSIGN_LIST_ID) {
+    throw new Error("Auto-Assign list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${AUTO_ASSIGN_LIST_ID}/items`;
+
+  const fields: Record<string, unknown> = {
+    Title: rule.title || `${rule.department || "All"} → ${rule.assignToEmail}`,
+    AssignToEmail: rule.assignToEmail,
+    SortOrder: rule.sortOrder,
+    IsActive: rule.isActive,
+  };
+
+  if (rule.department) fields.Department = rule.department;
+  if (rule.subCategory) fields.SubCategory = rule.subCategory;
+  if (rule.specificType) fields.SpecificType = rule.specificType;
+  if (rule.category) fields.Category = rule.category;
+  if (rule.priority) fields.Priority = rule.priority;
+
+  const response = await client.api(endpoint).post({ fields });
+
+  return {
+    id: response.id,
+    title: response.fields.Title,
+    department: response.fields.Department,
+    subCategory: response.fields.SubCategory,
+    specificType: response.fields.SpecificType,
+    category: response.fields.Category,
+    priority: response.fields.Priority,
+    assignToEmail: response.fields.AssignToEmail,
+    sortOrder: response.fields.SortOrder ?? 100,
+    isActive: response.fields.IsActive !== false,
+  };
+}
+
+// Update an existing auto-assign rule
+export async function updateAutoAssignRule(
+  client: Client,
+  ruleId: string,
+  updates: Partial<Omit<AutoAssignRuleData, "id">>
+): Promise<void> {
+  if (!AUTO_ASSIGN_LIST_ID) {
+    throw new Error("Auto-Assign list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${AUTO_ASSIGN_LIST_ID}/items/${ruleId}/fields`;
+
+  const fields: Record<string, unknown> = {};
+
+  if (updates.title !== undefined) fields.Title = updates.title;
+  if (updates.department !== undefined) fields.Department = updates.department || null;
+  if (updates.subCategory !== undefined) fields.SubCategory = updates.subCategory || null;
+  if (updates.specificType !== undefined) fields.SpecificType = updates.specificType || null;
+  if (updates.category !== undefined) fields.Category = updates.category || null;
+  if (updates.priority !== undefined) fields.Priority = updates.priority || null;
+  if (updates.assignToEmail !== undefined) fields.AssignToEmail = updates.assignToEmail;
+  if (updates.sortOrder !== undefined) fields.SortOrder = updates.sortOrder;
+  if (updates.isActive !== undefined) fields.IsActive = updates.isActive;
+
+  await client.api(endpoint).patch(fields);
+}
+
+// Delete an auto-assign rule
+export async function deleteAutoAssignRule(client: Client, ruleId: string): Promise<void> {
+  if (!AUTO_ASSIGN_LIST_ID) {
+    throw new Error("Auto-Assign list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${AUTO_ASSIGN_LIST_ID}/items/${ruleId}`;
+  await client.api(endpoint).delete();
+}
+
+// Create the AutoAssignRules SharePoint list with all required columns
+export async function createAutoAssignList(client: Client): Promise<string> {
+  // Create the list
+  const listData = {
+    displayName: "AutoAssignRules",
+    description: "Auto-assignment rules for ticket routing",
+    list: {
+      template: "genericList",
+    },
+  };
+
+  let listId: string;
+
+  try {
+    const list = await client.api(`/sites/${SITE_ID}/lists`).post(listData);
+    listId = list.id;
+    console.log(`Created AutoAssignRules list with ID: ${listId}`);
+  } catch (error: unknown) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 409 || err.message?.includes("already exists")) {
+      // List already exists, find it
+      const lists = await client
+        .api(`/sites/${SITE_ID}/lists`)
+        .filter(`displayName eq 'AutoAssignRules'`)
+        .get();
+      if (lists.value && lists.value.length > 0) {
+        listId = lists.value[0].id;
+        console.log(`Found existing AutoAssignRules list with ID: ${listId}`);
+      } else {
+        throw new Error("List creation conflict but list not found");
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  // Define columns to add
+  const columns = [
+    {
+      name: "Department",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "SubCategory",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "SpecificType",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "Category",
+      choice: {
+        allowTextEntry: false,
+        choices: ["Request", "Problem"],
+        displayAs: "dropDownMenu",
+      },
+    },
+    {
+      name: "Priority",
+      choice: {
+        allowTextEntry: false,
+        choices: ["Low", "Normal", "High", "Urgent"],
+        displayAs: "dropDownMenu",
+      },
+    },
+    {
+      name: "AssignToEmail",
+      text: { allowMultipleLines: false, maxLength: 255 },
+      required: true,
+    },
+    {
+      name: "SortOrder",
+      number: { decimalPlaces: "none", minimum: 0, maximum: 10000 },
+      defaultValue: { value: "100" },
+    },
+    {
+      name: "IsActive",
+      boolean: {},
+      defaultValue: { value: "true" },
+    },
+  ];
+
+  // Add each column
+  for (const column of columns) {
+    try {
+      await client.api(`/sites/${SITE_ID}/lists/${listId}/columns`).post(column);
+      console.log(`Added column: ${column.name}`);
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number; message?: string };
+      if (err.statusCode === 409 || err.message?.includes("already exists")) {
+        console.log(`Column already exists: ${column.name}`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return listId;
 }

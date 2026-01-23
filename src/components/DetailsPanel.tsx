@@ -19,6 +19,7 @@ import {
   hasSub2Categories,
 } from "@/lib/categoryConfig";
 import { getSuggestedAssignee } from "@/lib/autoAssignConfig";
+import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/autoAssignConfigService";
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
@@ -145,18 +146,41 @@ export default function DetailsPanel({
   // Auto-assign when department changes
   useEffect(() => {
     if (isAdmin && problemType !== ticket.problemType) {
-      const suggestion = getSuggestedAssignee(
-        problemType,
-        problemTypeSub || undefined,
-        problemTypeSub2 || undefined,
-        category
-      );
-      if (suggestion) {
-        // Automatically apply the assignment
-        setAutoAssignSuggestion(suggestion);
-        // Look up the user and set them as assignee
-        const applyAutoAssignment = async () => {
-          if (!accounts[0]) return;
+      const applyAutoAssignment = async () => {
+        if (!accounts[0]) return;
+
+        let suggestion: string | null = null;
+
+        // First try SharePoint rules
+        try {
+          const client = getGraphClient(instance, accounts[0]);
+          const autoAssignConfig = await fetchAutoAssignConfig(client);
+          if (autoAssignConfig.rules.length > 0) {
+            suggestion = getSuggestedAssigneeFromConfig(
+              autoAssignConfig,
+              problemType,
+              problemTypeSub || undefined,
+              problemTypeSub2 || undefined,
+              category,
+              priority
+            );
+          }
+        } catch (configError) {
+          console.warn("Failed to fetch SharePoint auto-assign config:", configError);
+        }
+
+        // Fall back to hardcoded rules
+        if (!suggestion) {
+          suggestion = getSuggestedAssignee(
+            problemType,
+            problemTypeSub || undefined,
+            problemTypeSub2 || undefined,
+            category
+          );
+        }
+
+        if (suggestion) {
+          setAutoAssignSuggestion(suggestion);
           try {
             const client = getGraphClient(instance, accounts[0]);
             const user = await getUserByEmail(client, suggestion);
@@ -166,13 +190,15 @@ export default function DetailsPanel({
           } catch (error) {
             console.error("Failed to lookup suggested assignee:", error);
           }
-        };
-        applyAutoAssignment();
-      }
+        } else {
+          setAutoAssignSuggestion(null);
+        }
+      };
+      applyAutoAssignment();
     } else {
       setAutoAssignSuggestion(null);
     }
-  }, [problemType, problemTypeSub, problemTypeSub2, category, ticket.problemType, isAdmin, accounts, instance]);
+  }, [problemType, problemTypeSub, problemTypeSub2, category, priority, ticket.problemType, isAdmin, accounts, instance]);
 
   const handleStatusChange = (newStatus: Ticket["status"]) => {
     setStatus(newStatus);

@@ -17,6 +17,7 @@ import {
   hasSub2Categories,
 } from "@/lib/categoryConfig";
 import { getSuggestedAssigneeWithGroup } from "@/lib/autoAssignConfig";
+import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/autoAssignConfigService";
 import { suggestCategory, getSuggestionMessage } from "@/lib/categorySuggestion";
 import AssigneePreview from "@/components/AssigneePreview";
 
@@ -175,13 +176,34 @@ export default function NewTicketPage() {
       const requesterEmail = accounts[0]?.username;
 
       // Get auto-assignment based on department/category
-      const assigneeResult = getSuggestedAssigneeWithGroup(
-        formData.problemType,
-        formData.problemTypeSub || undefined,
-        formData.problemTypeSub2 || undefined,
-        formData.category
-      );
-      const assigneeEmail = assigneeResult?.email || null;
+      // First try SharePoint rules, then fall back to hardcoded config
+      let assigneeEmail: string | null = null;
+      try {
+        const autoAssignConfig = await fetchAutoAssignConfig(client);
+        if (autoAssignConfig.rules.length > 0) {
+          assigneeEmail = getSuggestedAssigneeFromConfig(
+            autoAssignConfig,
+            formData.problemType,
+            formData.problemTypeSub || undefined,
+            formData.problemTypeSub2 || undefined,
+            formData.category,
+            formData.priority
+          );
+        }
+      } catch (configError) {
+        console.warn("Failed to fetch SharePoint auto-assign config:", configError);
+      }
+
+      // Fall back to hardcoded rules if no SharePoint match
+      if (!assigneeEmail) {
+        const assigneeResult = getSuggestedAssigneeWithGroup(
+          formData.problemType,
+          formData.problemTypeSub || undefined,
+          formData.problemTypeSub2 || undefined,
+          formData.category
+        );
+        assigneeEmail = assigneeResult?.email || null;
+      }
 
       const newTicket = await createTicket(
         client,

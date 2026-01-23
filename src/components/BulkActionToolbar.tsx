@@ -8,9 +8,13 @@ import {
   bulkUpdatePriority,
   bulkReassign,
   BulkUpdateResult,
-  searchUsers,
+  searchUsersAndGroups,
   OrgUser,
+  OrgGroup,
 } from "@/lib/graphClient";
+
+// Combined type for search results
+type SearchResult = (OrgUser & { type: "user" }) | (OrgGroup & { type: "group" });
 
 interface BulkActionToolbarProps {
   selectedIds: string[];
@@ -32,7 +36,7 @@ export default function BulkActionToolbar({
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showAssignMenu, setShowAssignMenu] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
-  const [assigneeResults, setAssigneeResults] = useState<OrgUser[]>([]);
+  const [assigneeResults, setAssigneeResults] = useState<SearchResult[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [lastResults, setLastResults] = useState<BulkUpdateResult[] | null>(null);
 
@@ -97,8 +101,18 @@ export default function BulkActionToolbar({
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const users = await searchUsers(client, query);
-      setAssigneeResults(users);
+      const { users, groups } = await searchUsersAndGroups(client, query);
+
+      // Combine and tag results
+      const combined: SearchResult[] = [
+        ...users.map(u => ({ ...u, type: "user" as const })),
+        ...groups.filter(g => g.mail).map(g => ({ ...g, type: "group" as const })),
+      ];
+
+      // Sort by displayName
+      combined.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      setAssigneeResults(combined);
     } catch (error) {
       console.error("User search failed:", error);
     } finally {
@@ -106,14 +120,23 @@ export default function BulkActionToolbar({
     }
   };
 
-  const handleBulkAssign = async (user: OrgUser) => {
+  const handleBulkAssign = async (result: SearchResult) => {
     if (!accounts[0]) return;
     closeAllMenus();
     setIsProcessing(true);
 
+    // Get the email - for users it's .email, for groups it's .mail
+    const email = result.type === "user" ? result.email : (result.mail || "");
+
+    if (!email) {
+      console.error("No email found for assignee");
+      setIsProcessing(false);
+      return;
+    }
+
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const results = await bulkReassign(client, selectedIds, user.email);
+      const results = await bulkReassign(client, selectedIds, email);
       setLastResults(results);
 
       const successCount = results.filter((r) => r.success).length;
@@ -214,7 +237,7 @@ export default function BulkActionToolbar({
                   type="text"
                   value={assigneeSearch}
                   onChange={(e) => handleAssigneeSearch(e.target.value)}
-                  placeholder="Search users..."
+                  placeholder="Search users or groups..."
                   className="w-full px-3 py-1.5 border border-border rounded text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
                   autoFocus
                 />
@@ -226,19 +249,24 @@ export default function BulkActionToolbar({
               )}
               {!searchingUsers && assigneeResults.length === 0 && assigneeSearch.length >= 2 && (
                 <div className="px-3 py-2 text-sm text-text-secondary">
-                  No users found
+                  No users or groups found
                 </div>
               )}
-              {assigneeResults.map((user) => (
+              {assigneeResults.map((result) => (
                 <button
-                  key={user.id}
-                  onClick={() => handleBulkAssign(user)}
+                  key={result.id}
+                  onClick={() => handleBulkAssign(result)}
                   className="w-full px-3 py-2 text-left hover:bg-bg-subtle transition-colors"
                 >
-                  <div className="text-sm font-medium text-text-primary">
-                    {user.displayName}
+                  <div className="text-sm font-medium text-text-primary flex items-center gap-2">
+                    {result.displayName}
+                    {result.type === "group" && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Group</span>
+                    )}
                   </div>
-                  <div className="text-xs text-text-secondary">{user.email}</div>
+                  <div className="text-xs text-text-secondary">
+                    {result.type === "user" ? result.email : result.mail}
+                  </div>
                 </button>
               ))}
             </div>

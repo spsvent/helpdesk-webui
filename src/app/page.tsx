@@ -217,11 +217,20 @@ export default function Home() {
       const client = getGraphClient(instance, accounts[0]);
       const freshTickets = await getTickets(client);
       setTickets(freshTickets);
+
+      // Update selected ticket if it was part of the bulk action
+      if (selectedTicket) {
+        const updatedSelectedTicket = freshTickets.find(t => t.id === selectedTicket.id);
+        if (updatedSelectedTicket) {
+          setSelectedTicket(updatedSelectedTicket);
+        }
+      }
+
       clearBulkSelection();
     } catch (e) {
       console.error("Failed to refresh tickets:", e);
     }
-  }, [accounts, instance, clearBulkSelection]);
+  }, [accounts, instance, clearBulkSelection, selectedTicket]);
 
   // Handle login
   const handleLogin = async () => {
@@ -378,6 +387,14 @@ export default function Home() {
           >
             Help
           </Link>
+          {permissions?.role === "admin" && (
+            <Link
+              href="/settings"
+              className="text-sm text-text-secondary hover:text-text-primary p-1 touch-manipulation hidden sm:block"
+            >
+              Settings
+            </Link>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-sm text-text-secondary hidden md:block">
               {accounts[0]?.name || accounts[0]?.username}

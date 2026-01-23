@@ -46,6 +46,7 @@ export const graphScopes = {
   scopes: [
     "User.Read",
     "Sites.ReadWrite.All",
+    "Sites.Manage.All", // For creating SharePoint lists (auto-assign rules)
     "User.Read.All", // For searching users in the organization
     "GroupMember.Read.All", // For RBAC - reading user's group memberships
     "Mail.Send", // For sending approval notification emails
