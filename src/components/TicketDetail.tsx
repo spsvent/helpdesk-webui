@@ -189,7 +189,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         }
 
         // Notify assignee if there is one and they're not the commenter
-        const assigneeEmail = ticket.assignedTo?.email;
+        const assigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
         if (assigneeEmail && assigneeEmail !== commenterEmail && assigneeEmail !== ticket.requester.email) {
           sendCommentEmail(
             client,
@@ -282,9 +282,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const approvalComment = await addComment(
       client,
       parseInt(ticket.id),
-      `Approval requested by ${requesterName}`,
-      true,
-      "Approval"
+      `📋 Approval requested by ${requesterName}`,
+      true
     );
     setComments((prev) => [...prev, approvalComment]);
   };
@@ -317,9 +316,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const approvalComment = await addComment(
       client,
       parseInt(ticket.id),
-      noteText,
-      true,
-      "Approval"
+      `📋 ${noteText}`,
+      true
     );
     setComments((prev) => [...prev, approvalComment]);
 

@@ -54,14 +54,26 @@ export default function TicketFiltersComponent({
 
   const activeFilterCount = getActiveFilterCount(filters);
 
-  // Extract unique assignees from tickets
+  // Extract unique assignees from tickets (check both assignedTo and originalAssignedTo)
   const uniqueAssignees = useMemo(() => {
     const assigneeMap = new Map<string, string>();
     tickets.forEach((ticket) => {
+      // Check Person field first
       if (ticket.assignedTo?.email) {
         const email = ticket.assignedTo.email.toLowerCase();
         if (!assigneeMap.has(email)) {
           assigneeMap.set(email, ticket.assignedTo.displayName || ticket.originalAssignedTo || email);
+        }
+      }
+      // Also check originalAssignedTo (auto-assigned tickets)
+      if (ticket.originalAssignedTo) {
+        const email = ticket.originalAssignedTo.toLowerCase();
+        if (!assigneeMap.has(email)) {
+          // Generate display name from email if needed
+          const displayName = email.includes('@')
+            ? email.split('@')[0].replace(/[._]/g, ' ')
+            : email;
+          assigneeMap.set(email, displayName);
         }
       }
     });

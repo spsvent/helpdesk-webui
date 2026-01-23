@@ -7,6 +7,7 @@ import {
   getGraphClient,
   updateTicketFields,
   getUserByEmail,
+  addAssignmentComment,
   OrgUser,
 } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -82,10 +83,17 @@ export default function DetailsPanel({
   const [problemType, setProblemType] = useState(ticket.problemType);
   const [problemTypeSub, setProblemTypeSub] = useState(ticket.problemTypeSub || "");
   const [problemTypeSub2, setProblemTypeSub2] = useState(ticket.problemTypeSub2 || "");
+  // Initialize assignee from either the Person field or OriginalAssignedTo text field
   const [selectedAssignee, setSelectedAssignee] = useState<{ displayName: string; email: string } | null>(
     ticket.assignedTo ? {
       displayName: ticket.originalAssignedTo?.split('<')[0].trim() || ticket.assignedTo.displayName,
-      email: ticket.assignedTo.email || "",
+      email: ticket.assignedTo.email || ticket.originalAssignedTo || "",
+    } : ticket.originalAssignedTo ? {
+      // Fallback to originalAssignedTo when Person field is empty (auto-assigned tickets)
+      displayName: ticket.originalAssignedTo.includes('@')
+        ? ticket.originalAssignedTo.split('@')[0].replace(/[._]/g, ' ')
+        : ticket.originalAssignedTo,
+      email: ticket.originalAssignedTo,
     } : null
   );
 
@@ -119,12 +127,16 @@ export default function DetailsPanel({
       status !== ticket.status ||
       priority !== ticket.priority;
 
+    // Compare assignee email to detect changes (check both originalAssignedTo and assignedTo)
+    const currentAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email || "";
+    const assigneeChanged = (selectedAssignee?.email || "") !== currentAssigneeEmail;
+
     const adminChanges = isAdmin && (
       category !== ticket.category ||
       problemType !== ticket.problemType ||
       problemTypeSub !== (ticket.problemTypeSub || "") ||
       problemTypeSub2 !== (ticket.problemTypeSub2 || "") ||
-      (selectedAssignee?.displayName !== (ticket.originalAssignedTo?.split('<')[0].trim() || ticket.assignedTo?.displayName))
+      assigneeChanged
     );
 
     setHasChanges(basicChanges || !!adminChanges);
@@ -203,7 +215,7 @@ export default function DetailsPanel({
     const currentUserName = accounts[0].name || accounts[0].username;
     const oldStatus = ticket.status;
     const oldPriority = ticket.priority;
-    const oldAssigneeEmail = ticket.assignedTo?.email;
+    const oldAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
 
     try {
       const client = getGraphClient(instance, accounts[0]);
@@ -221,15 +233,10 @@ export default function DetailsPanel({
         updates.ProblemTypeSub = problemTypeSub || undefined;
         updates.ProblemTypeSub2 = problemTypeSub2 || undefined;
 
-        // Handle assignee change
-        if (selectedAssignee?.email && selectedAssignee.email !== ticket.assignedTo?.email) {
-          // Look up the user to get their SharePoint ID
-          const user = await getUserByEmail(client, selectedAssignee.email);
-          if (user) {
-            // For SharePoint, we need to use the user's ID from the site's user info list
-            // This is a simplified approach - may need adjustment based on SharePoint setup
-            // Using email-based assignment for now
-          }
+        // Handle assignee change - update OriginalAssignedTo field
+        const currentAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
+        if (selectedAssignee?.email !== currentAssigneeEmail) {
+          updates.OriginalAssignedTo = selectedAssignee?.email || "";
         }
       }
 
@@ -248,6 +255,18 @@ export default function DetailsPanel({
           selectedAssignee.displayName,
           currentUserName
         ).catch((e) => console.error("Failed to send assignment email:", e));
+
+        // Add assignment tracking comment
+        const oldAssigneeName = ticket.assignedTo?.displayName ||
+          (oldAssigneeEmail ? oldAssigneeEmail.split('@')[0].replace(/[._]/g, ' ') : undefined);
+        addAssignmentComment(
+          client,
+          parseInt(ticket.id),
+          currentUserName,
+          selectedAssignee.displayName,
+          selectedAssignee.email,
+          oldAssigneeName
+        ).catch((e) => console.error("Failed to add assignment comment:", e));
       }
 
       // Notify requester if status changed

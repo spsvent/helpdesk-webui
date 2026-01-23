@@ -53,9 +53,9 @@ export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket
       return false;
     }
 
-    // Assignee filter
+    // Assignee filter (check both assignedTo and originalAssignedTo)
     if (filters.assignee) {
-      const assigneeEmail = ticket.assignedTo?.email?.toLowerCase() || "";
+      const assigneeEmail = ticket.originalAssignedTo?.toLowerCase() || ticket.assignedTo?.email?.toLowerCase() || "";
       if (assigneeEmail !== filters.assignee.toLowerCase()) {
         return false;
       }

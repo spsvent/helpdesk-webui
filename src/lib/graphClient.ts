@@ -117,8 +117,7 @@ export async function addComment(
   client: Client,
   ticketId: number,
   commentBody: string,
-  isInternal: boolean = false,
-  commentType: string = "Comment"
+  isInternal: boolean = false
 ): Promise<Comment> {
   const endpoint = `/sites/${SITE_ID}/lists/${COMMENTS_LIST_ID}/items`;
 
@@ -128,11 +127,27 @@ export async function addComment(
       TicketID: ticketId,
       Body: commentBody,
       IsInternal: isInternal,
-      // CommentType field is optional - only include if it exists in SharePoint
     },
   });
 
   return mapToComment(item);
+}
+
+// Add an assignment tracking comment
+export async function addAssignmentComment(
+  client: Client,
+  ticketId: number,
+  assignedByName: string,
+  newAssigneeName: string,
+  newAssigneeEmail: string,
+  oldAssigneeName?: string
+): Promise<Comment> {
+  const message = oldAssigneeName
+    ? `📋 Reassigned from ${oldAssigneeName} to ${newAssigneeName} (${newAssigneeEmail}) by ${assignedByName}`
+    : `📋 Assigned to ${newAssigneeName} (${newAssigneeEmail}) by ${assignedByName}`;
+
+  // Mark as internal so it shows in the internal notes section
+  return addComment(client, ticketId, message, true);
 }
 
 // Update ticket fields
@@ -358,7 +373,7 @@ export async function searchUsers(
   // Search by displayName, mail, or userPrincipalName
   const filter = `startswith(displayName,'${escapedQuery}') or startswith(mail,'${escapedQuery}') or startswith(userPrincipalName,'${escapedQuery}')`;
 
-  const endpoint = `/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,jobTitle,department,userPrincipalName&$top=${top}&$orderby=displayName`;
+  const endpoint = `/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,jobTitle,department,userPrincipalName&$top=${top}`;
 
   try {
     const response = await client.api(endpoint).get();
@@ -371,7 +386,7 @@ export async function searchUsers(
       userPrincipalName: user.userPrincipalName as string,
     }));
   } catch (error) {
-    console.error("Failed to search users:", error);
+    console.error("[searchUsers] Failed to search users:", error);
     return [];
   }
 }
@@ -386,8 +401,11 @@ export async function searchGroups(
     return [];
   }
 
-  const filter = `startswith(displayName,'${searchQuery}')`;
-  const endpoint = `/groups?$filter=${encodeURIComponent(filter)}&$select=id,displayName,description,mail&$top=${top}&$orderby=displayName`;
+  // Escape single quotes for OData filter
+  const escapedQuery = searchQuery.replace(/'/g, "''");
+  // Search by displayName or mail
+  const filter = `startswith(displayName,'${escapedQuery}') or startswith(mail,'${escapedQuery}')`;
+  const endpoint = `/groups?$filter=${encodeURIComponent(filter)}&$select=id,displayName,description,mail&$top=${top}`;
 
   try {
     const response = await client.api(endpoint).get();
@@ -416,6 +434,7 @@ export async function searchUsersAndGroups(
 }
 
 // Get user by email (for looking up assignees)
+// Returns null for distribution groups/non-users (expected behavior)
 export async function getUserByEmail(
   client: Client,
   email: string
@@ -431,8 +450,12 @@ export async function getUserByEmail(
       department: user.department,
       userPrincipalName: user.userPrincipalName,
     };
-  } catch (error) {
-    console.error("Failed to get user by email:", error);
+  } catch (error: unknown) {
+    // 404 is expected for distribution groups - don't log as error
+    const graphError = error as { statusCode?: number };
+    if (graphError.statusCode !== 404) {
+      console.error("Failed to get user by email:", error);
+    }
     return null;
   }
 }

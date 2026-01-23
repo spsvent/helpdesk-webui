@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { getGraphClient, createTicket, CreateTicketData, getUserByEmail } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment } from "@/lib/graphClient";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
@@ -193,6 +193,8 @@ export default function NewTicketPage() {
       if (assigneeEmail) {
         try {
           const assignee = await getUserByEmail(client, assigneeEmail);
+          const assigneeName = assignee?.displayName || assigneeEmail.split('@')[0].replace(/[._]/g, ' ');
+
           if (assignee) {
             await sendNewTicketEmail(
               client,
@@ -201,9 +203,18 @@ export default function NewTicketPage() {
               assignee.displayName
             );
           }
+
+          // Add assignment tracking comment (auto-assigned on creation)
+          await addAssignmentComment(
+            client,
+            parseInt(newTicket.id),
+            "System",
+            assigneeName,
+            assigneeEmail
+          );
         } catch (emailError) {
-          // Don't fail the ticket creation if email fails
-          console.error("Failed to send new ticket email:", emailError);
+          // Don't fail the ticket creation if email/comment fails
+          console.error("Failed to send new ticket email or add assignment comment:", emailError);
         }
       }
 
