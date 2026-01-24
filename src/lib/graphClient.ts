@@ -311,31 +311,72 @@ export async function getPendingApprovalsCount(client: Client): Promise<number> 
 }
 
 // Send email notification via Graph API
+// Email Function URL - if set, uses Azure Function for sending emails (app-only auth)
+// If not set, falls back to /me/sendMail (delegated auth, requires user mailbox)
+const EMAIL_FUNCTION_URL = process.env.NEXT_PUBLIC_EMAIL_FUNCTION_URL || "";
+
 export async function sendEmail(
   client: Client,
   recipientEmail: string,
   subject: string,
   htmlContent: string
 ): Promise<void> {
+  console.log("[sendEmail] Sending to:", recipientEmail, "Subject:", subject);
+
+  // Use Azure Function if configured (app-only auth from shared mailbox)
+  if (EMAIL_FUNCTION_URL) {
+    try {
+      const response = await fetch(EMAIL_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: recipientEmail,
+          subject,
+          htmlContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      console.log("[sendEmail] SUCCESS via Azure Function - Email sent to:", recipientEmail);
+      return;
+    } catch (error) {
+      console.error("[sendEmail] FAILED via Azure Function:", recipientEmail, error);
+      throw error;
+    }
+  }
+
+  // Fallback to delegated auth (requires signed-in user to have a mailbox)
   const endpoint = "/me/sendMail";
 
-  await client.api(endpoint).post({
-    message: {
-      subject,
-      body: {
-        contentType: "HTML",
-        content: htmlContent,
-      },
-      toRecipients: [
-        {
-          emailAddress: {
-            address: recipientEmail,
-          },
+  try {
+    await client.api(endpoint).post({
+      message: {
+        subject,
+        body: {
+          contentType: "HTML",
+          content: htmlContent,
         },
-      ],
-    },
-    saveToSentItems: true,
-  });
+        toRecipients: [
+          {
+            emailAddress: {
+              address: recipientEmail,
+            },
+          },
+        ],
+      },
+      saveToSentItems: true,
+    });
+    console.log("[sendEmail] SUCCESS - Email sent to:", recipientEmail);
+  } catch (error) {
+    console.error("[sendEmail] FAILED to send email to:", recipientEmail, error);
+    throw error;
+  }
 }
 
 // ============================================

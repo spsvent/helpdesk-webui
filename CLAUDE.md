@@ -29,6 +29,7 @@ npm run lint     # Run ESLint
 
 ## IMPORTANT: Help Documentation Maintenance
 
+**use the AskUserQuestionTool extensivly when creating plans**
 **After completing any feature addition, bug fix, or UI change, you MUST update the Help page.**
 
 ### Help Page Location
