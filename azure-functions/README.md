@@ -1,6 +1,8 @@
-# Help Desk Email Function
+# Help Desk Azure Functions
 
-Azure Function to send emails from the Help Desk app using application permissions.
+Azure Functions for the Help Desk app:
+- **SendEmail**: Send emails from a shared mailbox using application permissions
+- **CheckEscalations**: Automatically escalate tickets based on configured rules (runs hourly)
 
 ## Setup
 
@@ -112,4 +114,47 @@ Send an email from the shared mailbox.
   "success": true,
   "message": "Email sent successfully"
 }
+```
+
+### POST /api/runEscalationCheck
+
+Manually trigger an escalation check. Also runs automatically every hour via timer trigger.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Escalation check completed",
+  "checked": 15,
+  "escalated": 2
+}
+```
+
+## Escalation Rules
+
+The escalation function checks all open tickets against configured escalation rules. Rules can:
+- Match by priority, status, or department
+- Trigger after a specified time with no response or no updates
+- Take actions: escalate priority, reassign, notify, or both
+
+### Additional App Settings for Escalation
+
+```bash
+az functionapp config appsettings set \
+  --name helpdesk-email-func \
+  --resource-group helpdesk-rg \
+  --settings \
+    SHAREPOINT_SITE_ID="<site-id>" \
+    TICKETS_LIST_ID="<tickets-list-id>" \
+    COMMENTS_LIST_ID="<comments-list-id>" \
+    ESCALATION_LIST_ID="<escalation-list-id>" \
+    APP_URL="https://tickets.spsvent.net"
+```
+
+### Web App Configuration
+
+Add to `.env.local` for manual escalation check button:
+
+```
+NEXT_PUBLIC_ESCALATION_FUNCTION_URL=https://helpdesk-email-func.azurewebsites.net/api/runEscalationCheck?code=<function-key>
 ```

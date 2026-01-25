@@ -15,6 +15,7 @@ const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const TICKETS_LIST_ID = process.env.NEXT_PUBLIC_TICKETS_LIST_ID || "";
 const COMMENTS_LIST_ID = process.env.NEXT_PUBLIC_COMMENTS_LIST_ID || "";
 const AUTO_ASSIGN_LIST_ID = process.env.NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID || "";
+const ESCALATION_LIST_ID = process.env.NEXT_PUBLIC_ESCALATION_LIST_ID || "";
 
 // SharePoint site URL for REST API calls (attachments)
 const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
@@ -1146,6 +1147,292 @@ export async function createAutoAssignList(client: Client): Promise<string> {
       name: "AssignToEmail",
       text: { allowMultipleLines: false, maxLength: 255 },
       required: true,
+    },
+    {
+      name: "SortOrder",
+      number: { decimalPlaces: "none", minimum: 0, maximum: 10000 },
+      defaultValue: { value: "100" },
+    },
+    {
+      name: "IsActive",
+      boolean: {},
+      defaultValue: { value: "true" },
+    },
+  ];
+
+  // Add each column
+  for (const column of columns) {
+    try {
+      await client.api(`/sites/${SITE_ID}/lists/${listId}/columns`).post(column);
+      console.log(`Added column: ${column.name}`);
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number; message?: string };
+      if (err.statusCode === 409 || err.message?.includes("already exists")) {
+        console.log(`Column already exists: ${column.name}`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return listId;
+}
+
+// ============================================================================
+// ESCALATION RULES
+// ============================================================================
+
+export type EscalationTriggerType = "no_response" | "no_update" | "approaching_sla";
+export type EscalationActionType = "escalate_priority" | "reassign" | "notify" | "escalate_and_notify";
+
+export interface EscalationRuleData {
+  id: string;
+  title?: string;
+  triggerType: EscalationTriggerType;
+  triggerHours: number;
+  matchPriority?: "Low" | "Normal" | "High" | "Urgent";
+  matchStatus?: "New" | "In Progress" | "Pending Approval" | "On Hold";
+  matchDepartment?: string;
+  actionType: EscalationActionType;
+  escalateToPriority?: "Normal" | "High" | "Urgent";
+  notifyEmail?: string;
+  reassignToEmail?: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+interface SharePointEscalationItem {
+  id: string;
+  fields: {
+    Title?: string;
+    TriggerType: string;
+    TriggerHours: number;
+    MatchPriority?: string;
+    MatchStatus?: string;
+    MatchDepartment?: string;
+    ActionType: string;
+    EscalateToPriority?: string;
+    NotifyEmail?: string;
+    ReassignToEmail?: string;
+    SortOrder?: number;
+    IsActive?: boolean;
+  };
+}
+
+// Get all escalation rules
+export async function getEscalationRules(client: Client): Promise<EscalationRuleData[]> {
+  if (!ESCALATION_LIST_ID) {
+    throw new Error("Escalation list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${ESCALATION_LIST_ID}/items?$expand=fields&$top=500`;
+  const response = await client.api(endpoint).get();
+
+  const rules: EscalationRuleData[] = (response.value || []).map((item: SharePointEscalationItem) => ({
+    id: item.id,
+    title: item.fields.Title,
+    triggerType: item.fields.TriggerType as EscalationTriggerType,
+    triggerHours: item.fields.TriggerHours || 24,
+    matchPriority: item.fields.MatchPriority as EscalationRuleData["matchPriority"],
+    matchStatus: item.fields.MatchStatus as EscalationRuleData["matchStatus"],
+    matchDepartment: item.fields.MatchDepartment,
+    actionType: item.fields.ActionType as EscalationActionType,
+    escalateToPriority: item.fields.EscalateToPriority as EscalationRuleData["escalateToPriority"],
+    notifyEmail: item.fields.NotifyEmail,
+    reassignToEmail: item.fields.ReassignToEmail,
+    sortOrder: item.fields.SortOrder ?? 100,
+    isActive: item.fields.IsActive !== false,
+  }));
+
+  // Sort by sortOrder
+  rules.sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return rules;
+}
+
+// Create a new escalation rule
+export async function createEscalationRule(
+  client: Client,
+  rule: Omit<EscalationRuleData, "id">
+): Promise<EscalationRuleData> {
+  if (!ESCALATION_LIST_ID) {
+    throw new Error("Escalation list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${ESCALATION_LIST_ID}/items`;
+
+  const fields: Record<string, unknown> = {
+    Title: rule.title || `${rule.triggerType} after ${rule.triggerHours}h`,
+    TriggerType: rule.triggerType,
+    TriggerHours: rule.triggerHours,
+    ActionType: rule.actionType,
+    SortOrder: rule.sortOrder,
+    IsActive: rule.isActive,
+  };
+
+  if (rule.matchPriority) fields.MatchPriority = rule.matchPriority;
+  if (rule.matchStatus) fields.MatchStatus = rule.matchStatus;
+  if (rule.matchDepartment) fields.MatchDepartment = rule.matchDepartment;
+  if (rule.escalateToPriority) fields.EscalateToPriority = rule.escalateToPriority;
+  if (rule.notifyEmail) fields.NotifyEmail = rule.notifyEmail;
+  if (rule.reassignToEmail) fields.ReassignToEmail = rule.reassignToEmail;
+
+  const response = await client.api(endpoint).post({ fields });
+
+  return {
+    id: response.id,
+    title: response.fields.Title,
+    triggerType: response.fields.TriggerType as EscalationTriggerType,
+    triggerHours: response.fields.TriggerHours,
+    matchPriority: response.fields.MatchPriority,
+    matchStatus: response.fields.MatchStatus,
+    matchDepartment: response.fields.MatchDepartment,
+    actionType: response.fields.ActionType as EscalationActionType,
+    escalateToPriority: response.fields.EscalateToPriority,
+    notifyEmail: response.fields.NotifyEmail,
+    reassignToEmail: response.fields.ReassignToEmail,
+    sortOrder: response.fields.SortOrder ?? 100,
+    isActive: response.fields.IsActive !== false,
+  };
+}
+
+// Update an existing escalation rule
+export async function updateEscalationRule(
+  client: Client,
+  ruleId: string,
+  updates: Partial<Omit<EscalationRuleData, "id">>
+): Promise<void> {
+  if (!ESCALATION_LIST_ID) {
+    throw new Error("Escalation list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${ESCALATION_LIST_ID}/items/${ruleId}/fields`;
+
+  const fields: Record<string, unknown> = {};
+
+  if (updates.title !== undefined) fields.Title = updates.title;
+  if (updates.triggerType !== undefined) fields.TriggerType = updates.triggerType;
+  if (updates.triggerHours !== undefined) fields.TriggerHours = updates.triggerHours;
+  if (updates.matchPriority !== undefined) fields.MatchPriority = updates.matchPriority || null;
+  if (updates.matchStatus !== undefined) fields.MatchStatus = updates.matchStatus || null;
+  if (updates.matchDepartment !== undefined) fields.MatchDepartment = updates.matchDepartment || null;
+  if (updates.actionType !== undefined) fields.ActionType = updates.actionType;
+  if (updates.escalateToPriority !== undefined) fields.EscalateToPriority = updates.escalateToPriority || null;
+  if (updates.notifyEmail !== undefined) fields.NotifyEmail = updates.notifyEmail || null;
+  if (updates.reassignToEmail !== undefined) fields.ReassignToEmail = updates.reassignToEmail || null;
+  if (updates.sortOrder !== undefined) fields.SortOrder = updates.sortOrder;
+  if (updates.isActive !== undefined) fields.IsActive = updates.isActive;
+
+  await client.api(endpoint).patch(fields);
+}
+
+// Delete an escalation rule
+export async function deleteEscalationRule(client: Client, ruleId: string): Promise<void> {
+  if (!ESCALATION_LIST_ID) {
+    throw new Error("Escalation list not configured");
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${ESCALATION_LIST_ID}/items/${ruleId}`;
+  await client.api(endpoint).delete();
+}
+
+// Create the EscalationRules SharePoint list with all required columns
+export async function createEscalationList(client: Client): Promise<string> {
+  // Create the list
+  const listData = {
+    displayName: "EscalationRules",
+    description: "Escalation rules for ticket management",
+    list: {
+      template: "genericList",
+    },
+  };
+
+  let listId: string;
+
+  try {
+    const list = await client.api(`/sites/${SITE_ID}/lists`).post(listData);
+    listId = list.id;
+    console.log(`Created EscalationRules list with ID: ${listId}`);
+  } catch (error: unknown) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 409 || err.message?.includes("already exists")) {
+      // List already exists, find it
+      const lists = await client
+        .api(`/sites/${SITE_ID}/lists`)
+        .filter(`displayName eq 'EscalationRules'`)
+        .get();
+      if (lists.value && lists.value.length > 0) {
+        listId = lists.value[0].id;
+        console.log(`Found existing EscalationRules list with ID: ${listId}`);
+      } else {
+        throw new Error("List creation conflict but list not found");
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  // Define columns to add
+  const columns = [
+    {
+      name: "TriggerType",
+      choice: {
+        allowTextEntry: false,
+        choices: ["no_response", "no_update", "approaching_sla"],
+        displayAs: "dropDownMenu",
+      },
+      required: true,
+    },
+    {
+      name: "TriggerHours",
+      number: { decimalPlaces: "none", minimum: 1, maximum: 720 },
+      defaultValue: { value: "24" },
+      required: true,
+    },
+    {
+      name: "MatchPriority",
+      choice: {
+        allowTextEntry: false,
+        choices: ["Low", "Normal", "High", "Urgent"],
+        displayAs: "dropDownMenu",
+      },
+    },
+    {
+      name: "MatchStatus",
+      choice: {
+        allowTextEntry: false,
+        choices: ["New", "In Progress", "Pending Approval", "On Hold"],
+        displayAs: "dropDownMenu",
+      },
+    },
+    {
+      name: "MatchDepartment",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "ActionType",
+      choice: {
+        allowTextEntry: false,
+        choices: ["escalate_priority", "reassign", "notify", "escalate_and_notify"],
+        displayAs: "dropDownMenu",
+      },
+      required: true,
+    },
+    {
+      name: "EscalateToPriority",
+      choice: {
+        allowTextEntry: false,
+        choices: ["Normal", "High", "Urgent"],
+        displayAs: "dropDownMenu",
+      },
+    },
+    {
+      name: "NotifyEmail",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "ReassignToEmail",
+      text: { allowMultipleLines: false, maxLength: 255 },
     },
     {
       name: "SortOrder",

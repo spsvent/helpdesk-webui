@@ -7,6 +7,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { useRBAC } from "@/contexts/RBACContext";
 import AutoAssignRulesManager from "@/components/AutoAssignRulesManager";
+import EscalationRulesManager from "@/components/EscalationRulesManager";
 
 export default function SettingsPage() {
   const { instance, accounts, inProgress } = useMsal();
@@ -124,27 +125,7 @@ export default function SettingsPage() {
 
         {/* Tab Content */}
         {activeTab === "auto-assign" && <AutoAssignRulesManager />}
-        {activeTab === "escalation" && (
-          <div className="bg-bg-card rounded-xl p-8 text-center">
-            <svg
-              className="w-16 h-16 text-text-secondary mx-auto mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <h2 className="text-lg font-medium text-text-primary mb-2">Coming Soon</h2>
-            <p className="text-text-secondary">
-              Escalation rules will allow automatic actions when tickets sit too long.
-            </p>
-          </div>
-        )}
+        {activeTab === "escalation" && <EscalationRulesManager />}
       </main>
     </div>
   );
