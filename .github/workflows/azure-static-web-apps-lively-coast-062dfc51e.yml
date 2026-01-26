@@ -40,8 +40,13 @@ jobs:
           NEXT_PUBLIC_TICKETS_LIST_ID: "018f0d5c-318d-4856-a7f2-491f4e71a554"
           NEXT_PUBLIC_COMMENTS_LIST_ID: ${{ secrets.NEXT_PUBLIC_COMMENTS_LIST_ID }}
           NEXT_PUBLIC_RBAC_GROUPS_LIST_ID: "ce6c0e8c-ff31-4af4-92bd-5d0fdc263ea7"
+          NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID: "57a6cc6d-2dd1-4022-aaa2-45aa4d947761"
+          NEXT_PUBLIC_ESCALATION_LIST_ID: "6e3bb1d6-1938-4680-82aa-96223e4d3821"
+          NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "a961cb69-a588-4ca0-aa04-b421ebcc792a"
           NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"
           NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
+          NEXT_PUBLIC_EMAIL_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_EMAIL_FUNCTION_URL }}
+          NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
