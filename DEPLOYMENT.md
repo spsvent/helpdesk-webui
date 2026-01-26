@@ -26,6 +26,7 @@ Before starting, ensure you have:
 - [ ] Admin access to Azure AD (Entra ID)
 - [ ] Node.js 18+ installed locally
 - [ ] Git installed locally
+- [ ] Azure Functions Core Tools (`npm install -g azure-functions-core-tools@4`)
 
 ---
 
@@ -34,7 +35,7 @@ Before starting, ensure you have:
 ### Step 1: Create the App Registration
 
 1. Go to [Azure Portal](https://portal.azure.com)
-2. Navigate to **Azure Active Directory** → **App registrations**
+2. Navigate to **Microsoft Entra ID** → **App registrations**
 3. Click **+ New registration**
 4. Configure:
    - **Name**: `SkyPark Help Desk` (or your preferred name)
@@ -53,29 +54,53 @@ Before starting, ensure you have:
    - `http://localhost:3000` (development)
    - `https://your-production-url.com` (production - add after deployment)
 3. Under **Implicit grant and hybrid flows**, check:
-   - [ ] Access tokens
-   - [ ] ID tokens
+   - [x] Access tokens
+   - [x] ID tokens
 4. Click **Save**
 
-### Step 3: Configure API Permissions
+### Step 3: Configure API Permissions (Delegated)
+
+These permissions are used by the web app when users are signed in:
 
 1. Go to **API permissions**
 2. Click **+ Add a permission** → **Microsoft Graph** → **Delegated permissions**
 3. Add these permissions:
    - `User.Read` - Sign in and read user profile
-   - `User.ReadBasic.All` - Read all users' basic profiles
+   - `User.Read.All` - Read all users' full profiles (for user search)
    - `Sites.ReadWrite.All` - Read and write SharePoint sites
-   - `GroupMember.Read.All` - Read group memberships
+   - `Sites.Manage.All` - Create and manage SharePoint lists
+   - `GroupMember.Read.All` - Read group memberships (for RBAC)
    - `Mail.Send` - Send mail as the user (for notifications)
    - `ChannelMessage.Send` - Send messages to Teams channels (optional)
 4. Click **Grant admin consent for [Your Organization]**
 
-### Step 4: Note Your IDs
+### Step 4: Configure API Permissions (Application) for Azure Functions
+
+These permissions are used by Azure Functions for background operations:
+
+1. Still in **API permissions**, click **+ Add a permission** → **Microsoft Graph** → **Application permissions**
+2. Add these permissions:
+   - `Mail.Send` - Send mail as any user (for shared mailbox)
+   - `Sites.ReadWrite.All` - Read/write SharePoint (for escalation function)
+3. Click **Grant admin consent for [Your Organization]**
+
+### Step 5: Create Client Secret (for Azure Functions)
+
+1. Go to **Certificates & secrets** in the left sidebar
+2. Click **+ New client secret**
+3. Enter a description (e.g., "Azure Functions")
+4. Select an expiration period (recommended: 24 months)
+5. Click **Add**
+6. **IMPORTANT: Copy the secret value immediately** - you won't be able to see it again!
+7. Store this as `AZURE_CLIENT_SECRET` for Azure Functions
+
+### Step 6: Note Your IDs
 
 Record these values for later:
 ```
 NEXT_PUBLIC_CLIENT_ID=<Application (client) ID>
 NEXT_PUBLIC_TENANT_ID=<Directory (tenant) ID>
+AZURE_CLIENT_SECRET=<Client secret value>
 ```
 
 ---
@@ -84,24 +109,25 @@ NEXT_PUBLIC_TENANT_ID=<Directory (tenant) ID>
 
 ### Step 1: Create the SharePoint Site
 
-1. Go to [SharePoint Admin Center](https://admin.microsoft.com/sharepoint)
+1. Go to SharePoint or create a new site from Microsoft 365
 2. Create a new **Team site** or **Communication site**
    - Recommended name: `helpdesk`
    - URL will be: `https://yourtenant.sharepoint.com/sites/helpdesk`
 
 ### Step 2: Get the Site ID
 
-1. Navigate to your SharePoint site
-2. Open browser developer tools (F12)
-3. Go to Console and run:
-   ```javascript
-   _spPageContextInfo.siteId
-   ```
-4. Or use Graph Explorer:
+Use Microsoft Graph Explorer to get the full site ID:
+
+1. Go to [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)
+2. Sign in with your Microsoft 365 account
+3. Run this query (replace with your tenant and site name):
    ```
    GET https://graph.microsoft.com/v1.0/sites/yourtenant.sharepoint.com:/sites/helpdesk
    ```
-5. The Site ID format is: `yourtenant.sharepoint.com,<site-guid>,<web-guid>`
+4. From the response, combine these values:
+   - `siteCollection.hostname` + `,` + `id` (the site GUID) + `,` + look for the web ID
+
+   The format is: `yourtenant.sharepoint.com,<site-guid>,<web-guid>`
 
 Record:
 ```
@@ -117,30 +143,28 @@ NEXT_PUBLIC_SHAREPOINT_SITE_URL=https://yourtenant.sharepoint.com/sites/helpdesk
 
 | Column Name | Type | Required | Notes |
 |-------------|------|----------|-------|
-| Title | Single line of text | Yes | Default column |
+| Title | Single line of text | Yes | Default column (ticket title) |
 | Description | Multiple lines of text | No | Plain text |
+| TicketNumber | Number | No | Auto-generated ticket number |
 | Status | Choice | No | New, In Progress, On Hold, Resolved, Closed |
 | Priority | Choice | No | Low, Normal, High, Urgent |
 | Category | Choice | No | Request, Problem |
-| ProblemType | Single line of text | No | Department |
+| ProblemType | Single line of text | No | Department (Tech, Operations, etc.) |
 | ProblemTypeSub | Single line of text | No | Sub-category |
 | ProblemTypeSub2 | Single line of text | No | Specific type |
 | Location | Single line of text | No | |
-| RequesterId | Single line of text | No | User's Entra ID |
-| RequesterName | Single line of text | No | Display name |
-| RequesterEmail | Single line of text | No | Email address |
-| AssignedToId | Single line of text | No | Assignee's Entra ID |
-| AssignedToName | Single line of text | No | Assignee display name |
-| AssignedToEmail | Single line of text | No | Assignee email |
 | DueDate | Date and Time | No | |
-| ApprovalStatus | Choice | No | None, Pending, Approved, Denied, ChangesRequested |
-| ApprovalRequestedBy | Single line of text | No | |
-| ApprovalRequestedAt | Date and Time | No | |
-| ApprovalDecisionBy | Single line of text | No | |
-| ApprovalDecisionAt | Date and Time | No | |
+| EscalatedAt | Date and Time | No | Set when ticket is escalated |
+| OriginalRequester | Single line of text | No | For migrated tickets |
+| OriginalAssignedTo | Single line of text | No | For migrated tickets |
+| ApprovalStatus | Choice | No | None, Pending, Approved, Denied, Changes Requested |
+| ApprovalRequestedDate | Date and Time | No | |
+| ApprovalDate | Date and Time | No | |
 | ApprovalNotes | Multiple lines of text | No | |
 
-4. Get the list ID from **List Settings** URL
+**Note**: The `AssignedTo`, `Requester`, `ApprovalRequestedBy`, and `ApprovedBy` fields are created automatically by SharePoint as Person/Lookup columns when you reference users.
+
+4. Get the list ID from **List Settings** URL (look for `List=%7B...%7D` and decode the GUID)
 5. Record: `NEXT_PUBLIC_TICKETS_LIST_ID=<list-guid>`
 
 ### Step 4: Create the TicketComments List
@@ -148,22 +172,22 @@ NEXT_PUBLIC_SHAREPOINT_SITE_URL=https://yourtenant.sharepoint.com/sites/helpdesk
 1. Create a new list named `TicketComments`
 2. Add columns:
 
-| Column Name | Type | Required |
-|-------------|------|----------|
-| Title | Single line of text | Yes |
-| TicketId | Number | No |
-| CommentText | Multiple lines of text | No |
-| AuthorId | Single line of text | No |
-| AuthorName | Single line of text | No |
-| AuthorEmail | Single line of text | No |
-| IsInternal | Yes/No | No |
-| IsSystemGenerated | Yes/No | No |
+| Column Name | Type | Required | Notes |
+|-------------|------|----------|-------|
+| Title | Single line of text | Yes | Comment preview |
+| TicketID | Number | No | References ticket ID |
+| Body | Multiple lines of text | No | Comment content (legacy) |
+| CommentBody | Multiple lines of text | No | Comment content (preferred) |
+| IsInternal | Yes/No | No | Staff-only note |
+| CommentType | Choice | No | Comment, Status Change, Assignment, Resolution, Note, Approval |
+| OriginalAuthor | Single line of text | No | For migrated comments |
+| OriginalCreated | Single line of text | No | For migrated comments |
 
 3. Record: `NEXT_PUBLIC_COMMENTS_LIST_ID=<list-guid>`
 
 ### Step 5: Create Additional Lists (Optional - Can Be Created via App)
 
-The following lists can be created through the app's Settings page, or manually:
+The following lists can be created through the app's Settings page, which will automatically create the correct columns. Or you can create them manually:
 
 #### RBACGroups List
 For role-based access control configuration.
@@ -172,51 +196,56 @@ For role-based access control configuration.
 |-------------|------|-------|
 | Title | Single line of text | Group name |
 | GroupId | Single line of text | Entra ID group GUID |
-| GroupType | Choice | admin, department, subtype, visibility |
-| Department | Single line of text | For department/subtype groups |
-| SubCategory | Single line of text | For subtype groups |
+| GroupType | Choice | admin, department, visibility |
+| Department | Single line of text | For department groups (matches ProblemType) |
+| ProblemTypeSub | Single line of text | For subtype restrictions |
 | IsActive | Yes/No | Enable/disable |
 
 #### AutoAssignRules List
-For automatic ticket assignment.
+For automatic ticket assignment. **Best created via Settings page.**
 
-| Column Name | Type |
-|-------------|------|
-| Title | Single line of text |
-| Department | Single line of text |
-| SubCategory | Single line of text |
-| SpecificType | Single line of text |
-| Category | Choice (Request, Problem) |
-| Priority | Choice (Low, Normal, High, Urgent) |
-| AssignToEmail | Single line of text |
-| SortOrder | Number |
-| IsActive | Yes/No |
+| Column Name | Type | Notes |
+|-------------|------|-------|
+| Title | Single line of text | Rule name |
+| Department | Single line of text | Matches ProblemType |
+| SubCategory | Single line of text | Matches ProblemTypeSub |
+| SpecificType | Single line of text | Matches ProblemTypeSub2 |
+| Category | Choice | Request, Problem |
+| Priority | Choice | Low, Normal, High, Urgent |
+| AssignToEmail | Single line of text | Email of assignee (required) |
+| SortOrder | Number | Lower = higher priority (default 100) |
+| IsActive | Yes/No | Enable/disable (default Yes) |
 
 #### EscalationRules List
-For ticket escalation configuration.
+For ticket escalation configuration. **Best created via Settings page.**
 
-| Column Name | Type |
-|-------------|------|
-| Title | Single line of text |
-| TriggerType | Choice |
-| TriggerHours | Number |
-| Conditions | Multiple lines of text (JSON) |
-| Actions | Multiple lines of text (JSON) |
-| SortOrder | Number |
-| IsActive | Yes/No |
+| Column Name | Type | Notes |
+|-------------|------|-------|
+| Title | Single line of text | Rule name |
+| TriggerType | Choice | no_response, no_update, approaching_sla |
+| TriggerHours | Number | Hours before trigger (default 24) |
+| MatchPriority | Choice | Low, Normal, High, Urgent (optional filter) |
+| MatchStatus | Choice | New, In Progress, Pending Approval, On Hold (optional filter) |
+| MatchDepartment | Single line of text | Optional ProblemType filter |
+| ActionType | Choice | escalate_priority, reassign, notify, escalate_and_notify |
+| EscalateToPriority | Choice | Normal, High, Urgent |
+| NotifyEmail | Single line of text | Email to notify |
+| ReassignToEmail | Single line of text | Email to reassign to |
+| SortOrder | Number | Lower = higher priority (default 100) |
+| IsActive | Yes/No | Enable/disable (default Yes) |
 
 #### ActivityLog List
-For audit trail.
+For audit trail. **Best created via Settings page.**
 
-| Column Name | Type |
-|-------------|------|
-| Title | Single line of text |
-| EventType | Single line of text |
-| TicketId | Number |
-| Actor | Single line of text |
-| ActorEmail | Single line of text |
-| Details | Multiple lines of text |
-| Metadata | Multiple lines of text |
+| Column Name | Type | Notes |
+|-------------|------|-------|
+| Title | Single line of text | Event description |
+| EventType | Choice | ticket_created, ticket_updated, ticket_status_changed, ticket_priority_changed, ticket_assigned, ticket_escalated, comment_added, email_sent, approval_requested, approval_approved, approval_rejected, escalation_triggered |
+| TicketId | Single line of text | SharePoint item ID |
+| TicketNumber | Single line of text | Ticket number |
+| Actor | Single line of text | Email of who performed action |
+| ActorName | Single line of text | Display name |
+| Details | Multiple lines of text | JSON metadata |
 
 ---
 
@@ -242,13 +271,15 @@ NEXT_PUBLIC_TENANT_ID=your-tenant-id
 NEXT_PUBLIC_SHAREPOINT_SITE_ID=yourtenant.sharepoint.com,site-guid,web-guid
 NEXT_PUBLIC_SHAREPOINT_SITE_URL=https://yourtenant.sharepoint.com/sites/helpdesk
 
-# SharePoint List IDs
+# SharePoint List IDs (required)
 NEXT_PUBLIC_TICKETS_LIST_ID=tickets-list-guid
 NEXT_PUBLIC_COMMENTS_LIST_ID=comments-list-guid
-NEXT_PUBLIC_RBAC_GROUPS_LIST_ID=rbac-list-guid
-NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID=auto-assign-list-guid
-NEXT_PUBLIC_ESCALATION_LIST_ID=escalation-list-guid
-NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID=activity-log-list-guid
+
+# SharePoint List IDs (optional - create via Settings page)
+NEXT_PUBLIC_RBAC_GROUPS_LIST_ID=
+NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID=
+NEXT_PUBLIC_ESCALATION_LIST_ID=
+NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID=
 
 # Admin Configuration
 NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID=admin-group-guid
@@ -258,8 +289,8 @@ NEXT_PUBLIC_ADMIN_EMAILS=admin@yourdomain.com
 NEXT_PUBLIC_APP_URL=https://your-production-url.com
 
 # Azure Functions (add after setting up functions)
-NEXT_PUBLIC_EMAIL_FUNCTION_URL=https://your-func.azurewebsites.net/api/sendemail?code=...
-NEXT_PUBLIC_ESCALATION_FUNCTION_URL=https://your-func.azurewebsites.net/api/runEscalationCheck?code=...
+NEXT_PUBLIC_EMAIL_FUNCTION_URL=
+NEXT_PUBLIC_ESCALATION_FUNCTION_URL=
 ```
 
 ### Step 3: Test Locally
@@ -308,31 +339,37 @@ After deployment, Azure creates a GitHub Actions workflow. Add these secrets to 
 
 | Secret Name | Value |
 |-------------|-------|
+| `NEXT_PUBLIC_COMMENTS_LIST_ID` | Your Comments list GUID |
 | `NEXT_PUBLIC_EMAIL_FUNCTION_URL` | Your Azure Function URL with code |
 | `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` | Your Azure Function URL with code |
 
 ### Step 3: Update GitHub Actions Workflow
 
-Edit `.github/workflows/azure-static-web-apps-*.yml`:
+Edit `.github/workflows/azure-static-web-apps-*.yml` and add the `env` section under the build step:
 
 ```yaml
-env:
-  # Build-time environment variables
-  NEXT_PUBLIC_CLIENT_ID: "your-client-id"
-  NEXT_PUBLIC_TENANT_ID: "your-tenant-id"
-  NEXT_PUBLIC_SHAREPOINT_SITE_ID: "your-site-id"
-  NEXT_PUBLIC_SHAREPOINT_SITE_URL: "https://yourtenant.sharepoint.com/sites/helpdesk"
-  NEXT_PUBLIC_TICKETS_LIST_ID: "tickets-list-guid"
-  NEXT_PUBLIC_COMMENTS_LIST_ID: "comments-list-guid"
-  NEXT_PUBLIC_RBAC_GROUPS_LIST_ID: "rbac-list-guid"
-  NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID: "auto-assign-list-guid"
-  NEXT_PUBLIC_ESCALATION_LIST_ID: "escalation-list-guid"
-  NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "activity-log-list-guid"
-  NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "admin-group-guid"
-  NEXT_PUBLIC_APP_URL: "https://your-production-url.com"
-  # Secrets (stored in GitHub Secrets)
-  NEXT_PUBLIC_EMAIL_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_EMAIL_FUNCTION_URL }}
-  NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          # ... existing config ...
+        env:
+          # Build-time environment variables
+          NEXT_PUBLIC_CLIENT_ID: "your-client-id"
+          NEXT_PUBLIC_TENANT_ID: "your-tenant-id"
+          NEXT_PUBLIC_SHAREPOINT_SITE_ID: "your-site-id"
+          NEXT_PUBLIC_SHAREPOINT_SITE_URL: "https://yourtenant.sharepoint.com/sites/helpdesk"
+          NEXT_PUBLIC_TICKETS_LIST_ID: "tickets-list-guid"
+          NEXT_PUBLIC_COMMENTS_LIST_ID: ${{ secrets.NEXT_PUBLIC_COMMENTS_LIST_ID }}
+          NEXT_PUBLIC_RBAC_GROUPS_LIST_ID: "rbac-list-guid"
+          NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID: "auto-assign-list-guid"
+          NEXT_PUBLIC_ESCALATION_LIST_ID: "escalation-list-guid"
+          NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "activity-log-list-guid"
+          NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "admin-group-guid"
+          NEXT_PUBLIC_APP_URL: "https://your-production-url.com"
+          # Secrets (stored in GitHub Secrets - contain API keys)
+          NEXT_PUBLIC_EMAIL_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_EMAIL_FUNCTION_URL }}
+          NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
 ```
 
 ### Step 4: Add Production Redirect URI
@@ -372,10 +409,11 @@ The Help Desk uses Azure Functions for:
 
 ### Step 2: Deploy Functions
 
-The functions are in the `azure-functions/` directory. Deploy using VS Code Azure extension or Azure CLI:
+The functions are in the `azure-functions/` directory.
 
 ```bash
 cd azure-functions
+npm install
 func azure functionapp publish helpdesk-email-func
 ```
 
@@ -383,22 +421,35 @@ func azure functionapp publish helpdesk-email-func
 
 In Azure Portal → Function App → **Configuration** → **Application settings**, add:
 
-| Setting | Value |
-|---------|-------|
-| `TENANT_ID` | Your Azure AD tenant ID |
-| `CLIENT_ID` | Your Azure AD app client ID |
-| `CLIENT_SECRET` | Create in App Registration → Certificates & secrets |
-| `SHAREPOINT_SITE_ID` | Your SharePoint site ID |
-| `TICKETS_LIST_ID` | Your Tickets list GUID |
-| `SHARED_MAILBOX` | support@yourdomain.com |
-| `APP_URL` | https://your-production-url.com |
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `AZURE_CLIENT_ID` | Your Azure AD app client ID | Same as NEXT_PUBLIC_CLIENT_ID |
+| `AZURE_TENANT_ID` | Your Azure AD tenant ID | Same as NEXT_PUBLIC_TENANT_ID |
+| `AZURE_CLIENT_SECRET` | Your client secret | Created in Step 5 of App Registration |
+| `SENDER_EMAIL` | support@yourdomain.com | Shared mailbox for sending emails |
+| `SHAREPOINT_SITE_ID` | Your SharePoint site ID | Same as NEXT_PUBLIC_SHAREPOINT_SITE_ID |
+| `TICKETS_LIST_ID` | Your Tickets list GUID | Same as NEXT_PUBLIC_TICKETS_LIST_ID |
+| `COMMENTS_LIST_ID` | Your Comments list GUID | Same as NEXT_PUBLIC_COMMENTS_LIST_ID |
+| `ESCALATION_LIST_ID` | Your Escalation list GUID | Same as NEXT_PUBLIC_ESCALATION_LIST_ID |
+| `ACTIVITY_LOG_LIST_ID` | Your Activity Log list GUID | Optional |
+| `APP_URL` | https://your-production-url.com | For email links |
 
-### Step 4: Get Function URLs
+### Step 4: Configure Shared Mailbox (for email sending)
+
+For the Azure Function to send emails from a shared mailbox:
+
+1. Create a shared mailbox in Microsoft 365 Admin Center
+2. The app registration needs `Mail.Send` **Application** permission
+3. Set the `SENDER_EMAIL` to the shared mailbox address
+
+### Step 5: Get Function URLs
 
 1. Go to each function in Azure Portal
 2. Click **Get Function URL**
 3. Copy the URL (includes the function key)
-4. Add to GitHub Secrets as shown above
+4. Add to GitHub Secrets:
+   - `NEXT_PUBLIC_EMAIL_FUNCTION_URL`
+   - `NEXT_PUBLIC_ESCALATION_FUNCTION_URL`
 
 ---
 
@@ -411,6 +462,7 @@ In Azure Portal → Function App → **Configuration** → **Application setting
 | `NEXT_PUBLIC_CLIENT_ID` | Azure AD app client ID | `06fcde50-24bf-...` |
 | `NEXT_PUBLIC_TENANT_ID` | Azure AD tenant ID | `f0db97c1-2010-...` |
 | `NEXT_PUBLIC_SHAREPOINT_SITE_ID` | SharePoint site identifier | `tenant.sharepoint.com,guid,guid` |
+| `NEXT_PUBLIC_SHAREPOINT_SITE_URL` | SharePoint site URL | `https://tenant.sharepoint.com/sites/helpdesk` |
 | `NEXT_PUBLIC_TICKETS_LIST_ID` | Tickets list GUID | `018f0d5c-318d-...` |
 | `NEXT_PUBLIC_COMMENTS_LIST_ID` | Comments list GUID | `70713696-fd57-...` |
 
@@ -422,8 +474,12 @@ In Azure Portal → Function App → **Configuration** → **Application setting
 | `NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID` | Auto-assign rules list | Falls back to code config |
 | `NEXT_PUBLIC_ESCALATION_LIST_ID` | Escalation rules list | Disabled |
 | `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` | Activity log list | Disabled |
-| `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` | Enable Teams notifications | `false` |
+| `NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID` | Admin Entra group ID | Required for approvals |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Comma-separated admin emails | Empty |
+| `NEXT_PUBLIC_APP_URL` | Production app URL | Used in email links |
+| `NEXT_PUBLIC_EMAIL_FUNCTION_URL` | Azure Function for emails | Disabled |
+| `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` | Azure Function for escalations | Disabled |
+| `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` | Enable Teams notifications | `false` |
 
 ---
 
@@ -437,25 +493,37 @@ In Azure Portal → Function App → **Configuration** → **Application setting
 4. Copy the **Object ID**
 5. Set as `NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID`
 
-### 2. Configure RBAC Groups
+### 2. Create Lists via Settings Page
+
+Once the app is running, use the Settings page to create optional lists:
+
+1. Sign in as an admin
+2. Go to **Settings** (gear icon)
+3. For each section (Auto-Assign Rules, Escalation Rules, Activity Log):
+   - Click "Create List" if the list doesn't exist
+   - Copy the list ID shown
+   - Add to GitHub Actions workflow
+   - Commit and push to rebuild
+
+### 3. Configure RBAC Groups
 
 Access the app → **Settings** → **Visibility Groups** to configure:
 - Which Entra ID groups can see each other's tickets
 - Department-based support staff groups
 
-### 3. Set Up Auto-Assignment Rules
+### 4. Set Up Auto-Assignment Rules
 
 Access the app → **Settings** → **Auto-Assign Rules** to configure:
 - Default assignees per department
 - Priority-based routing
 
-### 4. Configure Escalation Rules
+### 5. Configure Escalation Rules
 
 Access the app → **Settings** → **Escalation Rules** to configure:
 - Time-based escalations
 - Priority escalation rules
 
-### 5. Set Up Custom Domain (Optional)
+### 6. Set Up Custom Domain (Optional)
 
 1. In Azure Portal → Static Web App → **Custom domains**
 2. Add your domain and verify ownership
@@ -471,30 +539,42 @@ Access the app → **Settings** → **Escalation Rules** to configure:
 1. Verify the list ID is correct (check SharePoint List Settings URL)
 2. Ensure the environment variable is set in GitHub Actions workflow
 3. Trigger a rebuild: `git commit --allow-empty -m "Rebuild" && git push`
+4. Clear browser cache and sign out/in
 
 ### Authentication Errors
 
 1. Verify redirect URIs match exactly (including trailing slashes)
 2. Check API permissions are granted admin consent
 3. Ensure the app registration is in the correct tenant
+4. Try signing out and back in
 
 ### SharePoint Permission Errors
 
-1. Verify `Sites.ReadWrite.All` permission is granted
+1. Verify `Sites.ReadWrite.All` and `Sites.Manage.All` permissions are granted
 2. Check the user has access to the SharePoint site
-3. Verify the Site ID format is correct
+3. Verify the Site ID format is correct (three parts separated by commas)
 
 ### Build Failures
 
 1. Check GitHub Actions logs for errors
 2. Verify all environment variables are set
 3. Ensure secrets don't contain special characters that need escaping
+4. Check that the workflow file YAML is valid
 
 ### Function App Errors
 
-1. Check Application Insights logs
+1. Check Application Insights or Log Stream in Azure Portal
 2. Verify all application settings are configured
-3. Test functions locally with `func start`
+3. Ensure `AZURE_CLIENT_SECRET` is valid and not expired
+4. Check that Application permissions have admin consent
+5. Test functions locally with `func start`
+
+### Email Not Sending
+
+1. Verify `Mail.Send` Application permission is granted
+2. Check the shared mailbox exists and is accessible
+3. Verify `SENDER_EMAIL` matches the shared mailbox address
+4. Check Function App logs for specific errors
 
 ---
 
@@ -503,4 +583,5 @@ Access the app → **Settings** → **Escalation Rules** to configure:
 For issues or questions:
 - Check the in-app Help documentation
 - Review the `CLAUDE.md` file for development guidelines
+- Review the `azure-functions/README.md` for function-specific setup
 - Open an issue on the GitHub repository
