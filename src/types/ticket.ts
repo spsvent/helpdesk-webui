@@ -5,6 +5,7 @@ export type ApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Chang
 
 export interface Ticket {
   id: string;
+  ticketNumber?: number;  // Auto-generated ticket number
   title: string;
   description: string;
   category: "Request" | "Problem";
@@ -84,6 +85,7 @@ export function mapToTicket(item: SharePointListItem): Ticket {
   const fields = item.fields as Record<string, unknown>;
   return {
     id: item.id,
+    ticketNumber: fields.TicketNumber as number | undefined,
     title: (fields.Title as string) || "",
     description: (fields.Description as string) || "",
     category: (fields.Category as Ticket["category"]) || "Request",

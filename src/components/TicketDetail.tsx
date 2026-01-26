@@ -13,6 +13,7 @@ import {
   uploadAttachment,
   deleteAttachment,
   downloadAttachment,
+  logActivity,
 } from "@/lib/graphClient";
 import { sendApprovalRequestEmail, sendDecisionEmail, sendCommentEmail } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -174,6 +175,21 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       );
       setComments((prev) => [...prev, newComment]);
 
+      // Log the comment activity
+      logActivity(client, {
+        eventType: "comment_added",
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+        actor: commenterEmail,
+        actorName: commenterName,
+        description: `${isInternal ? "Internal note" : "Comment"} added by ${commenterName}`,
+        details: JSON.stringify({
+          isInternal,
+          commentId: newComment.id,
+          textPreview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+        }),
+      }).catch((e) => console.error("Failed to log comment activity:", e));
+
       // Send email notifications for non-internal comments
       if (!isInternal) {
         // Notify requester if commenter is not the requester
@@ -270,10 +286,25 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     const client = getGraphClient(instance, accounts[0]);
     const requesterName = accounts[0].name || accounts[0].username;
+    const requesterEmail = accounts[0].username;
 
     // Update ticket status to Pending
     const updatedTicket = await requestApproval(client, ticket.id, requesterName);
     onUpdate(updatedTicket);
+
+    // Log approval request
+    logActivity(client, {
+      eventType: "approval_requested",
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+      actor: requesterEmail,
+      actorName: requesterName,
+      description: `Approval requested by ${requesterName}`,
+      details: JSON.stringify({
+        ticketTitle: ticket.title,
+        ticketStatus: updatedTicket.status,
+      }),
+    }).catch((e) => console.error("Failed to log approval request:", e));
 
     // Send email notifications to managers
     await sendApprovalRequestEmail(client, updatedTicket, requesterName);
@@ -297,6 +328,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     const client = getGraphClient(instance, accounts[0]);
     const approverName = accounts[0].name || accounts[0].username;
+    const approverEmail = accounts[0].username;
 
     // Process the approval decision
     const updatedTicket = await processApprovalDecision(
@@ -307,6 +339,22 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       notes
     );
     onUpdate(updatedTicket);
+
+    // Log the approval decision
+    const eventType = decision === "Approved" ? "approval_approved" : "approval_rejected";
+    logActivity(client, {
+      eventType,
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+      actor: approverEmail,
+      actorName: approverName,
+      description: `Ticket ${decision.toLowerCase()} by ${approverName}`,
+      details: JSON.stringify({
+        decision,
+        notes: notes || null,
+        requestedBy: ticket.approvalRequestedBy?.displayName || null,
+      }),
+    }).catch((e) => console.error("Failed to log approval decision:", e));
 
     // Add internal note about the decision
     const noteText = notes

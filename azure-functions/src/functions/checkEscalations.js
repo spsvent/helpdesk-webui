@@ -12,6 +12,7 @@ const config = {
   ticketsListId: process.env.TICKETS_LIST_ID,
   escalationListId: process.env.ESCALATION_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
+  activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
   appUrl: process.env.APP_URL || "https://tickets.spsvent.net",
 };
 
@@ -249,36 +250,144 @@ async function reassignTicket(client, ticket, newAssignee) {
   }
 }
 
+// Log activity to SharePoint list
+async function logActivity(client, entry) {
+  if (!config.activityLogListId) {
+    console.log("Activity log list not configured, skipping log");
+    return;
+  }
+
+  const endpoint = `/sites/${config.siteId}/lists/${config.activityLogListId}/items`;
+
+  try {
+    await client.api(endpoint).post({
+      fields: {
+        Title: entry.description.substring(0, 255),
+        EventType: entry.eventType,
+        TicketId: entry.ticketId || "",
+        TicketNumber: entry.ticketNumber || "",
+        Actor: entry.actor || "system",
+        ActorName: entry.actorName || "Escalation System",
+        Description: entry.description,
+        Details: entry.details || "",
+      },
+    });
+    console.log(`Activity logged: ${entry.eventType} - ${entry.description}`);
+  } catch (error) {
+    console.error("Failed to log activity:", error.message);
+  }
+}
+
 // Execute escalation action
 async function executeAction(client, rule, ticket) {
+  const ruleTitle = rule.title || rule.triggerType;
+
   switch (rule.actionType) {
     case "notify":
       if (rule.notifyEmail) {
         await sendNotificationEmail(client, rule.notifyEmail, ticket, rule);
+        await logActivity(client, {
+          eventType: "email_sent",
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber?.toString(),
+          description: `Escalation notification sent to ${rule.notifyEmail}`,
+          details: JSON.stringify({
+            emailType: "escalation_notification",
+            recipient: rule.notifyEmail,
+            rule: ruleTitle,
+            triggerType: rule.triggerType,
+          }),
+        });
       }
       break;
 
     case "escalate_priority":
       if (rule.escalateToPriority) {
+        const oldPriority = ticket.priority;
         await escalateTicketPriority(client, ticket, rule.escalateToPriority);
+        await logActivity(client, {
+          eventType: "ticket_escalated",
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber?.toString(),
+          description: `Priority escalated from "${oldPriority}" to "${rule.escalateToPriority}" by rule "${ruleTitle}"`,
+          details: JSON.stringify({
+            oldPriority,
+            newPriority: rule.escalateToPriority,
+            rule: ruleTitle,
+            triggerType: rule.triggerType,
+          }),
+        });
       }
       break;
 
     case "reassign":
       if (rule.reassignToEmail) {
+        const oldAssignee = ticket.assignedTo;
         await reassignTicket(client, ticket, rule.reassignToEmail);
+        await logActivity(client, {
+          eventType: "ticket_assigned",
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber?.toString(),
+          description: `Reassigned to ${rule.reassignToEmail} by escalation rule "${ruleTitle}"`,
+          details: JSON.stringify({
+            oldAssignee: oldAssignee || "Unassigned",
+            newAssignee: rule.reassignToEmail,
+            rule: ruleTitle,
+            triggerType: rule.triggerType,
+          }),
+        });
       }
       break;
 
     case "escalate_and_notify":
       if (rule.escalateToPriority) {
+        const oldPriority = ticket.priority;
         await escalateTicketPriority(client, ticket, rule.escalateToPriority);
+        await logActivity(client, {
+          eventType: "ticket_escalated",
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber?.toString(),
+          description: `Priority escalated from "${oldPriority}" to "${rule.escalateToPriority}" by rule "${ruleTitle}"`,
+          details: JSON.stringify({
+            oldPriority,
+            newPriority: rule.escalateToPriority,
+            rule: ruleTitle,
+            triggerType: rule.triggerType,
+          }),
+        });
       }
       if (rule.notifyEmail) {
         await sendNotificationEmail(client, rule.notifyEmail, ticket, rule);
+        await logActivity(client, {
+          eventType: "email_sent",
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber?.toString(),
+          description: `Escalation notification sent to ${rule.notifyEmail}`,
+          details: JSON.stringify({
+            emailType: "escalation_notification",
+            recipient: rule.notifyEmail,
+            rule: ruleTitle,
+            triggerType: rule.triggerType,
+          }),
+        });
       }
       break;
   }
+
+  // Log the escalation trigger itself
+  await logActivity(client, {
+    eventType: "escalation_triggered",
+    ticketId: ticket.id,
+    ticketNumber: ticket.ticketNumber?.toString(),
+    description: `Escalation rule "${ruleTitle}" triggered for ticket #${ticket.ticketNumber}`,
+    details: JSON.stringify({
+      rule: ruleTitle,
+      ruleId: rule.id,
+      triggerType: rule.triggerType,
+      triggerHours: rule.triggerHours,
+      actionType: rule.actionType,
+    }),
+  });
 }
 
 // Main escalation check function

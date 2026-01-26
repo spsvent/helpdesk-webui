@@ -95,6 +95,25 @@ Deployment is automatic via GitHub Actions on push to `main` branch.
 
 Production URL: https://lively-coast-062dfc51e.1.azurestaticapps.net
 
+## Roadmap / Planned Features
+
+### Activity/Audit Log
+Track and display a comprehensive log of all system activity:
+- **Emails sent** - To whom, subject, when, triggered by what (new ticket, escalation, etc.)
+- **Notifications** - Escalation alerts, assignment notifications
+- **Ticket events** - Creation, status changes, priority changes, reassignments
+- **Comments** - When added, by whom
+- **Approval actions** - Approved/rejected, by whom
+- **Escalation actions** - What rule triggered, what action was taken
+
+Implementation approach:
+- Create `ActivityLog` SharePoint list with columns: Timestamp, EventType, TicketId, Actor, Details, Metadata
+- Log events from: graphClient.ts (emails), page.tsx (ticket creation), DetailsPanel (updates), Azure Functions (escalations)
+- Add Activity Log viewer in Settings or as a new admin page
+- Filter by event type, date range, ticket, user
+
+---
+
 ## Related Documentation
 
 - `/README.md` - Full project documentation

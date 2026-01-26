@@ -16,6 +16,7 @@ const TICKETS_LIST_ID = process.env.NEXT_PUBLIC_TICKETS_LIST_ID || "";
 const COMMENTS_LIST_ID = process.env.NEXT_PUBLIC_COMMENTS_LIST_ID || "";
 const AUTO_ASSIGN_LIST_ID = process.env.NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID || "";
 const ESCALATION_LIST_ID = process.env.NEXT_PUBLIC_ESCALATION_LIST_ID || "";
+const ACTIVITY_LOG_LIST_ID = process.env.NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID || "";
 
 // SharePoint site URL for REST API calls (attachments)
 const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
@@ -1443,6 +1444,258 @@ export async function createEscalationList(client: Client): Promise<string> {
       name: "IsActive",
       boolean: {},
       defaultValue: { value: "true" },
+    },
+  ];
+
+  // Add each column
+  for (const column of columns) {
+    try {
+      await client.api(`/sites/${SITE_ID}/lists/${listId}/columns`).post(column);
+      console.log(`Added column: ${column.name}`);
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number; message?: string };
+      if (err.statusCode === 409 || err.message?.includes("already exists")) {
+        console.log(`Column already exists: ${column.name}`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return listId;
+}
+
+// ============================================================================
+// ACTIVITY LOG
+// ============================================================================
+
+export type ActivityEventType =
+  | "ticket_created"
+  | "ticket_updated"
+  | "ticket_status_changed"
+  | "ticket_priority_changed"
+  | "ticket_assigned"
+  | "ticket_escalated"
+  | "comment_added"
+  | "email_sent"
+  | "approval_requested"
+  | "approval_approved"
+  | "approval_rejected"
+  | "escalation_triggered";
+
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: string;
+  eventType: ActivityEventType;
+  ticketId?: string;
+  ticketNumber?: string;
+  actor: string; // Email of person who performed action
+  actorName?: string;
+  description: string;
+  details?: string; // JSON string with additional data
+}
+
+interface SharePointActivityLogItem {
+  id: string;
+  fields: {
+    Title: string; // Description
+    EventType: string;
+    TicketId?: string;
+    TicketNumber?: string;
+    Actor: string;
+    ActorName?: string;
+    Details?: string;
+    Created?: string;
+  };
+  createdDateTime: string;
+}
+
+// Log an activity event
+export async function logActivity(
+  client: Client,
+  entry: Omit<ActivityLogEntry, "id" | "timestamp">
+): Promise<void> {
+  if (!ACTIVITY_LOG_LIST_ID) {
+    console.log("[ActivityLog] List not configured, skipping log");
+    return;
+  }
+
+  try {
+    const endpoint = `/sites/${SITE_ID}/lists/${ACTIVITY_LOG_LIST_ID}/items`;
+
+    const fields: Record<string, unknown> = {
+      Title: entry.description,
+      EventType: entry.eventType,
+      Actor: entry.actor,
+    };
+
+    if (entry.ticketId) fields.TicketId = entry.ticketId;
+    if (entry.ticketNumber) fields.TicketNumber = entry.ticketNumber;
+    if (entry.actorName) fields.ActorName = entry.actorName;
+    if (entry.details) fields.Details = entry.details;
+
+    await client.api(endpoint).post({ fields });
+    console.log(`[ActivityLog] Logged: ${entry.eventType} - ${entry.description}`);
+  } catch (error) {
+    // Don't throw - logging should not break the main operation
+    console.error("[ActivityLog] Failed to log activity:", error);
+  }
+}
+
+// Helper to log activity with automatic actor detection
+export async function logActivityWithActor(
+  client: Client,
+  actor: { email: string; name?: string },
+  entry: Omit<ActivityLogEntry, "id" | "timestamp" | "actor" | "actorName">
+): Promise<void> {
+  return logActivity(client, {
+    ...entry,
+    actor: actor.email,
+    actorName: actor.name,
+  });
+}
+
+// Get activity log entries
+export async function getActivityLog(
+  client: Client,
+  options?: {
+    ticketId?: string;
+    eventType?: ActivityEventType;
+    limit?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }
+): Promise<ActivityLogEntry[]> {
+  if (!ACTIVITY_LOG_LIST_ID) {
+    throw new Error("Activity log list not configured");
+  }
+
+  let endpoint = `/sites/${SITE_ID}/lists/${ACTIVITY_LOG_LIST_ID}/items?$expand=fields&$orderby=createdDateTime desc`;
+
+  // Add limit
+  const limit = options?.limit || 100;
+  endpoint += `&$top=${limit}`;
+
+  // Build filter
+  const filters: string[] = [];
+  if (options?.ticketId) {
+    filters.push(`fields/TicketId eq '${options.ticketId}'`);
+  }
+  if (options?.eventType) {
+    filters.push(`fields/EventType eq '${options.eventType}'`);
+  }
+  if (options?.startDate) {
+    filters.push(`createdDateTime ge ${options.startDate.toISOString()}`);
+  }
+  if (options?.endDate) {
+    filters.push(`createdDateTime le ${options.endDate.toISOString()}`);
+  }
+
+  if (filters.length > 0) {
+    endpoint += `&$filter=${filters.join(" and ")}`;
+  }
+
+  const response = await client.api(endpoint).get();
+
+  return (response.value || []).map((item: SharePointActivityLogItem) => ({
+    id: item.id,
+    timestamp: item.fields.Created || item.createdDateTime,
+    eventType: item.fields.EventType as ActivityEventType,
+    ticketId: item.fields.TicketId,
+    ticketNumber: item.fields.TicketNumber,
+    actor: item.fields.Actor,
+    actorName: item.fields.ActorName,
+    description: item.fields.Title,
+    details: item.fields.Details,
+  }));
+}
+
+// Get activity log for a specific ticket
+export async function getTicketActivityLog(
+  client: Client,
+  ticketId: string
+): Promise<ActivityLogEntry[]> {
+  return getActivityLog(client, { ticketId, limit: 500 });
+}
+
+// Create the ActivityLog SharePoint list
+export async function createActivityLogList(client: Client): Promise<string> {
+  const listData = {
+    displayName: "ActivityLog",
+    description: "Activity log for help desk events",
+    list: {
+      template: "genericList",
+    },
+  };
+
+  let listId: string;
+
+  try {
+    const list = await client.api(`/sites/${SITE_ID}/lists`).post(listData);
+    listId = list.id;
+    console.log(`Created ActivityLog list with ID: ${listId}`);
+  } catch (error: unknown) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 409 || err.message?.includes("already exists")) {
+      const lists = await client
+        .api(`/sites/${SITE_ID}/lists`)
+        .filter(`displayName eq 'ActivityLog'`)
+        .get();
+      if (lists.value && lists.value.length > 0) {
+        listId = lists.value[0].id;
+        console.log(`Found existing ActivityLog list with ID: ${listId}`);
+      } else {
+        throw new Error("List creation conflict but list not found");
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  // Define columns
+  const columns = [
+    {
+      name: "EventType",
+      choice: {
+        allowTextEntry: false,
+        choices: [
+          "ticket_created",
+          "ticket_updated",
+          "ticket_status_changed",
+          "ticket_priority_changed",
+          "ticket_assigned",
+          "ticket_escalated",
+          "comment_added",
+          "email_sent",
+          "approval_requested",
+          "approval_approved",
+          "approval_rejected",
+          "escalation_triggered",
+        ],
+        displayAs: "dropDownMenu",
+      },
+      required: true,
+    },
+    {
+      name: "TicketId",
+      text: { allowMultipleLines: false, maxLength: 50 },
+    },
+    {
+      name: "TicketNumber",
+      text: { allowMultipleLines: false, maxLength: 20 },
+    },
+    {
+      name: "Actor",
+      text: { allowMultipleLines: false, maxLength: 255 },
+      required: true,
+    },
+    {
+      name: "ActorName",
+      text: { allowMultipleLines: false, maxLength: 255 },
+    },
+    {
+      name: "Details",
+      text: { allowMultipleLines: true, maxLength: 5000 },
     },
   ];
 

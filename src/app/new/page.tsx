@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment, logActivity } from "@/lib/graphClient";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
@@ -211,6 +211,23 @@ export default function NewTicketPage() {
         requesterEmail
       );
 
+      // Log ticket creation
+      const requesterName = accounts[0]?.name || accounts[0]?.username || "Unknown User";
+      await logActivity(client, {
+        eventType: "ticket_created",
+        ticketId: newTicket.id,
+        ticketNumber: newTicket.ticketNumber?.toString(),
+        actor: requesterEmail,
+        actorName: requesterName,
+        description: `Created ticket: ${newTicket.title}`,
+        details: JSON.stringify({
+          category: formData.category,
+          priority: formData.priority,
+          department: formData.problemType,
+          assignedTo: assigneeEmail || "Unassigned",
+        }),
+      });
+
       // Send email notification to assignee if there is one
       if (assigneeEmail) {
         console.log("[Email Debug] Assignee email:", assigneeEmail);
@@ -229,6 +246,17 @@ export default function NewTicketPage() {
             assigneeName
           );
           console.log("[Email Debug] Email sent successfully!");
+
+          // Log email sent
+          await logActivity(client, {
+            eventType: "email_sent",
+            ticketId: newTicket.id,
+            ticketNumber: newTicket.ticketNumber?.toString(),
+            actor: "system",
+            actorName: "System",
+            description: `Assignment notification sent to ${assigneeName}`,
+            details: JSON.stringify({ recipient: assigneeEmail, type: "new_ticket_assignment" }),
+          });
 
           // Add assignment tracking comment (auto-assigned on creation)
           await addAssignmentComment(
@@ -252,8 +280,18 @@ export default function NewTicketPage() {
       // For Request tickets, send approval notification to admins/managers
       if (formData.category === "Request") {
         try {
-          const requesterName = accounts[0]?.name || accounts[0]?.username || "Unknown User";
           await sendApprovalRequestEmail(client, newTicket, requesterName);
+
+          // Log approval requested
+          await logActivity(client, {
+            eventType: "approval_requested",
+            ticketId: newTicket.id,
+            ticketNumber: newTicket.ticketNumber?.toString(),
+            actor: requesterEmail,
+            actorName: requesterName,
+            description: `Approval request sent to managers`,
+            details: JSON.stringify({ category: "Request" }),
+          });
         } catch (approvalEmailError) {
           // Don't fail the ticket creation if approval email fails
           console.error("Failed to send approval request email:", approvalEmailError);

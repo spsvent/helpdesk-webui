@@ -8,6 +8,7 @@ import {
   updateTicketFields,
   getUserByEmail,
   addAssignmentComment,
+  logActivity,
   OrgUser,
 } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -271,6 +272,55 @@ export default function DetailsPanel({
       setHasChanges(false);
       setAutoAssignSuggestion(null);
 
+      // Log activity for changes (don't block on these)
+      const ticketNumber = ticket.ticketNumber?.toString() || ticket.id;
+
+      // Log status change
+      if (status !== oldStatus) {
+        logActivity(client, {
+          eventType: "ticket_status_changed",
+          ticketId: ticket.id,
+          ticketNumber,
+          actor: accounts[0].username,
+          actorName: currentUserName,
+          description: `Status changed from "${oldStatus}" to "${status}"`,
+          details: JSON.stringify({ oldStatus, newStatus: status }),
+        }).catch((e) => console.error("Failed to log status change:", e));
+      }
+
+      // Log priority change
+      if (priority !== oldPriority) {
+        logActivity(client, {
+          eventType: "ticket_priority_changed",
+          ticketId: ticket.id,
+          ticketNumber,
+          actor: accounts[0].username,
+          actorName: currentUserName,
+          description: `Priority changed from "${oldPriority}" to "${priority}"`,
+          details: JSON.stringify({ oldPriority, newPriority: priority }),
+        }).catch((e) => console.error("Failed to log priority change:", e));
+      }
+
+      // Log assignment change
+      if (selectedAssignee?.email && selectedAssignee.email !== oldAssigneeEmail) {
+        const oldAssigneeName = ticket.assignedTo?.displayName ||
+          (oldAssigneeEmail ? oldAssigneeEmail.split('@')[0].replace(/[._]/g, ' ') : "Unassigned");
+        logActivity(client, {
+          eventType: "ticket_assigned",
+          ticketId: ticket.id,
+          ticketNumber,
+          actor: accounts[0].username,
+          actorName: currentUserName,
+          description: `Assigned to ${selectedAssignee.displayName}`,
+          details: JSON.stringify({
+            oldAssignee: oldAssigneeName,
+            oldAssigneeEmail: oldAssigneeEmail || null,
+            newAssignee: selectedAssignee.displayName,
+            newAssigneeEmail: selectedAssignee.email,
+          }),
+        }).catch((e) => console.error("Failed to log assignment change:", e));
+      }
+
       // Send email notifications (don't block on these)
       // Notify new assignee if assignment changed
       if (selectedAssignee?.email && selectedAssignee.email !== oldAssigneeEmail) {
@@ -280,7 +330,22 @@ export default function DetailsPanel({
           selectedAssignee.email,
           selectedAssignee.displayName,
           currentUserName
-        ).catch((e) => console.error("Failed to send assignment email:", e));
+        ).then(() => {
+          // Log successful email
+          logActivity(client, {
+            eventType: "email_sent",
+            ticketId: ticket.id,
+            ticketNumber,
+            actor: accounts[0].username,
+            actorName: currentUserName,
+            description: `Assignment notification sent to ${selectedAssignee.displayName}`,
+            details: JSON.stringify({
+              emailType: "assignment_notification",
+              recipient: selectedAssignee.email,
+              recipientName: selectedAssignee.displayName,
+            }),
+          }).catch((e) => console.error("Failed to log email sent:", e));
+        }).catch((e) => console.error("Failed to send assignment email:", e));
 
         // Add assignment tracking comment
         const oldAssigneeName = ticket.assignedTo?.displayName ||
@@ -303,7 +368,24 @@ export default function DetailsPanel({
           ticket.requester.email,
           oldStatus,
           currentUserName
-        ).catch((e) => console.error("Failed to send status change email:", e));
+        ).then(() => {
+          // Log successful email
+          logActivity(client, {
+            eventType: "email_sent",
+            ticketId: ticket.id,
+            ticketNumber,
+            actor: accounts[0].username,
+            actorName: currentUserName,
+            description: `Status change notification sent to ${ticket.requester.displayName}`,
+            details: JSON.stringify({
+              emailType: "status_change_notification",
+              recipient: ticket.requester.email,
+              recipientName: ticket.requester.displayName,
+              oldStatus,
+              newStatus: status,
+            }),
+          }).catch((e) => console.error("Failed to log email sent:", e));
+        }).catch((e) => console.error("Failed to send status change email:", e));
 
         // Also send Teams notification for status change
         sendStatusChangeTeamsNotification(client, updated, oldStatus, currentUserName);

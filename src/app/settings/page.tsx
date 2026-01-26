@@ -8,12 +8,13 @@ import { loginRequest } from "@/lib/msalConfig";
 import { useRBAC } from "@/contexts/RBACContext";
 import AutoAssignRulesManager from "@/components/AutoAssignRulesManager";
 import EscalationRulesManager from "@/components/EscalationRulesManager";
+import ActivityLogManager from "@/components/ActivityLogManager";
 
 export default function SettingsPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const { permissions, loading: rbacLoading } = useRBAC();
-  const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation">("auto-assign");
+  const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "activity-log">("auto-assign");
 
   // Handle authentication
   useEffect(() => {
@@ -121,11 +122,22 @@ export default function SettingsPage() {
           >
             Escalation Rules
           </button>
+          <button
+            onClick={() => setActiveTab("activity-log")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "activity-log"
+                ? "border-brand-primary text-brand-primary"
+                : "border-transparent text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Activity Log
+          </button>
         </div>
 
         {/* Tab Content */}
         {activeTab === "auto-assign" && <AutoAssignRulesManager />}
         {activeTab === "escalation" && <EscalationRulesManager />}
+        {activeTab === "activity-log" && <ActivityLogManager />}
       </main>
     </div>
   );
