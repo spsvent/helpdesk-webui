@@ -81,13 +81,44 @@ Each help section has this structure:
 
 ## Environment Variables
 
-Required environment variables (set in GitHub Actions workflow):
+Required environment variables for local development (`.env.local`) and production (Azure):
 
+### Core Configuration
 - `NEXT_PUBLIC_CLIENT_ID` - Azure AD app client ID
 - `NEXT_PUBLIC_TENANT_ID` - Azure AD tenant ID
 - `NEXT_PUBLIC_SHAREPOINT_SITE_ID` - SharePoint site ID
-- `NEXT_PUBLIC_TICKETS_LIST_ID` - SharePoint Tickets list ID
-- `NEXT_PUBLIC_COMMENTS_LIST_ID` - SharePoint TicketComments list ID
+- `NEXT_PUBLIC_SHAREPOINT_SITE_URL` - SharePoint site URL
+
+### SharePoint List IDs
+- `NEXT_PUBLIC_TICKETS_LIST_ID` - Tickets list
+- `NEXT_PUBLIC_COMMENTS_LIST_ID` - TicketComments list
+- `NEXT_PUBLIC_RBAC_GROUPS_LIST_ID` - RBACGroups list (role-based access control)
+- `NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID` - AutoAssignRules list
+- `NEXT_PUBLIC_ESCALATION_LIST_ID` - EscalationRules list
+- `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` - ActivityLog list
+
+### Other Configuration
+- `NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID` - Entra ID group for admin access
+- `NEXT_PUBLIC_ADMIN_EMAILS` - Comma-separated admin emails (fallback)
+- `NEXT_PUBLIC_APP_URL` - Production app URL (for email links)
+- `NEXT_PUBLIC_EMAIL_FUNCTION_URL` - Azure Function for sending emails
+- `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` - Azure Function for escalation checks
+
+### Adding Environment Variables to Azure (Production)
+
+1. Go to Azure Portal: https://portal.azure.com
+2. Navigate to: **Static Web Apps** → **skypark-helpdesk-v2**
+3. In the left sidebar under **Settings**, click **Environment variables**
+4. Ensure **Production** is selected in the Environments dropdown
+5. Click **+ Add** to add a new variable
+6. Enter the Name and Value
+7. Click **Apply** at the bottom to save
+8. **Important**: After adding/changing variables, trigger a rebuild:
+   ```bash
+   git commit --allow-empty -m "Trigger rebuild for env vars" && git push
+   ```
+
+**Note**: `NEXT_PUBLIC_*` variables are baked in at build time. Changes won't take effect until the app is rebuilt.
 
 ## Deployment
 
