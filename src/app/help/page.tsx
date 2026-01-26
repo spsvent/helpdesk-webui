@@ -1574,6 +1574,137 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "admin-deployment",
+    title: "Admin: Deployment & Environment Setup",
+    content: (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admin Only:</strong> This section covers deployment configuration
+            for administrators setting up or maintaining the Help Desk application.
+          </p>
+        </div>
+
+        <p>
+          The Help Desk uses Azure Static Web Apps with GitHub Actions for deployment.
+          Environment variables are configured in two places depending on when they&apos;re needed.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Build-Time vs Runtime Variables</h4>
+        <div className="space-y-3 mt-3">
+          <div className="p-3 border border-blue-200 bg-blue-50 rounded-lg">
+            <p className="font-medium">Build-Time (NEXT_PUBLIC_*)</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Variables starting with <code className="bg-blue-100 px-1 rounded">NEXT_PUBLIC_</code> are
+              baked into the app at build time. These must be configured in <strong>GitHub Actions</strong>.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">Runtime</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Server-side variables can be configured in Azure Portal, but this app uses static export
+              so most configuration is build-time.
+            </p>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Configuring GitHub Secrets</h4>
+        <p>
+          Sensitive values (API keys, function URLs) should be stored as GitHub repository secrets:
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Go to your GitHub repository</li>
+          <li>Navigate to <strong>Settings → Secrets and variables → Actions</strong></li>
+          <li>Click <strong>New repository secret</strong></li>
+          <li>Add each secret with its name and value</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Required GitHub Secrets</h4>
+        <div className="overflow-x-auto mt-3">
+          <table className="min-w-full text-sm border border-gray-200 rounded-lg">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">Secret Name</th>
+                <th className="px-4 py-2 text-left font-medium">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">AZURE_STATIC_WEB_APPS_API_TOKEN_*</td>
+                <td className="px-4 py-2">Auto-generated deployment token</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">NEXT_PUBLIC_COMMENTS_LIST_ID</td>
+                <td className="px-4 py-2">SharePoint Comments list GUID</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">NEXT_PUBLIC_EMAIL_FUNCTION_URL</td>
+                <td className="px-4 py-2">Azure Function URL for sending emails (includes API key)</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 font-mono text-xs">NEXT_PUBLIC_ESCALATION_FUNCTION_URL</td>
+                <td className="px-4 py-2">Azure Function URL for escalation checks (includes API key)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">GitHub Actions Workflow</h4>
+        <p>
+          The workflow file is located at <code className="bg-gray-100 px-1 rounded">.github/workflows/azure-static-web-apps-*.yml</code>.
+          Non-sensitive environment variables are configured directly in this file:
+        </p>
+        <div className="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-xs mt-3 overflow-x-auto">
+          <pre>{`env:
+  NEXT_PUBLIC_CLIENT_ID: "your-client-id"
+  NEXT_PUBLIC_TENANT_ID: "your-tenant-id"
+  NEXT_PUBLIC_SHAREPOINT_SITE_ID: "site-id"
+  NEXT_PUBLIC_TICKETS_LIST_ID: "list-guid"
+  NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID: "list-guid"
+  NEXT_PUBLIC_ESCALATION_LIST_ID: "list-guid"
+  NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "list-guid"
+  # Secrets referenced like this:
+  NEXT_PUBLIC_EMAIL_FUNCTION_URL: \${{ secrets.NEXT_PUBLIC_EMAIL_FUNCTION_URL }}`}</pre>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Adding a New SharePoint List</h4>
+        <p>When you create a new SharePoint list through the app (e.g., AutoAssign Rules, Escalation Rules):</p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Note the list ID shown after creation</li>
+          <li>Add the environment variable to your local <code className="bg-gray-100 px-1 rounded">.env.local</code></li>
+          <li>Add the same variable to the GitHub Actions workflow file</li>
+          <li>Commit and push to trigger a rebuild</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Finding SharePoint List IDs</h4>
+        <p>To find an existing list&apos;s ID:</p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Go to your SharePoint site → Site Contents</li>
+          <li>Click on the list</li>
+          <li>Click the gear icon → <strong>List Settings</strong></li>
+          <li>Look at the URL - find <code className="bg-gray-100 px-1 rounded">List=%7B...%7D</code></li>
+          <li>The GUID is between the encoded braces (decode %7B as {"{"} and %7D as {"}"})</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Triggering a Rebuild</h4>
+        <p>
+          After changing environment variables, you must trigger a new build for changes to take effect:
+        </p>
+        <div className="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-sm mt-3">
+          git commit --allow-empty -m &quot;Trigger rebuild&quot; &amp;&amp; git push
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> For a complete deployment guide including Azure AD setup,
+            SharePoint configuration, and Azure Functions, see the{" "}
+            <code className="bg-blue-100 px-1 rounded">DEPLOYMENT.md</code> file in the repository.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "admin-teams-config",
     title: "Admin: Teams Channel Configuration",
     content: (
