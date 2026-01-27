@@ -31,7 +31,8 @@ inkscape outline.svg -w 32 -h 32 -o outline.png
 
 ```bash
 cd teams-app
-zip -r helpdesk-teams-app.zip manifest.json color.png outline.png
+# Replace X.X.X with current version from manifest.json
+zip -r helpdesk-teams-app-vX.X.X.zip manifest.json color.png outline.png
 ```
 
 ## Deploy to Teams
