@@ -72,12 +72,16 @@ export async function fetchTeamsChannelConfig(client: Client): Promise<TeamsChan
   }
 
   try {
-    const endpoint = `/sites/${SITE_ID}/lists/${TEAMS_CHANNELS_LIST_ID}/items?$expand=fields&$filter=fields/IsActive eq true`;
+    // Fetch all items and filter client-side (IsActive column may not be indexed)
+    const endpoint = `/sites/${SITE_ID}/lists/${TEAMS_CHANNELS_LIST_ID}/items?$expand=fields`;
     const response = await client.api(endpoint).get();
 
-    const configs: TeamsChannelConfig[] = response.value.map(
+    const allConfigs: TeamsChannelConfig[] = response.value.map(
       (item: TeamsChannelSharePointItem) => mapToTeamsChannelConfig(item)
     );
+
+    // Filter to only active channels client-side
+    const configs = allConfigs.filter(config => config.isActive);
 
     // Update cache
     channelConfigCache = configs;
@@ -734,37 +738,53 @@ export function sendNewTicketTeamsNotification(
   client: Client,
   ticket: Ticket
 ): void {
+  console.log("[Teams Debug] sendNewTicketTeamsNotification called for ticket:", ticket.id);
+  console.log("[Teams Debug] TEAMS_NOTIFICATIONS_ENABLED:", TEAMS_NOTIFICATIONS_ENABLED);
+  console.log("[Teams Debug] TEAMS_CHANNELS_LIST_ID:", TEAMS_CHANNELS_LIST_ID);
+
   // Check global kill switch
   if (!TEAMS_NOTIFICATIONS_ENABLED) {
+    console.log("[Teams Debug] BLOCKED: Notifications disabled");
     return;
   }
 
   // Check date filter (skip old/migrated tickets)
   if (!isTicketAfterStartDate(ticket)) {
+    console.log("[Teams Debug] BLOCKED: Ticket before start date");
     return;
   }
+
+  console.log("[Teams Debug] Passed initial checks, starting async notification...");
 
   // Run async without blocking
   (async () => {
     try {
+      console.log("[Teams Debug] Fetching channel config...");
       const configs = await fetchTeamsChannelConfig(client);
+      console.log("[Teams Debug] Got configs:", configs.length, "channels");
+      console.log("[Teams Debug] Looking for department:", ticket.problemType);
+
       const channelConfig = findChannelForTicket(configs, ticket.problemType);
 
       if (!channelConfig) {
-        console.log(`No Teams channel configured for department: ${ticket.problemType}`);
+        console.log(`[Teams Debug] BLOCKED: No Teams channel configured for department: ${ticket.problemType}`);
+        console.log("[Teams Debug] Available departments:", configs.map(c => c.department));
         return;
       }
+
+      console.log("[Teams Debug] Found channel:", channelConfig.title);
 
       if (!shouldNotifyTeams(ticket.priority, channelConfig.minPriority)) {
-        console.log(`Ticket priority ${ticket.priority} below threshold ${channelConfig.minPriority} - skipping Teams notification`);
+        console.log(`[Teams Debug] BLOCKED: Ticket priority ${ticket.priority} below threshold ${channelConfig.minPriority}`);
         return;
       }
 
+      console.log("[Teams Debug] Generating card and posting...");
       const card = generateNewTicketCard(ticket);
       await postToTeamsChannel(client, channelConfig.teamId, channelConfig.channelId, card);
-      console.log(`Posted new ticket notification to Teams channel: ${channelConfig.title}`);
+      console.log(`[Teams Debug] SUCCESS: Posted to Teams channel: ${channelConfig.title}`);
     } catch (error) {
-      console.error("Failed to send new ticket Teams notification:", error);
+      console.error("[Teams Debug] ERROR:", error);
     }
   })();
 }
