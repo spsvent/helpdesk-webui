@@ -53,8 +53,21 @@ export default function RootLayout({
                 console.log("Teams SSO successful:", ssoResult.account.username);
               }
             } catch (ssoError) {
-              console.log("Teams SSO silent auth failed, will show login:", ssoError);
-              // SSO failed - user will see normal login button
+              console.log("Teams SSO silent auth failed, trying popup:", ssoError);
+              // ssoSilent failed - try popup (works in Teams iframe, unlike redirect)
+              try {
+                const popupResult = await msalInstance.loginPopup({
+                  ...loginRequest,
+                  loginHint: teamsAuth.loginHint,
+                });
+                if (popupResult?.account) {
+                  msalInstance.setActiveAccount(popupResult.account);
+                  console.log("Teams popup login successful:", popupResult.account.username);
+                }
+              } catch (popupError) {
+                console.log("Teams popup auth failed, will show login:", popupError);
+                // Popup also failed - user will see normal login button
+              }
             }
           }
         }
