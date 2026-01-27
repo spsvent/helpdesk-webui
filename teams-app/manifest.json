@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "id": "06fcde50-24bf-4d53-838d-ecc035653d8f",
   "packageName": "com.skypark.helpdesk",
   "developer": {
@@ -16,7 +16,7 @@
   },
   "description": {
     "short": "Submit and track support tickets",
-    "full": "SkyPark Help Desk - Submit support requests, track ticket status, and communicate with support staff. (v1.2.4)"
+    "full": "SkyPark Help Desk - Submit support requests, track ticket status, and communicate with support staff. (v1.2.5)"
   },
   "icons": {
     "outline": "outline.png",

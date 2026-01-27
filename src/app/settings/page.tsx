@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
+import { isRunningInTeams } from "@/lib/teamsAuth";
 import { useRBAC } from "@/contexts/RBACContext";
 import AutoAssignRulesManager from "@/components/AutoAssignRulesManager";
 import EscalationRulesManager from "@/components/EscalationRulesManager";
@@ -17,10 +18,14 @@ export default function SettingsPage() {
   const { permissions, loading: rbacLoading } = useRBAC();
   const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "teams" | "activity-log">("auto-assign");
 
-  // Handle authentication
+  // Handle authentication - use popup in Teams (redirects don't work in iframes)
   useEffect(() => {
     if (!isAuthenticated && inProgress === InteractionStatus.None) {
-      instance.loginRedirect(loginRequest);
+      if (isRunningInTeams()) {
+        instance.loginPopup(loginRequest);
+      } else {
+        instance.loginRedirect(loginRequest);
+      }
     }
   }, [isAuthenticated, inProgress, instance]);
 

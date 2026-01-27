@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
+import { isRunningInTeams } from "@/lib/teamsAuth";
 import { getGraphClient, getTickets, getArchivedTickets, getTicket } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, DEFAULT_FILTERS } from "@/types/filters";
@@ -232,10 +233,15 @@ export default function Home() {
     }
   }, [accounts, instance, clearBulkSelection, selectedTicket]);
 
-  // Handle login
+  // Handle login - use popup in Teams (redirects don't work in iframes)
   const handleLogin = async () => {
     try {
-      await instance.loginRedirect(loginRequest);
+      if (isRunningInTeams()) {
+        console.log("Running in Teams, using popup login");
+        await instance.loginPopup(loginRequest);
+      } else {
+        await instance.loginRedirect(loginRequest);
+      }
     } catch (e) {
       console.error("Login failed:", e);
     }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
+import { isRunningInTeams } from "@/lib/teamsAuth";
 import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment, logActivity } from "@/lib/graphClient";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
@@ -132,7 +133,11 @@ export default function NewTicketPage() {
 
   const handleLogin = async () => {
     try {
-      await instance.loginRedirect(loginRequest);
+      if (isRunningInTeams()) {
+        await instance.loginPopup(loginRequest);
+      } else {
+        await instance.loginRedirect(loginRequest);
+      }
     } catch (e) {
       console.error("Login failed:", e);
     }
