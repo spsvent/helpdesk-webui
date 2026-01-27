@@ -321,7 +321,8 @@ export async function sendEmail(
   client: Client,
   recipientEmail: string,
   subject: string,
-  htmlContent: string
+  htmlContent: string,
+  conversationId?: string
 ): Promise<void> {
   console.log("[sendEmail] Sending to:", recipientEmail, "Subject:", subject);
 
@@ -337,6 +338,8 @@ export async function sendEmail(
           to: recipientEmail,
           subject,
           htmlContent,
+          // Pass conversation ID for email threading
+          conversationId,
         }),
       });
 
@@ -356,6 +359,12 @@ export async function sendEmail(
   // Fallback to delegated auth (requires signed-in user to have a mailbox)
   const endpoint = "/me/sendMail";
 
+  // Build internet message headers for email threading
+  const internetMessageHeaders = conversationId ? [
+    { name: "In-Reply-To", value: `<${conversationId}>` },
+    { name: "References", value: `<${conversationId}>` },
+  ] : undefined;
+
   try {
     await client.api(endpoint).post({
       message: {
@@ -371,6 +380,8 @@ export async function sendEmail(
             },
           },
         ],
+        // Add threading headers if conversationId provided
+        ...(internetMessageHeaders && { internetMessageHeaders }),
       },
       saveToSentItems: true,
     });

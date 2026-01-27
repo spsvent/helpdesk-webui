@@ -183,10 +183,11 @@ export async function sendApprovalRequestEmail(
 
   const subject = `[Approval Required] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateApprovalRequestEmail(ticket, requesterName);
+  const conversationId = getTicketConversationId(ticket.id);
 
   // Send to each approver
   const sendPromises = approverEmails.map((email) =>
-    sendEmail(client, email, subject, htmlContent).catch((error) => {
+    sendEmail(client, email, subject, htmlContent, conversationId).catch((error) => {
       console.error(`Failed to send approval request to ${email}:`, error);
     })
   );
@@ -206,8 +207,9 @@ export async function sendDecisionEmail(
   const decisionWord = decision === "Changes Requested" ? "Changes Requested" : decision;
   const subject = `[${decisionWord}] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateDecisionEmail(ticket, decision, approverName, notes);
+  const conversationId = getTicketConversationId(ticket.id);
 
-  await sendEmail(client, requesterEmail, subject, htmlContent);
+  await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
 }
 
 // Escape HTML to prevent XSS in emails
@@ -413,6 +415,12 @@ function generateStatusChangeEmail(
 </html>`;
 }
 
+// Generate a deterministic conversation ID for a ticket
+// This allows email clients to thread all emails about the same ticket
+function getTicketConversationId(ticketId: string): string {
+  return `ticket-${ticketId}@helpdesk.skypark.local`;
+}
+
 // Send notification when a new ticket is created with an assignee
 export async function sendNewTicketEmail(
   client: Client,
@@ -420,9 +428,10 @@ export async function sendNewTicketEmail(
   assigneeEmail: string,
   assigneeName: string
 ): Promise<void> {
-  const subject = `[New Ticket] #${ticket.id}: ${ticket.title}`;
+  const subject = `[New Ticket] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateNewTicketEmail(ticket, assigneeName);
-  await sendEmail(client, assigneeEmail, subject, htmlContent);
+  const conversationId = getTicketConversationId(ticket.id);
+  await sendEmail(client, assigneeEmail, subject, htmlContent, conversationId);
 }
 
 // Send notification when a ticket is assigned to someone
@@ -433,9 +442,10 @@ export async function sendAssignmentEmail(
   assigneeName: string,
   assignedByName: string
 ): Promise<void> {
-  const subject = `[Assigned to You] Ticket #${ticket.id}: ${ticket.title}`;
+  const subject = `[Assigned] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateAssignmentEmail(ticket, assigneeName, assignedByName);
-  await sendEmail(client, assigneeEmail, subject, htmlContent);
+  const conversationId = getTicketConversationId(ticket.id);
+  await sendEmail(client, assigneeEmail, subject, htmlContent, conversationId);
 }
 
 // Send notification when a comment is added (to requester and/or assignee)
@@ -452,7 +462,8 @@ export async function sendCommentEmail(
     : `[New Comment] Ticket #${ticket.id}: ${ticket.title}`;
   const preview = commentText.substring(0, 300);
   const htmlContent = generateCommentEmail(ticket, commenterName, preview, recipientIsRequester);
-  await sendEmail(client, recipientEmail, subject, htmlContent);
+  const conversationId = getTicketConversationId(ticket.id);
+  await sendEmail(client, recipientEmail, subject, htmlContent, conversationId);
 }
 
 // Send notification when ticket status changes (to requester)
@@ -465,5 +476,6 @@ export async function sendStatusChangeEmail(
 ): Promise<void> {
   const subject = `[${ticket.status}] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateStatusChangeEmail(ticket, oldStatus, changedByName);
-  await sendEmail(client, requesterEmail, subject, htmlContent);
+  const conversationId = getTicketConversationId(ticket.id);
+  await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
 }
