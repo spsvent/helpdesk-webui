@@ -179,10 +179,10 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
-      // Header with accent background
+      // Header with emphasis background (darker, more readable)
       {
         type: "Container",
-        style: "accent",
+        style: "emphasis",
         bleed: true,
         padding: "default",
         items: [
@@ -195,17 +195,15 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
                 items: [
                   {
                     type: "TextBlock",
-                    text: "🎫 NEW TICKET",
+                    text: "NEW TICKET",
                     size: "small",
                     weight: "bolder",
-                    color: "light",
                   },
                   {
                     type: "TextBlock",
                     text: `#${ticket.ticketNumber || ticket.id}`,
                     size: "extraLarge",
                     weight: "bolder",
-                    color: "light",
                     spacing: "none",
                   },
                 ],
@@ -220,7 +218,6 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
                     text: `${priorityEmoji} ${ticket.priority}`,
                     size: "medium",
                     weight: "bolder",
-                    color: "light",
                     horizontalAlignment: "right",
                   },
                 ],
@@ -298,7 +295,7 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
               },
               {
                 type: "TextBlock",
-                text: `👤 ${ticket.originalRequester || ticket.requester.displayName}`,
+                text: ticket.originalRequester || ticket.requester.displayName,
                 spacing: "none",
                 wrap: true,
               },
@@ -317,7 +314,7 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
               },
               {
                 type: "TextBlock",
-                text: `🕐 ${formatCardDate(ticket.created)}`,
+                text: formatCardDate(ticket.created),
                 spacing: "none",
               },
             ],
@@ -328,7 +325,7 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
       ...(ticket.location ? [
         {
           type: "TextBlock",
-          text: `📍 ${ticket.location}`,
+          text: ticket.location,
           isSubtle: true,
           spacing: "small",
         } as AdaptiveCardElement,
@@ -352,7 +349,7 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "📂 Open Ticket",
+        title: "Open Ticket",
         url: `${APP_URL}?ticket=${ticket.id}`,
         style: "positive",
       },
@@ -406,7 +403,7 @@ export function generateStatusChangeCard(
                 items: [
                   {
                     type: "TextBlock",
-                    text: "📊 STATUS UPDATE",
+                    text: "STATUS UPDATE",
                     size: "small",
                     weight: "bolder",
                   },
@@ -461,7 +458,7 @@ export function generateStatusChangeCard(
                 items: [
                   {
                     type: "TextBlock",
-                    text: "➡️",
+                    text: "→",
                     size: "large",
                   },
                 ],
@@ -487,7 +484,7 @@ export function generateStatusChangeCard(
       // Changed by info
       {
         type: "TextBlock",
-        text: `👤 Updated by ${changedByName}`,
+        text: `Updated by ${changedByName}`,
         isSubtle: true,
         spacing: "medium",
         size: "small",
@@ -496,7 +493,7 @@ export function generateStatusChangeCard(
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "📂 Open Ticket",
+        title: "Open Ticket",
         url: `${APP_URL}?ticket=${ticket.id}`,
         style: "positive",
       },
@@ -530,42 +527,19 @@ export function generatePriorityEscalationCard(
         padding: "default",
         items: [
           {
-            type: "ColumnSet",
-            columns: [
-              {
-                type: "Column",
-                width: "auto",
-                verticalContentAlignment: "center",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: isUrgent ? "🚨" : "⚡",
-                    size: "extraLarge",
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: isUrgent ? "URGENT ESCALATION" : "PRIORITY ESCALATION",
-                    size: "medium",
-                    weight: "bolder",
-                    color: "light",
-                  },
-                  {
-                    type: "TextBlock",
-                    text: `#${ticket.ticketNumber || ticket.id}`,
-                    size: "large",
-                    weight: "bolder",
-                    color: "light",
-                    spacing: "none",
-                  },
-                ],
-              },
-            ],
+            type: "TextBlock",
+            text: isUrgent ? "URGENT ESCALATION" : "PRIORITY ESCALATION",
+            size: "small",
+            weight: "bolder",
+            color: "light",
+          },
+          {
+            type: "TextBlock",
+            text: `#${ticket.ticketNumber || ticket.id}`,
+            size: "extraLarge",
+            weight: "bolder",
+            color: "light",
+            spacing: "none",
           },
         ],
       },
@@ -607,7 +581,7 @@ export function generatePriorityEscalationCard(
                 items: [
                   {
                     type: "TextBlock",
-                    text: "⬆️",
+                    text: "→",
                     size: "large",
                   },
                 ],
@@ -677,7 +651,7 @@ export function generatePriorityEscalationCard(
       // Escalated by
       {
         type: "TextBlock",
-        text: `⬆️ Escalated by ${changedByName}`,
+        text: `Escalated by ${changedByName}`,
         isSubtle: true,
         spacing: "medium",
         size: "small",
@@ -686,7 +660,7 @@ export function generatePriorityEscalationCard(
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "🚀 Open Ticket Now",
+        title: "Open Ticket",
         url: `${APP_URL}?ticket=${ticket.id}`,
         style: "positive",
       },
@@ -738,53 +712,35 @@ export function sendNewTicketTeamsNotification(
   client: Client,
   ticket: Ticket
 ): void {
-  console.log("[Teams Debug] sendNewTicketTeamsNotification called for ticket:", ticket.id);
-  console.log("[Teams Debug] TEAMS_NOTIFICATIONS_ENABLED:", TEAMS_NOTIFICATIONS_ENABLED);
-  console.log("[Teams Debug] TEAMS_CHANNELS_LIST_ID:", TEAMS_CHANNELS_LIST_ID);
-
   // Check global kill switch
   if (!TEAMS_NOTIFICATIONS_ENABLED) {
-    console.log("[Teams Debug] BLOCKED: Notifications disabled");
     return;
   }
 
   // Check date filter (skip old/migrated tickets)
   if (!isTicketAfterStartDate(ticket)) {
-    console.log("[Teams Debug] BLOCKED: Ticket before start date");
     return;
   }
-
-  console.log("[Teams Debug] Passed initial checks, starting async notification...");
 
   // Run async without blocking
   (async () => {
     try {
-      console.log("[Teams Debug] Fetching channel config...");
       const configs = await fetchTeamsChannelConfig(client);
-      console.log("[Teams Debug] Got configs:", configs.length, "channels");
-      console.log("[Teams Debug] Looking for department:", ticket.problemType);
-
       const channelConfig = findChannelForTicket(configs, ticket.problemType);
 
       if (!channelConfig) {
-        console.log(`[Teams Debug] BLOCKED: No Teams channel configured for department: ${ticket.problemType}`);
-        console.log("[Teams Debug] Available departments:", configs.map(c => c.department));
+        console.log(`No Teams channel configured for department: ${ticket.problemType}`);
         return;
       }
-
-      console.log("[Teams Debug] Found channel:", channelConfig.title);
 
       if (!shouldNotifyTeams(ticket.priority, channelConfig.minPriority)) {
-        console.log(`[Teams Debug] BLOCKED: Ticket priority ${ticket.priority} below threshold ${channelConfig.minPriority}`);
         return;
       }
 
-      console.log("[Teams Debug] Generating card and posting...");
       const card = generateNewTicketCard(ticket);
       await postToTeamsChannel(client, channelConfig.teamId, channelConfig.channelId, card);
-      console.log(`[Teams Debug] SUCCESS: Posted to Teams channel: ${channelConfig.title}`);
     } catch (error) {
-      console.error("[Teams Debug] ERROR:", error);
+      console.error("Failed to send new ticket Teams notification:", error);
     }
   })();
 }
