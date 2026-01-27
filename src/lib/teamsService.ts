@@ -519,10 +519,10 @@ export function generatePriorityEscalationCard(
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
-      // Header with attention-grabbing style
+      // Header with colored text for urgency
       {
         type: "Container",
-        style: isUrgent ? "attention" : "warning",
+        style: "emphasis",
         bleed: true,
         padding: "default",
         items: [
@@ -531,14 +531,13 @@ export function generatePriorityEscalationCard(
             text: isUrgent ? "URGENT ESCALATION" : "PRIORITY ESCALATION",
             size: "small",
             weight: "bolder",
-            color: "light",
+            color: isUrgent ? "attention" : "warning",
           },
           {
             type: "TextBlock",
             text: `#${ticket.ticketNumber || ticket.id}`,
             size: "extraLarge",
             weight: "bolder",
-            color: "light",
             spacing: "none",
           },
         ],
