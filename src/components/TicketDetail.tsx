@@ -71,6 +71,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const MIN_SIDEBAR_WIDTH = 240;
   const MAX_SIDEBAR_WIDTH = 500;
 
+  // Ref to access DetailsPanel save function
+  const detailsPanelSaveRef = useRef<{ save: () => Promise<void>; hasChanges: boolean } | null>(null);
+
   // Detect mobile screen
   useEffect(() => {
     const checkMobile = () => {
@@ -166,6 +169,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const commenterName = accounts[0].name || accounts[0].username;
 
     try {
+      // Save any pending details changes first
+      if (detailsPanelSaveRef.current?.hasChanges) {
+        await detailsPanelSaveRef.current.save();
+      }
+
       const client = getGraphClient(instance, accounts[0]);
       const newComment = await addComment(
         client,
@@ -511,6 +519,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUploadAttachment={handleUploadAttachment}
               onDeleteAttachment={handleDeleteAttachment}
               onDownloadAttachment={handleDownloadAttachment}
+              saveRef={detailsPanelSaveRef}
             />
           </aside>
         )}
