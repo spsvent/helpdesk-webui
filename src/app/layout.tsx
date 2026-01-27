@@ -46,17 +46,21 @@ export default function RootLayout({
             console.log("Attempting Teams SSO with login hint:", teamsAuth.loginHint);
 
             try {
-              const ssoResult = await msalInstance.ssoSilent({
+              // Add timeout to ssoSilent (5 seconds) to prevent hanging
+              const ssoPromise = msalInstance.ssoSilent({
                 ...loginRequest,
                 loginHint: teamsAuth.loginHint,
               });
+              const timeoutPromise = new Promise<null>((_, reject) =>
+                setTimeout(() => reject(new Error("SSO timeout")), 5000)
+              );
+              const ssoResult = await Promise.race([ssoPromise, timeoutPromise]);
               if (ssoResult?.account) {
                 msalInstance.setActiveAccount(ssoResult.account);
                 console.log("Teams SSO successful:", ssoResult.account.username);
               }
             } catch (ssoError) {
-              // Silent SSO failed - user will need to click sign in button
-              // Don't try popups as they hang in Teams desktop app
+              // Silent SSO failed or timed out - user will need to click sign in button
               console.log("Teams SSO silent auth failed, will show login button:", ssoError);
             }
           }

@@ -44,8 +44,21 @@ let teamsInitialized = false;
 let isTeamsContext = false;
 let teamsLoginHint: string | null = null;
 
+// Timeout for Teams operations (in ms)
+const TEAMS_TIMEOUT = 3000;
+
 /**
- * Load the Teams SDK dynamically
+ * Wrap a promise with a timeout
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
+
+/**
+ * Load the Teams SDK dynamically with timeout
  */
 async function loadTeamsSDK(): Promise<boolean> {
   if (typeof window === "undefined") return false;
@@ -53,7 +66,7 @@ async function loadTeamsSDK(): Promise<boolean> {
   // Check if already loaded
   if (window.microsoftTeams) return true;
 
-  return new Promise((resolve) => {
+  const loadPromise = new Promise<boolean>((resolve) => {
     const script = document.createElement("script");
     script.src = "https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js";
     script.async = true;
@@ -61,6 +74,9 @@ async function loadTeamsSDK(): Promise<boolean> {
     script.onerror = () => resolve(false);
     document.head.appendChild(script);
   });
+
+  // Timeout SDK loading after 2 seconds
+  return withTimeout(loadPromise, 2000, false);
 }
 
 /**
@@ -76,31 +92,48 @@ export async function initializeTeamsAuth(): Promise<{
   }
 
   try {
-    // Try to load SDK
+    // Try to load SDK (with timeout)
     const sdkLoaded = await loadTeamsSDK();
     if (!sdkLoaded || !window.microsoftTeams) {
+      console.log("Teams SDK not available");
       teamsInitialized = true;
       return { isTeams: false, loginHint: null };
     }
 
-    // Initialize Teams SDK
-    await window.microsoftTeams.app.initialize();
+    // Initialize Teams SDK (with timeout - can hang when not in Teams)
+    const initResult = await withTimeout(
+      window.microsoftTeams.app.initialize().then(() => true),
+      TEAMS_TIMEOUT,
+      false
+    );
 
-    // Get context to check if we're in Teams
-    const context = await window.microsoftTeams.app.getContext();
+    if (!initResult) {
+      console.log("Teams SDK init timed out - not in Teams");
+      teamsInitialized = true;
+      return { isTeams: false, loginHint: null };
+    }
+
+    // Get context to check if we're in Teams (with timeout)
+    const context = await withTimeout(
+      window.microsoftTeams.app.getContext(),
+      TEAMS_TIMEOUT,
+      null
+    );
 
     // Check if we have a valid Teams context
     if (context?.page?.frameContext) {
       isTeamsContext = true;
       teamsLoginHint = context.user?.loginHint || context.user?.userPrincipalName || null;
       console.log("Running inside Microsoft Teams, user:", teamsLoginHint);
+    } else {
+      console.log("No Teams context found");
     }
 
     teamsInitialized = true;
     return { isTeams: isTeamsContext, loginHint: teamsLoginHint };
   } catch (error) {
     // Not in Teams or SDK failed - this is expected when not in Teams
-    console.log("Not running inside Teams");
+    console.log("Not running inside Teams:", error);
     teamsInitialized = true;
     return { isTeams: false, loginHint: null };
   }
