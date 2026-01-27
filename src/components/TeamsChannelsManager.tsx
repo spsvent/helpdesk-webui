@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
-import { getProblemTypes } from "@/lib/categoryConfig";
+import { getProblemTypes, getProblemTypeSubs, hasSubCategories } from "@/lib/categoryConfig";
 import { TeamsChannelConfig, TeamsMinPriority } from "@/types/teams";
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
@@ -12,6 +12,7 @@ const TEAMS_CHANNELS_LIST_ID = process.env.NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID ||
 interface ChannelFormData {
   title: string;
   department: string;
+  subDepartment: string;
   teamsUrl: string;
   teamId: string;
   channelId: string;
@@ -22,6 +23,7 @@ interface ChannelFormData {
 const EMPTY_FORM: ChannelFormData = {
   title: "",
   department: "",
+  subDepartment: "",
   teamsUrl: "",
   teamId: "",
   channelId: "",
@@ -140,6 +142,7 @@ export default function TeamsChannelsManager() {
         fields: {
           Title?: string;
           Department?: string;
+          SubDepartment?: string;
           TeamId?: string;
           ChannelId?: string;
           IsActive?: boolean;
@@ -149,6 +152,7 @@ export default function TeamsChannelsManager() {
         id: item.id,
         title: item.fields.Title || "",
         department: item.fields.Department || "",
+        subDepartment: item.fields.SubDepartment || "",
         teamId: item.fields.TeamId || "",
         channelId: item.fields.ChannelId || "",
         isActive: item.fields.IsActive ?? false,
@@ -260,7 +264,7 @@ export default function TeamsChannelsManager() {
     try {
       const client = getGraphClient(instance, accounts[0]);
 
-      const fields = {
+      const fields: Record<string, unknown> = {
         Title: formData.title,
         Department: formData.department,
         TeamId: formData.teamId,
@@ -268,6 +272,11 @@ export default function TeamsChannelsManager() {
         IsActive: formData.isActive,
         MinPriority: formData.minPriority,
       };
+
+      // Only include SubDepartment if it has a value
+      if (formData.subDepartment) {
+        fields.SubDepartment = formData.subDepartment;
+      }
 
       if (editingChannel) {
         // Update existing
@@ -404,6 +413,7 @@ export default function TeamsChannelsManager() {
     setFormData({
       title: channel.title,
       department: channel.department,
+      subDepartment: channel.subDepartment || "",
       teamsUrl: "",
       teamId: channel.teamId,
       channelId: channel.channelId,
@@ -583,7 +593,11 @@ export default function TeamsChannelsManager() {
               </label>
               <select
                 value={formData.department}
-                onChange={(e) => setFormData((prev) => ({ ...prev, department: e.target.value }))}
+                onChange={(e) => setFormData((prev) => ({
+                  ...prev,
+                  department: e.target.value,
+                  subDepartment: "" // Reset sub-department when department changes
+                }))}
                 className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white text-sm"
               >
                 <option value="">Select department...</option>
@@ -597,6 +611,30 @@ export default function TeamsChannelsManager() {
                 Tickets with this department will notify this channel
               </p>
             </div>
+
+            {/* Sub-Department (optional) */}
+            {formData.department && hasSubCategories(formData.department) && (
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+                  Sub-Department <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <select
+                  value={formData.subDepartment}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, subDepartment: e.target.value }))}
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white text-sm"
+                >
+                  <option value="">All sub-departments</option>
+                  {getProblemTypeSubs(formData.department).map((sub) => (
+                    <option key={sub} value={sub}>
+                      {sub}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Only notify for this specific sub-department (leave empty for all)
+                </p>
+              </div>
+            )}
 
             {/* Min Priority */}
             <div>
@@ -687,7 +725,12 @@ export default function TeamsChannelsManager() {
                   <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Department:</span>{" "}
-                      <span className="dark:text-gray-200">{channel.department}</span>
+                      <span className="dark:text-gray-200">
+                        {channel.department}
+                        {channel.subDepartment && (
+                          <span className="text-gray-400 dark:text-gray-500"> &gt; {channel.subDepartment}</span>
+                        )}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Min Priority:</span>{" "}

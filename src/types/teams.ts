@@ -3,6 +3,7 @@ export interface TeamsChannelConfig {
   id: string;
   title: string;              // Friendly name (e.g., "Tech Support Channel")
   department: string;         // Matches ticket.problemType (Tech, Operations, HR, etc.)
+  subDepartment?: string;     // Optional: Matches ticket.problemTypeSub (e.g., "POS Software")
   teamId: string;             // Microsoft Teams Team ID (GUID)
   channelId: string;          // Channel ID (format: 19:xxx@thread.tacv2)
   isActive: boolean;          // Enable/disable notifications
@@ -113,6 +114,7 @@ export interface TeamsChannelSharePointItem {
   fields: {
     Title: string;
     Department: string;
+    SubDepartment?: string;
     TeamId: string;
     ChannelId: string;
     IsActive: boolean;
@@ -126,6 +128,7 @@ export function mapToTeamsChannelConfig(item: TeamsChannelSharePointItem): Teams
     id: item.id,
     title: item.fields.Title || "",
     department: item.fields.Department || "",
+    subDepartment: item.fields.SubDepartment || undefined,
     teamId: item.fields.TeamId || "",
     channelId: item.fields.ChannelId || "",
     isActive: item.fields.IsActive ?? false,
