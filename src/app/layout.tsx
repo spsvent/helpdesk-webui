@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication, EventType, AuthenticationResult } from "@azure/msal-browser";
 import { msalConfig, loginRequest } from "@/lib/msalConfig";
-import { initializeTeamsAuth, getTeamsSSOToken } from "@/lib/teamsAuth";
+import { initializeTeamsAuth } from "@/lib/teamsAuth";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
@@ -41,16 +41,10 @@ export default function RootLayout({
           if (accounts.length > 0) {
             msalInstance.setActiveAccount(accounts[0]);
           } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
-            // Running in Teams with no existing account - try multiple SSO approaches
+            // Running in Teams with no existing account - try silent SSO only
+            // Don't try popups in Teams as they hang in the desktop app
             console.log("Attempting Teams SSO with login hint:", teamsAuth.loginHint);
 
-            // First, try to get Teams native SSO token (works better in desktop app)
-            const teamsToken = await getTeamsSSOToken();
-            if (teamsToken) {
-              console.log("Got Teams native token, attempting MSAL ssoSilent");
-            }
-
-            // Now try MSAL ssoSilent with the login hint
             try {
               const ssoResult = await msalInstance.ssoSilent({
                 ...loginRequest,
@@ -61,41 +55,9 @@ export default function RootLayout({
                 console.log("Teams SSO successful:", ssoResult.account.username);
               }
             } catch (ssoError) {
-              console.log("Teams SSO silent auth failed:", ssoError);
-
-              // Try popup as fallback (may work in web, blocked in desktop)
-              try {
-                console.log("Trying popup login for Teams...");
-                const popupResult = await msalInstance.loginPopup({
-                  ...loginRequest,
-                  loginHint: teamsAuth.loginHint,
-                  prompt: "none", // Try without prompt first
-                });
-                if (popupResult?.account) {
-                  msalInstance.setActiveAccount(popupResult.account);
-                  console.log("Teams popup login successful:", popupResult.account.username);
-                }
-              } catch (popupError: unknown) {
-                console.log("Teams popup auth failed:", popupError);
-
-                // If prompt:none failed, try with select_account for desktop
-                if (popupError && typeof popupError === 'object' && 'errorCode' in popupError &&
-                    (popupError as { errorCode: string }).errorCode === 'login_required') {
-                  try {
-                    console.log("Retrying popup with account selection...");
-                    const retryResult = await msalInstance.loginPopup({
-                      ...loginRequest,
-                      loginHint: teamsAuth.loginHint,
-                    });
-                    if (retryResult?.account) {
-                      msalInstance.setActiveAccount(retryResult.account);
-                      console.log("Teams popup retry successful:", retryResult.account.username);
-                    }
-                  } catch (retryError) {
-                    console.log("Teams popup retry failed, will show login:", retryError);
-                  }
-                }
-              }
+              // Silent SSO failed - user will need to click sign in button
+              // Don't try popups as they hang in Teams desktop app
+              console.log("Teams SSO silent auth failed, will show login button:", ssoError);
             }
           }
         }
