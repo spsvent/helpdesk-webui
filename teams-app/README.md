@@ -62,21 +62,41 @@ Once installed, the app provides:
 
 - **Channel tab** - Add to any Teams channel
 
-## Azure AD Configuration
+## Azure AD Configuration for Teams SSO
 
-For SSO to work seamlessly, ensure your Azure AD app registration has:
+For automatic sign-in (SSO) inside Teams, configure your Azure AD app:
 
-1. **Redirect URIs** include:
-   - `https://tickets.spsvent.net`
-   - `https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect`
+### 1. Expose an API
 
-2. **API permissions** include:
-   - Microsoft Graph: User.Read, Sites.ReadWrite.All, etc.
+1. Go to **Azure Portal** → **Entra ID** → **App registrations** → Your app
+2. Click **Expose an API**
+3. Set **Application ID URI** to:
+   ```
+   api://tickets.spsvent.net/06fcde50-24bf-4d53-838d-ecc035653d8f
+   ```
+   (Replace with your domain and client ID)
 
-3. **Expose an API** with:
-   - Application ID URI: `api://tickets.spsvent.net/06fcde50-24bf-4d53-838d-ecc035653d8f`
-   - Scope: `access_as_user`
+### 2. Add a Scope
 
-4. **Authorized client applications** (for Teams SSO):
+1. Click **+ Add a scope**
+2. Configure:
+   - **Scope name**: `access_as_user`
+   - **Who can consent?**: Admins and users
+   - **Admin consent display name**: `Access Help Desk as user`
+   - **Admin consent description**: `Allows Teams to access Help Desk on behalf of the signed-in user`
+   - **State**: Enabled
+3. Click **Add scope**
+
+### 3. Authorize Teams Clients
+
+1. Under **Authorized client applications**, click **+ Add a client application**
+2. Add both Teams client IDs:
    - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Teams desktop/mobile)
    - `5e3ce6c0-2b1f-4285-8d4b-75ee78787346` (Teams web)
+3. Check the `access_as_user` scope for each
+
+### 4. Verify Redirect URIs
+
+In **Authentication**, ensure these redirect URIs exist:
+- `https://tickets.spsvent.net` (or your production URL)
+- `http://localhost:3000` (for development)

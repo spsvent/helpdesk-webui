@@ -578,6 +578,106 @@ Access the app → **Settings** → **Escalation Rules** to configure:
 
 ---
 
+## Microsoft Teams App Setup
+
+The Help Desk can be embedded in Microsoft Teams as a tab app with Single Sign-On (SSO).
+
+### Step 1: Configure Azure AD for Teams SSO
+
+#### 1.1 Expose an API
+
+1. Go to **Azure Portal** → **Microsoft Entra ID** → **App registrations**
+2. Select your Help Desk app registration
+3. Click **Expose an API** in the left sidebar
+4. Click **Set** next to "Application ID URI"
+5. Set the URI to: `api://tickets.spsvent.net/<your-client-id>`
+   - Replace `tickets.spsvent.net` with your production domain
+   - Replace `<your-client-id>` with your Application (client) ID
+6. Click **Save**
+
+#### 1.2 Add a Scope
+
+1. On **Expose an API**, click **+ Add a scope**
+2. Configure:
+   - **Scope name**: `access_as_user`
+   - **Who can consent?**: Admins and users
+   - **Admin consent display name**: `Access Help Desk as user`
+   - **Admin consent description**: `Allows Teams to access Help Desk on behalf of the signed-in user`
+   - **User consent display name**: `Access Help Desk`
+   - **User consent description**: `Allows Teams to access Help Desk on your behalf`
+   - **State**: Enabled
+3. Click **Add scope**
+
+#### 1.3 Authorize Teams Client Applications
+
+1. On **Expose an API**, scroll to **Authorized client applications**
+2. Click **+ Add a client application**
+3. Add **Teams desktop/mobile**:
+   - **Client ID**: `1fec8e78-bce4-4aaf-ab1b-5451cc387264`
+   - Check the box next to your `access_as_user` scope
+   - Click **Add application**
+4. Add **Teams web**:
+   - **Client ID**: `5e3ce6c0-2b1f-4285-8d4b-75ee78787346`
+   - Check the box next to your `access_as_user` scope
+   - Click **Add application**
+
+### Step 2: Build and Upload the Teams App Package
+
+1. Navigate to the `teams-app/` directory
+2. Edit `manifest.json` if needed:
+   - Update `id` to match your Azure AD app client ID
+   - Update `webApplicationInfo.id` and `webApplicationInfo.resource`
+   - Update domain URLs
+3. Create the app package:
+   ```bash
+   cd teams-app
+   zip -r helpdesk-teams-app.zip manifest.json color.png outline.png
+   ```
+
+### Step 3: Deploy to Microsoft Teams
+
+#### Option A: Teams Admin Center (Organization-wide)
+
+1. Go to [Teams Admin Center](https://admin.teams.microsoft.com)
+2. Navigate to **Teams apps** → **Manage apps**
+3. Click **+ Upload new app**
+4. Select your `helpdesk-teams-app.zip`
+5. The app will be available to all users in your organization
+
+#### Option B: Sideload for Testing
+
+1. In Teams, click **Apps** in the left sidebar
+2. Click **Manage your apps** → **Upload an app**
+3. Select **Upload a custom app**
+4. Upload `helpdesk-teams-app.zip`
+
+### Step 4: Add as Channel Tab
+
+1. In Teams, navigate to any channel
+2. Click **+** to add a tab
+3. Search for "Help Desk" and select it
+4. Click **Save** to add the tab
+5. Users will be automatically signed in via SSO
+
+### Teams SSO Troubleshooting
+
+**"Unable to get auth token" error:**
+- Verify the Application ID URI matches the manifest's `webApplicationInfo.resource`
+- Ensure both Teams client IDs are authorized
+- Check that admin consent was granted for API permissions
+
+**Save button greyed out when adding tab:**
+- Ensure the app is deployed and `/teams-config` page is accessible
+- Check browser console for Teams SDK errors
+- Verify `validDomains` in manifest.json includes your domain
+
+**Login page still appears in Teams:**
+- SSO requires the Azure AD app to be properly configured
+- Check that `access_as_user` scope exists and is authorized
+- Verify the user has consented to the app permissions
+
+---
+
 ## Support
 
 For issues or questions:
