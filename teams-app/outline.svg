@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Subtle compass circle in background -->
+  <circle cx="16" cy="15" r="11" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.4"/>
+
   <!-- Ticket outline shape -->
   <path d="M5 7H27C28.1 7 29 7.9 29 9V12C27.3 12 26 13.3 26 15C26 16.7 27.3 18 29 18V23C29 24.1 28.1 25 27 25H5C3.9 25 3 24.1 3 23V18C4.7 18 6 16.7 6 15C6 13.3 4.7 12 3 12V9C3 7.9 3.9 7 5 7Z" fill="none" stroke="#ffffff" stroke-width="2"/>
 

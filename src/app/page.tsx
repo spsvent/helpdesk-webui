@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { isRunningInTeams } from "@/lib/teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
 import { getGraphClient, getTickets, getArchivedTickets, getTicket } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, DEFAULT_FILTERS } from "@/types/filters";
@@ -233,12 +233,26 @@ export default function Home() {
     }
   }, [accounts, instance, clearBulkSelection, selectedTicket]);
 
-  // Handle login - use popup in Teams (redirects don't work in iframes)
+  // Handle login - use Teams SDK popup in Teams (MSAL popups get blocked in desktop app)
   const handleLogin = async () => {
     try {
       if (isRunningInTeams()) {
-        console.log("Running in Teams, using popup login");
-        await instance.loginPopup(loginRequest);
+        console.log("Running in Teams, using Teams SDK auth popup");
+        const result = await openTeamsAuthPopup();
+        if (result) {
+          console.log("Teams auth popup returned:", result);
+          // Reload to pick up the new auth state
+          window.location.reload();
+        } else {
+          console.log("Teams auth popup failed or was cancelled");
+          // Fallback to MSAL popup (works in Teams web)
+          try {
+            console.log("Falling back to MSAL popup");
+            await instance.loginPopup(loginRequest);
+          } catch (popupError) {
+            console.error("MSAL popup also failed:", popupError);
+          }
+        }
       } else {
         await instance.loginRedirect(loginRequest);
       }

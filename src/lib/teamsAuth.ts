@@ -20,6 +20,14 @@ declare global {
       };
       authentication: {
         getAuthToken: (options?: { silent?: boolean }) => Promise<string>;
+        authenticate: (params: {
+          url: string;
+          width?: number;
+          height?: number;
+          isExternal?: boolean;
+        }) => Promise<string>;
+        notifySuccess: (result?: string) => void;
+        notifyFailure: (reason?: string) => void;
       };
       pages: {
         config: {
@@ -179,4 +187,50 @@ export async function getTeamsSSOToken(): Promise<string | null> {
  */
 export function getTeamsLoginHint(): string | null {
   return teamsLoginHint;
+}
+
+/**
+ * Open Teams authentication popup (works in Teams desktop app)
+ * This uses the Teams SDK's built-in popup mechanism which is allowed in desktop
+ */
+export async function openTeamsAuthPopup(): Promise<string | null> {
+  const teamsSDK = window.microsoftTeams;
+  if (!teamsSDK) {
+    console.error("Teams SDK not available for auth popup");
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    // The Teams SDK has a different authentication API
+    // We need to use microsoftTeams.authentication.authenticate() which opens a popup
+    const authUrl = `${window.location.origin}/auth-callback`;
+
+    console.log("Opening Teams auth popup with URL:", authUrl);
+
+    // Teams SDK 2.0 uses a different API
+    if (teamsSDK.authentication) {
+      // Try the authenticate method which opens a popup that Teams controls
+      const authParams = {
+        url: authUrl,
+        width: 600,
+        height: 535,
+        isExternal: false,
+      };
+
+      // The Teams SDK will handle the popup
+      // We need to create the auth page that will call notifySuccess/notifyFailure
+      teamsSDK.authentication.authenticate(authParams)
+        .then((result: string) => {
+          console.log("Teams auth popup succeeded:", result);
+          resolve(result);
+        })
+        .catch((error: Error) => {
+          console.error("Teams auth popup failed:", error);
+          resolve(null);
+        });
+    } else {
+      console.error("Teams authentication API not available");
+      resolve(null);
+    }
+  });
 }

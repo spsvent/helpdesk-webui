@@ -9,7 +9,9 @@ export const msalConfig: Configuration = {
     postLogoutRedirectUri: typeof window !== "undefined" ? window.location.origin : "",
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    // Use localStorage so tokens are shared between main window and auth popup
+    // This is needed for Teams desktop app where auth happens in a popup
+    cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
   },
   system: {

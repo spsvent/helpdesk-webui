@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { isRunningInTeams } from "@/lib/teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
 import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment, logActivity } from "@/lib/graphClient";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
@@ -134,7 +134,18 @@ export default function NewTicketPage() {
   const handleLogin = async () => {
     try {
       if (isRunningInTeams()) {
-        await instance.loginPopup(loginRequest);
+        console.log("Running in Teams, using Teams SDK auth popup");
+        const result = await openTeamsAuthPopup();
+        if (result) {
+          window.location.reload();
+        } else {
+          // Fallback to MSAL popup (works in Teams web)
+          try {
+            await instance.loginPopup(loginRequest);
+          } catch (popupError) {
+            console.error("MSAL popup also failed:", popupError);
+          }
+        }
       } else {
         await instance.loginRedirect(loginRequest);
       }
