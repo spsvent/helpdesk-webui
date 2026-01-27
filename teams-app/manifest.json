@@ -1,0 +1,66 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "06fcde50-24bf-4d53-838d-ecc035653d8f",
+  "packageName": "com.skypark.helpdesk",
+  "developer": {
+    "name": "SkyPark",
+    "websiteUrl": "https://tickets.spsvent.net",
+    "privacyUrl": "https://tickets.spsvent.net/help",
+    "termsOfUseUrl": "https://tickets.spsvent.net/help"
+  },
+  "name": {
+    "short": "Help Desk",
+    "full": "SkyPark Help Desk"
+  },
+  "description": {
+    "short": "Submit and track support tickets",
+    "full": "SkyPark Help Desk - Submit support requests, track ticket status, and communicate with support staff."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#1e3a5f",
+  "staticTabs": [
+    {
+      "entityId": "helpdesk-home",
+      "name": "Tickets",
+      "contentUrl": "https://tickets.spsvent.net",
+      "websiteUrl": "https://tickets.spsvent.net",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "helpdesk-new",
+      "name": "New Ticket",
+      "contentUrl": "https://tickets.spsvent.net/new",
+      "websiteUrl": "https://tickets.spsvent.net/new",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "helpdesk-help",
+      "name": "Help",
+      "contentUrl": "https://tickets.spsvent.net/help",
+      "websiteUrl": "https://tickets.spsvent.net/help",
+      "scopes": ["personal"]
+    }
+  ],
+  "configurableTabs": [
+    {
+      "configurationUrl": "https://tickets.spsvent.net",
+      "canUpdateConfiguration": false,
+      "scopes": ["team", "groupchat"]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": [
+    "tickets.spsvent.net",
+    "lively-coast-062dfc51e.1.azurestaticapps.net",
+    "login.microsoftonline.com"
+  ],
+  "webApplicationInfo": {
+    "id": "06fcde50-24bf-4d53-838d-ecc035653d8f",
+    "resource": "api://tickets.spsvent.net/06fcde50-24bf-4d53-838d-ecc035653d8f"
+  }
+}
