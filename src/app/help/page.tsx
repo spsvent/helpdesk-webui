@@ -1477,6 +1477,90 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "outlook-rules",
+    title: "Organizing Help Desk Emails",
+    content: (
+      <div className="space-y-4">
+        <p>
+          If you receive Help Desk notification emails and want to keep your inbox organized,
+          you can create an Outlook rule to automatically move these emails to a dedicated folder.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Creating the Folder</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>In Outlook, right-click on <strong>Inbox</strong> in the folder list</li>
+          <li>Select <strong>New Folder</strong></li>
+          <li>Name it something like &quot;Help Desk&quot; or &quot;Support Tickets&quot;</li>
+          <li>Press Enter to create the folder</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Creating the Rule in Outlook Desktop</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Go to <strong>File → Manage Rules &amp; Alerts</strong></li>
+          <li>Click <strong>New Rule...</strong></li>
+          <li>Select <strong>&quot;Apply rule on messages I receive&quot;</strong> and click Next</li>
+          <li>
+            Check <strong>&quot;with specific words in the subject&quot;</strong>
+          </li>
+          <li>
+            Click <strong>&quot;specific words&quot;</strong> and add: <code className="bg-gray-100 px-1 rounded">[Ticket #</code>
+          </li>
+          <li>Click <strong>Add</strong>, then <strong>OK</strong>, then <strong>Next</strong></li>
+          <li>
+            Check <strong>&quot;move it to the specified folder&quot;</strong>
+          </li>
+          <li>Click <strong>&quot;specified&quot;</strong> and select your Help Desk folder</li>
+          <li>Click <strong>Next</strong>, then <strong>Finish</strong></li>
+          <li>Click <strong>Apply</strong> and <strong>OK</strong></li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Creating the Rule in Outlook on the Web</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Click the <strong>Settings</strong> gear icon in the top right
+          </li>
+          <li>Click <strong>View all Outlook settings</strong> at the bottom</li>
+          <li>Go to <strong>Mail → Rules</strong></li>
+          <li>Click <strong>+ Add new rule</strong></li>
+          <li>Name the rule (e.g., &quot;Help Desk Emails&quot;)</li>
+          <li>
+            Under &quot;Add a condition&quot;, select <strong>Subject includes</strong>
+          </li>
+          <li>
+            Enter: <code className="bg-gray-100 px-1 rounded">[Ticket #</code>
+          </li>
+          <li>
+            Under &quot;Add an action&quot;, select <strong>Move to</strong>
+          </li>
+          <li>Select your Help Desk folder</li>
+          <li>Click <strong>Save</strong></li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> All Help Desk emails include the ticket number in the subject line
+            (e.g., &quot;[Ticket #123] Your ticket has been updated&quot;). This makes it easy to filter
+            them with a single rule.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Alternative: Filter by Sender</h4>
+        <p>
+          You can also filter by the sender email address if you prefer. Help Desk emails
+          come from the system&apos;s notification address. Ask your administrator for the exact
+          sender address if you&apos;d like to use this method.
+        </p>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> After creating the rule, existing emails won&apos;t be moved automatically.
+            You can run the rule manually on existing messages, or just let it organize new emails going forward.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "teams-notifications",
     title: "Teams Notifications",
     content: (
