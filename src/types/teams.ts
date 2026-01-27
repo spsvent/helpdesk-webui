@@ -34,7 +34,9 @@ export type AdaptiveCardElement =
   | AdaptiveCardTextBlock
   | AdaptiveCardContainer
   | AdaptiveCardColumnSet
-  | AdaptiveCardFactSet;
+  | AdaptiveCardFactSet
+  | AdaptiveCardImage
+  | AdaptiveCardActionSet;
 
 export interface AdaptiveCardTextBlock {
   type: "TextBlock";
@@ -46,6 +48,8 @@ export interface AdaptiveCardTextBlock {
   spacing?: "none" | "small" | "default" | "medium" | "large" | "extraLarge";
   isSubtle?: boolean;
   maxLines?: number;
+  horizontalAlignment?: "left" | "center" | "right";
+  separator?: boolean;
 }
 
 export interface AdaptiveCardContainer {
@@ -54,6 +58,8 @@ export interface AdaptiveCardContainer {
   style?: "default" | "emphasis" | "good" | "attention" | "warning" | "accent";
   bleed?: boolean;
   padding?: "none" | "small" | "default" | "medium" | "large" | "extraLarge";
+  spacing?: "none" | "small" | "default" | "medium" | "large" | "extraLarge";
+  separator?: boolean;
 }
 
 export interface AdaptiveCardColumnSet {
@@ -65,6 +71,8 @@ export interface AdaptiveCardColumn {
   type: "Column";
   width: string | number;
   items: AdaptiveCardElement[];
+  verticalContentAlignment?: "top" | "center" | "bottom";
+  spacing?: "none" | "small" | "default" | "medium" | "large" | "extraLarge";
 }
 
 export interface AdaptiveCardFactSet {
@@ -78,9 +86,25 @@ export interface AdaptiveCardFact {
 }
 
 export interface AdaptiveCardAction {
-  type: "Action.OpenUrl";
+  type: "Action.OpenUrl" | "Action.Submit";
   title: string;
+  url?: string;
+  style?: "default" | "positive" | "destructive";
+}
+
+export interface AdaptiveCardImage {
+  type: "Image";
   url: string;
+  size?: "auto" | "stretch" | "small" | "medium" | "large";
+  style?: "default" | "person";
+  altText?: string;
+  width?: string;
+  height?: string;
+}
+
+export interface AdaptiveCardActionSet {
+  type: "ActionSet";
+  actions: AdaptiveCardAction[];
 }
 
 // SharePoint list item for Teams channel config

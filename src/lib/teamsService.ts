@@ -5,6 +5,7 @@ import {
   TeamsMinPriority,
   PRIORITY_ORDER,
   AdaptiveCardBody,
+  AdaptiveCardElement,
   mapToTeamsChannelConfig,
   TeamsChannelSharePointItem,
 } from "@/types/teams";
@@ -116,19 +117,65 @@ export function shouldNotifyTeams(
 // ============================================
 
 /**
+ * Get emoji indicator for priority
+ */
+function getPriorityEmoji(priority: string): string {
+  switch (priority) {
+    case "Low": return "🟢";
+    case "Normal": return "🔵";
+    case "High": return "🟠";
+    case "Urgent": return "🔴";
+    default: return "⚪";
+  }
+}
+
+/**
+ * Get emoji indicator for category
+ */
+function getCategoryEmoji(category: string): string {
+  switch (category) {
+    case "Request": return "📋";
+    case "Incident": return "⚠️";
+    case "Problem": return "🔧";
+    default: return "📌";
+  }
+}
+
+/**
+ * Format date for display
+ */
+function formatCardDate(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Unknown";
+  }
+}
+
+/**
  * Generate an Adaptive Card for a new ticket notification
- * Blue accent style with full ticket details
+ * Modern design with clear visual hierarchy
  */
 export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
-  const truncatedDescription = ticket.description.length > 300
-    ? ticket.description.substring(0, 300) + "..."
+  const truncatedDescription = ticket.description.length > 200
+    ? ticket.description.substring(0, 200) + "..."
     : ticket.description;
+
+  const priorityEmoji = getPriorityEmoji(ticket.priority);
+  const categoryEmoji = getCategoryEmoji(ticket.category);
 
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
+      // Header with accent background
       {
         type: "Container",
         style: "accent",
@@ -136,69 +183,210 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
         padding: "default",
         items: [
           {
-            type: "TextBlock",
-            text: "New Ticket Created",
-            size: "medium",
-            weight: "bolder",
-            color: "light",
+            type: "ColumnSet",
+            columns: [
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "🎫 NEW TICKET",
+                    size: "small",
+                    weight: "bolder",
+                    color: "light",
+                  },
+                  {
+                    type: "TextBlock",
+                    text: `#${ticket.ticketNumber || ticket.id}`,
+                    size: "extraLarge",
+                    weight: "bolder",
+                    color: "light",
+                    spacing: "none",
+                  },
+                ],
+              },
+              {
+                type: "Column",
+                width: "auto",
+                verticalContentAlignment: "center",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: `${priorityEmoji} ${ticket.priority}`,
+                    size: "medium",
+                    weight: "bolder",
+                    color: "light",
+                    horizontalAlignment: "right",
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
+      // Title
       {
         type: "TextBlock",
-        text: `#${ticket.id}: ${ticket.title}`,
+        text: ticket.title,
         size: "large",
         weight: "bolder",
         wrap: true,
         spacing: "medium",
       },
+      // Key info in two columns
       {
-        type: "FactSet",
-        facts: [
-          { title: "Priority", value: ticket.priority },
-          { title: "Category", value: ticket.category },
-          { title: "Department", value: formatDepartment(ticket) },
-          { title: "Requester", value: ticket.originalRequester || ticket.requester.displayName },
-          ...(ticket.location ? [{ title: "Location", value: ticket.location }] : []),
+        type: "ColumnSet",
+        columns: [
+          {
+            type: "Column",
+            width: "stretch",
+            items: [
+              {
+                type: "TextBlock",
+                text: "CATEGORY",
+                size: "small",
+                isSubtle: true,
+                weight: "bolder",
+              },
+              {
+                type: "TextBlock",
+                text: `${categoryEmoji} ${ticket.category}`,
+                spacing: "none",
+              },
+            ],
+          },
+          {
+            type: "Column",
+            width: "stretch",
+            items: [
+              {
+                type: "TextBlock",
+                text: "DEPARTMENT",
+                size: "small",
+                isSubtle: true,
+                weight: "bolder",
+              },
+              {
+                type: "TextBlock",
+                text: formatDepartment(ticket),
+                spacing: "none",
+                wrap: true,
+              },
+            ],
+          },
         ],
       },
+      // Requester and location row
       {
-        type: "TextBlock",
-        text: "Description",
-        weight: "bolder",
-        spacing: "medium",
+        type: "ColumnSet",
+        columns: [
+          {
+            type: "Column",
+            width: "stretch",
+            items: [
+              {
+                type: "TextBlock",
+                text: "REQUESTER",
+                size: "small",
+                isSubtle: true,
+                weight: "bolder",
+              },
+              {
+                type: "TextBlock",
+                text: `👤 ${ticket.originalRequester || ticket.requester.displayName}`,
+                spacing: "none",
+                wrap: true,
+              },
+            ],
+          },
+          {
+            type: "Column",
+            width: "stretch",
+            items: [
+              {
+                type: "TextBlock",
+                text: "CREATED",
+                size: "small",
+                isSubtle: true,
+                weight: "bolder",
+              },
+              {
+                type: "TextBlock",
+                text: `🕐 ${formatCardDate(ticket.created)}`,
+                spacing: "none",
+              },
+            ],
+          },
+        ],
       },
+      // Location if present
+      ...(ticket.location ? [
+        {
+          type: "TextBlock",
+          text: `📍 ${ticket.location}`,
+          isSubtle: true,
+          spacing: "small",
+        } as AdaptiveCardElement,
+      ] : []),
+      // Description section
       {
-        type: "TextBlock",
-        text: truncatedDescription || "(No description provided)",
-        wrap: true,
-        isSubtle: true,
+        type: "Container",
+        separator: true,
+        spacing: "medium",
+        items: [
+          {
+            type: "TextBlock",
+            text: truncatedDescription || "_No description provided_",
+            wrap: true,
+            isSubtle: true,
+            maxLines: 4,
+          },
+        ],
       },
     ],
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "View Ticket",
+        title: "📂 Open Ticket",
         url: `${APP_URL}?ticket=${ticket.id}`,
+        style: "positive",
       },
     ],
   };
 }
 
 /**
+ * Get status emoji
+ */
+function getStatusEmoji(status: string): string {
+  switch (status) {
+    case "New": return "🆕";
+    case "In Progress": return "🔄";
+    case "On Hold": return "⏸️";
+    case "Resolved": return "✅";
+    case "Closed": return "🔒";
+    default: return "📋";
+  }
+}
+
+/**
  * Generate an Adaptive Card for status change notification
- * Shows old status -> new status transition
+ * Clean design showing the status transition
  */
 export function generateStatusChangeCard(
   ticket: Ticket,
   oldStatus: string,
   changedByName: string
 ): AdaptiveCardBody {
+  const newStatusEmoji = getStatusEmoji(ticket.status);
+
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
+      // Header
       {
         type: "Container",
         style: "emphasis",
@@ -206,74 +394,107 @@ export function generateStatusChangeCard(
         padding: "default",
         items: [
           {
-            type: "TextBlock",
-            text: "Ticket Status Changed",
-            size: "medium",
-            weight: "bolder",
+            type: "ColumnSet",
+            columns: [
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "📊 STATUS UPDATE",
+                    size: "small",
+                    weight: "bolder",
+                  },
+                  {
+                    type: "TextBlock",
+                    text: `#${ticket.ticketNumber || ticket.id}`,
+                    size: "large",
+                    weight: "bolder",
+                    spacing: "none",
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
+      // Title
       {
         type: "TextBlock",
-        text: `#${ticket.id}: ${ticket.title}`,
+        text: ticket.title,
         size: "medium",
         weight: "bolder",
         wrap: true,
         spacing: "medium",
       },
+      // Status transition - prominent display
       {
-        type: "ColumnSet",
-        columns: [
+        type: "Container",
+        style: "default",
+        spacing: "medium",
+        items: [
           {
-            type: "Column",
-            width: "auto",
-            items: [
+            type: "ColumnSet",
+            columns: [
               {
-                type: "TextBlock",
-                text: oldStatus,
-                size: "medium",
-                color: "dark",
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: oldStatus,
+                    size: "medium",
+                    horizontalAlignment: "center",
+                    isSubtle: true,
+                  },
+                ],
               },
-            ],
-          },
-          {
-            type: "Column",
-            width: "auto",
-            items: [
               {
-                type: "TextBlock",
-                text: "→",
-                size: "medium",
+                type: "Column",
+                width: "auto",
+                verticalContentAlignment: "center",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "➡️",
+                    size: "large",
+                  },
+                ],
               },
-            ],
-          },
-          {
-            type: "Column",
-            width: "auto",
-            items: [
               {
-                type: "TextBlock",
-                text: ticket.status,
-                size: "medium",
-                weight: "bolder",
-                color: getStatusColor(ticket.status),
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: `${newStatusEmoji} ${ticket.status}`,
+                    size: "medium",
+                    weight: "bolder",
+                    horizontalAlignment: "center",
+                    color: getStatusColor(ticket.status),
+                  },
+                ],
               },
             ],
           },
         ],
       },
+      // Changed by info
       {
         type: "TextBlock",
-        text: `Changed by ${changedByName}`,
+        text: `👤 Updated by ${changedByName}`,
         isSubtle: true,
-        spacing: "small",
+        spacing: "medium",
+        size: "small",
       },
     ],
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "View Ticket",
+        title: "📂 Open Ticket",
         url: `${APP_URL}?ticket=${ticket.id}`,
+        style: "positive",
       },
     ],
   };
@@ -281,7 +502,7 @@ export function generateStatusChangeCard(
 
 /**
  * Generate an Adaptive Card for priority escalation notification
- * Orange/red warning style for escalated tickets
+ * Attention-grabbing design for escalated tickets
  */
 export function generatePriorityEscalationCard(
   ticket: Ticket,
@@ -289,12 +510,15 @@ export function generatePriorityEscalationCard(
   changedByName: string
 ): AdaptiveCardBody {
   const isUrgent = ticket.priority === "Urgent";
+  const oldEmoji = getPriorityEmoji(oldPriority);
+  const newEmoji = getPriorityEmoji(ticket.priority);
 
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
+      // Header with attention-grabbing style
       {
         type: "Container",
         style: isUrgent ? "attention" : "warning",
@@ -302,77 +526,165 @@ export function generatePriorityEscalationCard(
         padding: "default",
         items: [
           {
-            type: "TextBlock",
-            text: isUrgent ? "URGENT: Priority Escalated" : "Priority Escalated",
-            size: "medium",
-            weight: "bolder",
-            color: "light",
+            type: "ColumnSet",
+            columns: [
+              {
+                type: "Column",
+                width: "auto",
+                verticalContentAlignment: "center",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: isUrgent ? "🚨" : "⚡",
+                    size: "extraLarge",
+                  },
+                ],
+              },
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: isUrgent ? "URGENT ESCALATION" : "PRIORITY ESCALATION",
+                    size: "medium",
+                    weight: "bolder",
+                    color: "light",
+                  },
+                  {
+                    type: "TextBlock",
+                    text: `#${ticket.ticketNumber || ticket.id}`,
+                    size: "large",
+                    weight: "bolder",
+                    color: "light",
+                    spacing: "none",
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
+      // Title
       {
         type: "TextBlock",
-        text: `#${ticket.id}: ${ticket.title}`,
+        text: ticket.title,
         size: "medium",
         weight: "bolder",
         wrap: true,
         spacing: "medium",
       },
+      // Priority transition - very prominent
+      {
+        type: "Container",
+        style: "emphasis",
+        spacing: "medium",
+        padding: "default",
+        items: [
+          {
+            type: "ColumnSet",
+            columns: [
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: `${oldEmoji} ${oldPriority}`,
+                    size: "medium",
+                    horizontalAlignment: "center",
+                  },
+                ],
+              },
+              {
+                type: "Column",
+                width: "auto",
+                verticalContentAlignment: "center",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "⬆️",
+                    size: "large",
+                  },
+                ],
+              },
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: `${newEmoji} ${ticket.priority}`,
+                    size: "large",
+                    weight: "bolder",
+                    horizontalAlignment: "center",
+                    color: getPriorityColor(ticket.priority),
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      // Details
       {
         type: "ColumnSet",
         columns: [
           {
             type: "Column",
-            width: "auto",
+            width: "stretch",
             items: [
               {
                 type: "TextBlock",
-                text: oldPriority,
-                size: "medium",
-                color: "dark",
-              },
-            ],
-          },
-          {
-            type: "Column",
-            width: "auto",
-            items: [
-              {
-                type: "TextBlock",
-                text: "→",
-                size: "medium",
-              },
-            ],
-          },
-          {
-            type: "Column",
-            width: "auto",
-            items: [
-              {
-                type: "TextBlock",
-                text: ticket.priority,
-                size: "medium",
+                text: "DEPARTMENT",
+                size: "small",
+                isSubtle: true,
                 weight: "bolder",
-                color: getPriorityColor(ticket.priority),
+              },
+              {
+                type: "TextBlock",
+                text: formatDepartment(ticket),
+                spacing: "none",
+                wrap: true,
+              },
+            ],
+          },
+          {
+            type: "Column",
+            width: "stretch",
+            items: [
+              {
+                type: "TextBlock",
+                text: "REQUESTER",
+                size: "small",
+                isSubtle: true,
+                weight: "bolder",
+              },
+              {
+                type: "TextBlock",
+                text: ticket.originalRequester || ticket.requester.displayName,
+                spacing: "none",
+                wrap: true,
               },
             ],
           },
         ],
       },
+      // Escalated by
       {
-        type: "FactSet",
-        facts: [
-          { title: "Department", value: formatDepartment(ticket) },
-          { title: "Requester", value: ticket.originalRequester || ticket.requester.displayName },
-          { title: "Escalated by", value: changedByName },
-        ],
+        type: "TextBlock",
+        text: `⬆️ Escalated by ${changedByName}`,
+        isSubtle: true,
+        spacing: "medium",
+        size: "small",
       },
     ],
     actions: [
       {
         type: "Action.OpenUrl",
-        title: "View Ticket",
+        title: "🚀 Open Ticket Now",
         url: `${APP_URL}?ticket=${ticket.id}`,
+        style: "positive",
       },
     ],
   };

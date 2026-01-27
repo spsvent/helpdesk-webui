@@ -97,6 +97,11 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_ESCALATION_LIST_ID` - EscalationRules list
 - `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` - ActivityLog list
 
+### Teams Notifications
+- `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` - "true" to enable Teams notifications
+- `NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID` - TeamsChannels SharePoint list ID
+- `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE` - Only notify for tickets after this date (YYYY-MM-DD)
+
 ### Other Configuration
 - `NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID` - Entra ID group for admin access
 - `NEXT_PUBLIC_ADMIN_EMAILS` - Comma-separated admin emails (fallback)
@@ -128,20 +133,20 @@ Production URL: https://lively-coast-062dfc51e.1.azurestaticapps.net
 
 ## Roadmap / Planned Features
 
-### Activity/Audit Log
+### ✅ Activity/Audit Log (Completed)
 Track and display a comprehensive log of all system activity:
-- **Emails sent** - To whom, subject, when, triggered by what (new ticket, escalation, etc.)
-- **Notifications** - Escalation alerts, assignment notifications
-- **Ticket events** - Creation, status changes, priority changes, reassignments
-- **Comments** - When added, by whom
-- **Approval actions** - Approved/rejected, by whom
-- **Escalation actions** - What rule triggered, what action was taken
+- ✅ **Emails sent** - To whom, subject, when, triggered by what (new ticket, escalation, etc.)
+- ✅ **Notifications** - Escalation alerts, assignment notifications
+- ✅ **Ticket events** - Creation, status changes, priority changes, reassignments
+- ✅ **Comments** - When added, by whom
+- ✅ **Approval actions** - Approved/rejected, by whom
+- ✅ **Escalation actions** - What rule triggered, what action was taken
 
-Implementation approach:
-- Create `ActivityLog` SharePoint list with columns: Timestamp, EventType, TicketId, Actor, Details, Metadata
-- Log events from: graphClient.ts (emails), page.tsx (ticket creation), DetailsPanel (updates), Azure Functions (escalations)
-- Add Activity Log viewer in Settings or as a new admin page
-- Filter by event type, date range, ticket, user
+Implementation:
+- `ActivityLog` SharePoint list with columns: Timestamp, EventType, TicketId, Actor, Details, Metadata
+- Events logged from: graphClient.ts, new/page.tsx, TicketDetail.tsx, DetailsPanel.tsx
+- Activity Log viewer accessible via Settings → Activity Log
+- Filters by event type, ticket number, result limit
 
 ---
 

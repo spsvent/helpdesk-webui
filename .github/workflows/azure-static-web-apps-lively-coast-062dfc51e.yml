@@ -47,6 +47,10 @@ jobs:
           NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
           NEXT_PUBLIC_EMAIL_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_EMAIL_FUNCTION_URL }}
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
+          # Teams Notifications
+          NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED: "true"
+          NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID: "e95f1cea-76ce-472e-b55c-423f5627c734"
+          NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE: "2026-01-27"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

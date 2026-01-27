@@ -230,22 +230,18 @@ export default function NewTicketPage() {
 
       // Send email notification to assignee if there is one
       if (assigneeEmail) {
-        console.log("[Email Debug] Assignee email:", assigneeEmail);
         try {
           // Try to look up user, but don't require it (might be a group)
           const assignee = await getUserByEmail(client, assigneeEmail);
           const assigneeName = assignee?.displayName || assigneeEmail.split('@')[0].replace(/[._]/g, ' ');
-          console.log("[Email Debug] Assignee name:", assigneeName, "User found:", !!assignee);
 
           // Send email regardless of whether user lookup succeeded (groups have email too)
-          console.log("[Email Debug] Sending email to:", assigneeEmail);
           await sendNewTicketEmail(
             client,
             newTicket,
             assigneeEmail,
             assigneeName
           );
-          console.log("[Email Debug] Email sent successfully!");
 
           // Log email sent
           await logActivity(client, {
@@ -268,10 +264,8 @@ export default function NewTicketPage() {
           );
         } catch (emailError) {
           // Don't fail the ticket creation if email/comment fails
-          console.error("[Email Debug] FAILED to send email:", emailError);
+          console.error("Failed to send assignment email:", emailError);
         }
-      } else {
-        console.log("[Email Debug] No assignee email - skipping notification");
       }
 
       // Send Teams notification (fire-and-forget, only for Normal+ priority)
