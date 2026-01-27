@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication, EventType, AuthenticationResult } from "@azure/msal-browser";
-import { msalConfig } from "@/lib/msalConfig";
+import { msalConfig, loginRequest } from "@/lib/msalConfig";
+import { initializeTeamsAuth, isRunningInTeams, getTeamsLoginHint } from "@/lib/teamsAuth";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
@@ -25,6 +26,9 @@ export default function RootLayout({
         // Must initialize MSAL before calling any other methods
         await msalInstance.initialize();
 
+        // Check if running inside Teams (do this early)
+        const teamsAuth = await initializeTeamsAuth();
+
         // Handle redirect promise - this processes the auth response after redirect
         const response = await msalInstance.handleRedirectPromise();
 
@@ -36,6 +40,22 @@ export default function RootLayout({
           const accounts = msalInstance.getAllAccounts();
           if (accounts.length > 0) {
             msalInstance.setActiveAccount(accounts[0]);
+          } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
+            // Running in Teams with no existing account - try silent SSO
+            console.log("Attempting Teams SSO with login hint:", teamsAuth.loginHint);
+            try {
+              const ssoResult = await msalInstance.ssoSilent({
+                ...loginRequest,
+                loginHint: teamsAuth.loginHint,
+              });
+              if (ssoResult?.account) {
+                msalInstance.setActiveAccount(ssoResult.account);
+                console.log("Teams SSO successful:", ssoResult.account.username);
+              }
+            } catch (ssoError) {
+              console.log("Teams SSO silent auth failed, will show login:", ssoError);
+              // SSO failed - user will see normal login button
+            }
           }
         }
       } catch (error) {

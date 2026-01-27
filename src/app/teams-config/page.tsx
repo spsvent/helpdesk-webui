@@ -2,24 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Script from "next/script";
-
-declare global {
-  interface Window {
-    microsoftTeams: {
-      app: {
-        initialize: () => Promise<void>;
-        getContext: () => Promise<{ page?: { frameContext?: string } }>;
-      };
-      pages: {
-        config: {
-          setValidityState: (valid: boolean) => void;
-          registerOnSaveHandler: (handler: (saveEvent: { notifySuccess: () => void; notifyFailure: (reason: string) => void }) => void) => void;
-          setConfig: (config: { entityId: string; contentUrl: string; websiteUrl: string; suggestedDisplayName: string }) => Promise<void>;
-        };
-      };
-    };
-  }
-}
+import "@/lib/teamsAuth"; // Import for Teams SDK type declarations
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://tickets.spsvent.net";
 
@@ -33,14 +16,20 @@ export default function TeamsConfigPage() {
 
     const initializeTeams = async () => {
       try {
-        await window.microsoftTeams.app.initialize();
+        const teams = window.microsoftTeams;
+        if (!teams) {
+          setError("Teams SDK not loaded");
+          return;
+        }
+
+        await teams.app.initialize();
 
         // Enable the Save button
-        window.microsoftTeams.pages.config.setValidityState(true);
+        teams.pages.config.setValidityState(true);
 
         // Register save handler
-        window.microsoftTeams.pages.config.registerOnSaveHandler((saveEvent) => {
-          window.microsoftTeams.pages.config.setConfig({
+        teams.pages.config.registerOnSaveHandler((saveEvent) => {
+          teams.pages.config.setConfig({
             entityId: "helpdesk-tab",
             contentUrl: APP_URL,
             websiteUrl: APP_URL,
