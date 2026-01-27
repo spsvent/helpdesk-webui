@@ -360,7 +360,7 @@ export default function DetailsPanel({
         ).catch((e) => console.error("Failed to add assignment comment:", e));
       }
 
-      // Notify requester if status changed
+      // Notify requester if status changed (email)
       if (status !== oldStatus && ticket.requester.email) {
         sendStatusChangeEmail(
           client,
@@ -386,8 +386,10 @@ export default function DetailsPanel({
             }),
           }).catch((e) => console.error("Failed to log email sent:", e));
         }).catch((e) => console.error("Failed to send status change email:", e));
+      }
 
-        // Also send Teams notification for status change
+      // Send Teams notification for status change (independent of email)
+      if (status !== oldStatus) {
         sendStatusChangeTeamsNotification(client, updated, oldStatus, currentUserName);
       }
 
