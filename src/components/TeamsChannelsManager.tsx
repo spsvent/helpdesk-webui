@@ -33,18 +33,32 @@ const PRIORITY_OPTIONS: TeamsMinPriority[] = ["Low", "Normal", "High", "Urgent"]
 
 /**
  * Parse a Teams channel URL and extract TeamId and ChannelId
+ * Supports both regular Teams URLs and Admin Center URLs
  */
 function parseTeamsUrl(url: string): { teamId: string; channelId: string } | null {
   try {
-    // Example URL:
-    // https://teams.microsoft.com/l/channel/19%3A00253cfab7d54da09286a7167e7866b5%40thread.tacv2/HelpDesk?groupId=7e1b9f86-5fc0-4f83-a6d2-e52167d0e4cf&tenantId=...
-
     const urlObj = new URL(url);
 
-    // Extract groupId (TeamId) from query params
+    // Admin Center URL format:
+    // https://admin.teams.microsoft.com/teams/manage/{teamId}/channels/{channelId}
+    if (urlObj.hostname === "admin.teams.microsoft.com") {
+      const pathParts = urlObj.pathname.split("/");
+      const manageIndex = pathParts.indexOf("manage");
+      const channelsIndex = pathParts.indexOf("channels");
+
+      if (manageIndex !== -1 && channelsIndex !== -1 &&
+          pathParts[manageIndex + 1] && pathParts[channelsIndex + 1]) {
+        const teamId = pathParts[manageIndex + 1];
+        const channelId = decodeURIComponent(pathParts[channelsIndex + 1]);
+        return { teamId, channelId };
+      }
+      return null;
+    }
+
+    // Regular Teams URL format:
+    // https://teams.microsoft.com/l/channel/19%3A...%40thread.tacv2/ChannelName?groupId=...&tenantId=...
     const teamId = urlObj.searchParams.get("groupId");
 
-    // Extract channelId from path - it's URL encoded
     const pathParts = urlObj.pathname.split("/");
     const channelIndex = pathParts.indexOf("channel");
 
@@ -179,7 +193,7 @@ export default function TeamsChannelsManager() {
         title: prev.title || (channelName ? `${channelName} Channel` : ""),
       }));
     } else {
-      setUrlError("Invalid Teams URL. Please copy the full URL from Teams.");
+      setUrlError("Invalid URL. Use a Teams channel link or Admin Center URL.");
       setFormData((prev) => ({ ...prev, teamId: "", channelId: "" }));
     }
   };
@@ -523,7 +537,7 @@ export default function TeamsChannelsManager() {
               />
               {urlError && <p className="text-red-500 text-xs mt-1">{urlError}</p>}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Right-click a channel in Teams → &quot;Get link to channel&quot; → paste here
+                Paste a Teams channel link or Admin Center URL
               </p>
             </div>
 
