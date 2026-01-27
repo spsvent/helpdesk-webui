@@ -115,6 +115,7 @@ export function isRunningInTeams(): boolean {
 
 /**
  * Get the Teams SSO token (only works inside Teams)
+ * This uses the Teams SDK's built-in authentication which works better in desktop app
  */
 export async function getTeamsSSOToken(): Promise<string | null> {
   if (!isTeamsContext || !window.microsoftTeams) {
@@ -122,11 +123,21 @@ export async function getTeamsSSOToken(): Promise<string | null> {
   }
 
   try {
+    // Try silent first
     const token = await window.microsoftTeams.authentication.getAuthToken({ silent: true });
+    console.log("Got Teams SSO token (silent)");
     return token;
-  } catch (error) {
-    console.error("Failed to get Teams SSO token:", error);
-    return null;
+  } catch (silentError) {
+    console.log("Silent Teams token failed, trying interactive:", silentError);
+    try {
+      // Try interactive (will show consent prompt if needed)
+      const token = await window.microsoftTeams.authentication.getAuthToken({ silent: false });
+      console.log("Got Teams SSO token (interactive)");
+      return token;
+    } catch (interactiveError) {
+      console.error("Failed to get Teams SSO token:", interactiveError);
+      return null;
+    }
   }
 }
 
