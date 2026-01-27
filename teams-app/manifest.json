@@ -48,8 +48,8 @@
   ],
   "configurableTabs": [
     {
-      "configurationUrl": "https://tickets.spsvent.net",
-      "canUpdateConfiguration": false,
+      "configurationUrl": "https://tickets.spsvent.net/teams-config",
+      "canUpdateConfiguration": true,
       "scopes": ["team", "groupchat"]
     }
   ],
