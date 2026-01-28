@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Compass logo (centered) -->
+  <g transform="translate(96, 70)">
+    <!-- Outer circle -->
+    <circle cx="0" cy="0" r="50" fill="none" stroke="white" stroke-width="3"/>
+
+    <!-- Inner circle -->
+    <circle cx="0" cy="0" r="38" fill="none" stroke="white" stroke-width="2"/>
+
+    <!-- Compass points -->
+    <!-- North -->
+    <path d="M0 -50 L0 -45" stroke="white" stroke-width="3"/>
+    <path d="M0 -45 L-4 -36 L0 -40 L4 -36 Z" fill="white"/>
+    <!-- South -->
+    <path d="M0 50 L0 45" stroke="white" stroke-width="3"/>
+    <path d="M0 45 L-4 36 L0 40 L4 36 Z" fill="white"/>
+    <!-- East -->
+    <path d="M50 0 L45 0" stroke="white" stroke-width="3"/>
+    <path d="M45 0 L36 -4 L40 0 L36 4 Z" fill="white"/>
+    <!-- West -->
+    <path d="M-50 0 L-45 0" stroke="white" stroke-width="3"/>
+    <path d="M-45 0 L-36 -4 L-40 0 L-36 4 Z" fill="white"/>
+  </g>
+</svg>

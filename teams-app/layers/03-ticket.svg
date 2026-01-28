@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Ticket icon -->
+  <g transform="translate(32, 24) scale(1.33)">
+    <!-- Ticket shape -->
+    <path d="M16 20H80C84.4 20 88 23.6 88 28V40C83.6 40 80 43.6 80 48C80 52.4 83.6 56 88 56V68C88 72.4 84.4 76 80 76H16C11.6 76 8 72.4 8 68V56C12.4 56 16 52.4 16 48C16 43.6 12.4 40 8 40V28C8 23.6 11.6 20 16 20Z" fill="white"/>
+
+    <!-- Ticket stub line -->
+    <path d="M32 20V76" stroke="#c41e3a" stroke-width="2" stroke-dasharray="4 4"/>
+
+    <!-- Check mark -->
+    <path d="M50 42L58 52L72 36" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
