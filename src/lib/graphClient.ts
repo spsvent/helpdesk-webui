@@ -44,6 +44,27 @@ export function getGraphClient(
   });
 }
 
+// Get site user ID for Person field lookup
+// SharePoint Person fields require the user's ID from the site's User Information List
+async function getSiteUserId(client: Client, email: string): Promise<number | null> {
+  try {
+    const response = await client
+      .api(`/sites/${SITE_ID}/lists/User Information List/items`)
+      .filter(`fields/EMail eq '${email}'`)
+      .select("id")
+      .top(1)
+      .get();
+
+    if (response.value && response.value.length > 0) {
+      return parseInt(response.value[0].id, 10);
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to get site user ID:", error);
+    return null;
+  }
+}
+
 // Archive threshold: 90 days
 const ARCHIVE_DAYS = 90;
 
@@ -228,8 +249,13 @@ export async function createTicket(
     fields.ApprovalRequestedDate = new Date().toISOString();
   }
 
-  // Note: Requester is automatically set to the authenticated user by SharePoint (Author/createdBy field)
-  // The requesterEmail parameter is kept for potential future use (e.g., submitting on behalf of someone)
+  // Set Requester field (Person field) using the site user ID
+  if (requesterEmail) {
+    const siteUserId = await getSiteUserId(client, requesterEmail);
+    if (siteUserId) {
+      fields.RequesterLookupId = siteUserId;
+    }
+  }
 
   const item = await client.api(endpoint).post({ fields });
 

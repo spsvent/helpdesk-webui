@@ -17,6 +17,9 @@ const TEAMS_CHANNELS_LIST_ID = process.env.NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID ||
 // App URL for card action buttons
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc51e.1.azurestaticapps.net";
 
+// Azure Function URL for Teams notifications (uses bot for proactive messaging)
+const TEAMS_FUNCTION_URL = process.env.NEXT_PUBLIC_TEAMS_FUNCTION_URL || "";
+
 // Global kill switch for Teams notifications - defaults to DISABLED
 // Set NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED=true to enable
 const TEAMS_NOTIFICATIONS_ENABLED = process.env.NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED === "true";
@@ -714,28 +717,34 @@ export function generatePriorityEscalationCard(
  * Post an Adaptive Card message to a Teams channel
  */
 export async function postToTeamsChannel(
-  client: Client,
+  _client: Client,
   teamId: string,
   channelId: string,
   card: AdaptiveCardBody
 ): Promise<void> {
-  const endpoint = `/teams/${teamId}/channels/${channelId}/messages`;
+  // Use Azure Function with Bot Framework for proactive messaging
+  // This doesn't require the user to be a member of the team
+  if (!TEAMS_FUNCTION_URL) {
+    console.error("NEXT_PUBLIC_TEAMS_FUNCTION_URL not configured");
+    return;
+  }
 
-  const message = {
-    body: {
-      contentType: "html",
-      content: "<attachment id=\"card\"></attachment>",
+  const response = await fetch(TEAMS_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-    attachments: [
-      {
-        id: "card",
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: JSON.stringify(card),
-      },
-    ],
-  };
+    body: JSON.stringify({
+      teamId,
+      channelId,
+      card,
+    }),
+  });
 
-  await client.api(endpoint).post(message);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Teams notification failed: ${response.status}`);
+  }
 }
 
 // ============================================
