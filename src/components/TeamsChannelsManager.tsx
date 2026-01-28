@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
-import { getProblemTypes, getProblemTypeSubs, hasSubCategories } from "@/lib/categoryConfig";
+import { getProblemTypes, getProblemTypeSubs, getProblemTypeSub2s, hasSubCategories, hasSub2Categories } from "@/lib/categoryConfig";
 import { TeamsChannelConfig, TeamsMinPriority } from "@/types/teams";
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
@@ -13,6 +13,7 @@ interface ChannelFormData {
   title: string;
   department: string;
   subDepartment: string;
+  problemType: string;
   teamsUrl: string;
   teamId: string;
   channelId: string;
@@ -24,6 +25,7 @@ const EMPTY_FORM: ChannelFormData = {
   title: "",
   department: "",
   subDepartment: "",
+  problemType: "",
   teamsUrl: "",
   teamId: "",
   channelId: "",
@@ -143,6 +145,7 @@ export default function TeamsChannelsManager() {
           Title?: string;
           Department?: string;
           SubDepartment?: string;
+          ProblemType?: string;
           TeamId?: string;
           ChannelId?: string;
           IsActive?: boolean;
@@ -153,6 +156,7 @@ export default function TeamsChannelsManager() {
         title: item.fields.Title || "",
         department: item.fields.Department || "",
         subDepartment: item.fields.SubDepartment || "",
+        problemType: item.fields.ProblemType || "",
         teamId: item.fields.TeamId || "",
         channelId: item.fields.ChannelId || "",
         isActive: item.fields.IsActive ?? false,
@@ -216,6 +220,8 @@ export default function TeamsChannelsManager() {
         displayName: "TeamsChannels",
         columns: [
           { name: "Department", text: { maxLength: 100 } },
+          { name: "SubDepartment", text: { maxLength: 100 } },
+          { name: "ProblemType", text: { maxLength: 100 } },
           { name: "TeamId", text: { maxLength: 100 } },
           { name: "ChannelId", text: { maxLength: 200 } },
           { name: "IsActive", boolean: {} },
@@ -276,6 +282,11 @@ export default function TeamsChannelsManager() {
       // Only include SubDepartment if it has a value
       if (formData.subDepartment) {
         fields.SubDepartment = formData.subDepartment;
+      }
+
+      // Only include ProblemType if it has a value
+      if (formData.problemType) {
+        fields.ProblemType = formData.problemType;
       }
 
       if (editingChannel) {
@@ -414,6 +425,7 @@ export default function TeamsChannelsManager() {
       title: channel.title,
       department: channel.department,
       subDepartment: channel.subDepartment || "",
+      problemType: channel.problemType || "",
       teamsUrl: "",
       teamId: channel.teamId,
       channelId: channel.channelId,
@@ -596,7 +608,8 @@ export default function TeamsChannelsManager() {
                 onChange={(e) => setFormData((prev) => ({
                   ...prev,
                   department: e.target.value,
-                  subDepartment: "" // Reset sub-department when department changes
+                  subDepartment: "", // Reset sub-department when department changes
+                  problemType: "", // Reset problem type too
                 }))}
                 className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white text-sm"
               >
@@ -620,7 +633,11 @@ export default function TeamsChannelsManager() {
                 </label>
                 <select
                   value={formData.subDepartment}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, subDepartment: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    subDepartment: e.target.value,
+                    problemType: "", // Reset problem type when sub-department changes
+                  }))}
                   className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white text-sm"
                 >
                   <option value="">All sub-departments</option>
@@ -632,6 +649,30 @@ export default function TeamsChannelsManager() {
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Only notify for this specific sub-department (leave empty for all)
+                </p>
+              </div>
+            )}
+
+            {/* Problem Type (optional - only if sub-department selected and has sub2 categories) */}
+            {formData.department && formData.subDepartment && hasSub2Categories(formData.department, formData.subDepartment) && (
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+                  Problem Type <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <select
+                  value={formData.problemType}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, problemType: e.target.value }))}
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white text-sm"
+                >
+                  <option value="">All problem types</option>
+                  {getProblemTypeSub2s(formData.department, formData.subDepartment).map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Only notify for this specific problem type (leave empty for all)
                 </p>
               </div>
             )}
@@ -729,6 +770,9 @@ export default function TeamsChannelsManager() {
                         {channel.department}
                         {channel.subDepartment && (
                           <span className="text-gray-400 dark:text-gray-500"> &gt; {channel.subDepartment}</span>
+                        )}
+                        {channel.problemType && (
+                          <span className="text-gray-400 dark:text-gray-500"> &gt; {channel.problemType}</span>
                         )}
                       </span>
                     </div>

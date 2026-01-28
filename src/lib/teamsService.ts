@@ -95,35 +95,53 @@ export async function fetchTeamsChannelConfig(client: Client): Promise<TeamsChan
 }
 
 /**
- * Find the Teams channel configuration for a ticket's department and sub-department
- * Matching priority:
- * 1. Exact match on department + subDepartment
- * 2. Department match with no subDepartment filter (channel accepts all sub-departments)
+ * Find the Teams channel configuration for a ticket's department hierarchy
+ * Matching priority (most specific to least specific):
+ * 1. Exact match on department + subDepartment + problemType
+ * 2. Match on department + subDepartment (no problemType filter)
+ * 3. Match on department only (no subDepartment or problemType filter)
  */
 export function findChannelForTicket(
   configs: TeamsChannelConfig[],
   department: string,
-  subDepartment?: string
+  subDepartment?: string,
+  problemType?: string
 ): TeamsChannelConfig | null {
-  // First, try to find an exact match (department + subDepartment)
-  if (subDepartment) {
+  // Priority 1: Exact match (department + subDepartment + problemType)
+  if (subDepartment && problemType) {
     const exactMatch = configs.find(
       (config) =>
         config.isActive &&
         config.department.toLowerCase() === department.toLowerCase() &&
-        config.subDepartment?.toLowerCase() === subDepartment.toLowerCase()
+        config.subDepartment?.toLowerCase() === subDepartment.toLowerCase() &&
+        config.problemType?.toLowerCase() === problemType.toLowerCase()
     );
     if (exactMatch) {
       return exactMatch;
     }
   }
 
-  // Fall back to department-only match (no subDepartment filter = accepts all)
+  // Priority 2: Department + subDepartment match (accepts all problemTypes)
+  if (subDepartment) {
+    const subDeptMatch = configs.find(
+      (config) =>
+        config.isActive &&
+        config.department.toLowerCase() === department.toLowerCase() &&
+        config.subDepartment?.toLowerCase() === subDepartment.toLowerCase() &&
+        !config.problemType // Only match channels that accept all problemTypes
+    );
+    if (subDeptMatch) {
+      return subDeptMatch;
+    }
+  }
+
+  // Priority 3: Department-only match (accepts all sub-departments and problemTypes)
   return configs.find(
     (config) =>
       config.isActive &&
       config.department.toLowerCase() === department.toLowerCase() &&
-      !config.subDepartment // Only match channels that accept all sub-departments
+      !config.subDepartment && // Only match channels that accept all sub-departments
+      !config.problemType
   ) || null;
 }
 
@@ -746,7 +764,7 @@ export function sendNewTicketTeamsNotification(
   (async () => {
     try {
       const configs = await fetchTeamsChannelConfig(client);
-      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub);
+      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub, ticket.problemTypeSub2);
 
       if (!channelConfig) {
         console.log(`No Teams channel configured for department: ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}`);
@@ -789,7 +807,7 @@ export function sendStatusChangeTeamsNotification(
   (async () => {
     try {
       const configs = await fetchTeamsChannelConfig(client);
-      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub);
+      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub, ticket.problemTypeSub2);
 
       if (!channelConfig) {
         console.log(`No Teams channel configured for department: ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}`);
@@ -844,7 +862,7 @@ export function sendPriorityEscalationTeamsNotification(
       }
 
       const configs = await fetchTeamsChannelConfig(client);
-      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub);
+      const channelConfig = findChannelForTicket(configs, ticket.problemType, ticket.problemTypeSub, ticket.problemTypeSub2);
 
       if (!channelConfig) {
         console.log(`No Teams channel configured for department: ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}`);
