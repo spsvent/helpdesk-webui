@@ -7,6 +7,7 @@ import { msalConfig, loginRequest } from "@/lib/msalConfig";
 import { initializeTeamsAuth } from "@/lib/teamsAuth";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -103,10 +104,7 @@ export default function RootLayout({
         </head>
         <body className="bg-bg-subtle min-h-screen font-body">
           <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
-              <p className="mt-4 text-text-secondary">Loading...</p>
-            </div>
+            <LoadingSpinner message="Loading Help Desk..." size="large" />
           </div>
         </body>
       </html>

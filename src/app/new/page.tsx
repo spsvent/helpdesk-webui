@@ -21,6 +21,7 @@ import { getSuggestedAssigneeWithGroup } from "@/lib/autoAssignConfig";
 import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/autoAssignConfigService";
 import { suggestCategory, getSuggestionMessage } from "@/lib/categorySuggestion";
 import AssigneePreview from "@/components/AssigneePreview";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -350,10 +351,7 @@ export default function NewTicketPage() {
   if (inProgress !== InteractionStatus.None) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-subtle">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue mx-auto"></div>
-          <p className="mt-4 text-text-secondary">Authenticating...</p>
-        </div>
+        <LoadingSpinner message="Authenticating..." size="large" />
       </div>
     );
   }

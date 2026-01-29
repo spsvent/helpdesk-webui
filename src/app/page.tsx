@@ -17,6 +17,7 @@ import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
 import DarkModeToggle from "@/components/DarkModeToggle";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function Home() {
@@ -359,10 +360,7 @@ export default function Home() {
   if (inProgress !== InteractionStatus.None) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
-          <p className="mt-4 text-text-secondary">Authenticating...</p>
-        </div>
+        <LoadingSpinner message="Authenticating..." size="large" />
       </div>
     );
   }
