@@ -33,7 +33,7 @@ function getAdapter() {
  */
 app.http("SendTeamsNotification", {
   methods: ["POST", "OPTIONS"],
-  authLevel: "function",
+  authLevel: "anonymous",
   handler: async (request, context) => {
     // CORS headers
     const corsHeaders = {

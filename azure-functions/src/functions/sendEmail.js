@@ -44,7 +44,7 @@ function getGraphClient(accessToken) {
 
 app.http("SendEmail", {
   methods: ["POST", "OPTIONS"],
-  authLevel: "function",
+  authLevel: "anonymous",
   handler: async (request, context) => {
     // CORS headers
     const corsHeaders = {
