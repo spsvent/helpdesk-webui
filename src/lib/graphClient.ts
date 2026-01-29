@@ -48,8 +48,12 @@ export function getGraphClient(
 // SharePoint Person fields require the user's ID from the site's User Information List
 async function getSiteUserId(client: Client, email: string): Promise<number | null> {
   try {
+    // The EMail field in User Information List is not indexed, so we need to add
+    // the Prefer header to allow non-indexed queries. This may be slow on very large
+    // lists but works for most organizations.
     const response = await client
       .api(`/sites/${SITE_ID}/lists/User Information List/items`)
+      .header("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly")
       .filter(`fields/EMail eq '${email}'`)
       .select("id")
       .top(1)
