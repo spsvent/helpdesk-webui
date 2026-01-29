@@ -109,27 +109,107 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_EMAIL_FUNCTION_URL` - Azure Function for sending emails
 - `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` - Azure Function for escalation checks
 
-### Adding Environment Variables to Azure (Production)
+### CRITICAL: Environment Variables for Production
 
-1. Go to Azure Portal: https://portal.azure.com
-2. Navigate to: **Static Web Apps** → **skypark-helpdesk-v2**
-3. In the left sidebar under **Settings**, click **Environment variables**
-4. Ensure **Production** is selected in the Environments dropdown
-5. Click **+ Add** to add a new variable
-6. Enter the Name and Value
-7. Click **Apply** at the bottom to save
-8. **Important**: After adding/changing variables, trigger a rebuild:
+**⚠️ IMPORTANT: This app uses Next.js static export. `NEXT_PUBLIC_*` variables are baked in at BUILD TIME, not runtime.**
+
+#### Where to Set Environment Variables
+
+| Variable Type | Where to Set | When Applied |
+|---------------|--------------|--------------|
+| `NEXT_PUBLIC_*` | GitHub Actions workflow file | Build time (baked into JS bundle) |
+| Server-side / API | Azure Portal (won't work for this app) | Runtime |
+
+#### Adding/Changing NEXT_PUBLIC_* Variables
+
+**You MUST edit the GitHub Actions workflow file directly:**
+
+1. Edit `.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml`
+2. Find the `env:` section under the "Build And Deploy" step
+3. Add or modify the variable:
+   ```yaml
+   env:
+     NEXT_PUBLIC_MY_NEW_VAR: "value"
+   ```
+4. Commit and push to trigger a rebuild:
    ```bash
-   git commit --allow-empty -m "Trigger rebuild for env vars" && git push
+   git add .github/workflows/*.yml
+   git commit -m "Update environment variable NEXT_PUBLIC_MY_NEW_VAR"
+   git push
    ```
 
-**Note**: `NEXT_PUBLIC_*` variables are baked in at build time. Changes won't take effect until the app is rebuilt.
+#### Why Azure Portal Environment Variables Don't Work
+
+Setting `NEXT_PUBLIC_*` variables in Azure Portal → Static Web Apps → Environment Variables **WILL NOT WORK** because:
+- Azure Portal env vars are for **runtime** (server-side code)
+- Next.js static export has **no server** - it's purely static HTML/JS/CSS
+- `NEXT_PUBLIC_*` variables are replaced at build time by Next.js
+- The build happens in GitHub Actions, which reads from the workflow file
+
+#### Current Production Environment Variables
+
+All `NEXT_PUBLIC_*` variables are defined in:
+`.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml`
+
+Key variables include:
+- `NEXT_PUBLIC_EMAIL_FUNCTION_URL` - Azure Function for emails
+- `NEXT_PUBLIC_TEAMS_FUNCTION_URL` - Azure Function for Teams bot notifications
+- `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` - Azure Function for escalation checks
+
+#### Using GitHub Secrets (Optional)
+
+For sensitive values, you can use GitHub Secrets:
+1. Go to GitHub repo → Settings → Secrets and variables → Actions
+2. Add a new repository secret
+3. Reference in workflow: `${{ secrets.SECRET_NAME }}`
+
+**Note:** Even with secrets, you still need to reference them in the workflow file.
 
 ## Deployment
 
 Deployment is automatic via GitHub Actions on push to `main` branch.
 
 Production URL: https://lively-coast-062dfc51e.1.azurestaticapps.net
+Custom Domain: https://tickets.spsvent.net
+
+## Azure Functions
+
+The app uses Azure Functions for backend operations that require server-side credentials.
+
+### Function App: `helpdesk-notify-func`
+
+Location: `azure-functions/` directory in this repo
+
+| Function | Endpoint | Purpose |
+|----------|----------|---------|
+| `sendemail` | `/api/sendemail` | Sends email notifications via Microsoft Graph |
+| `sendteamsnotification` | `/api/sendteamsnotification` | Posts to Teams channels via Bot Framework |
+| `checkescalations` | `/api/checkescalations` | Timer-triggered escalation checks |
+
+### Function App Configuration
+
+The Azure Function App has these environment variables (set in Azure Portal → Function App → Configuration):
+- `MICROSOFT_APP_ID` - Azure AD app client ID (same as web app)
+- `MICROSOFT_APP_PASSWORD` - Azure AD app client secret
+- `MICROSOFT_APP_TENANT_ID` - Azure AD tenant ID
+- `SITE_ID` - SharePoint site ID
+- `TICKETS_LIST_ID` - SharePoint Tickets list ID
+- `ESCALATION_LIST_ID` - SharePoint EscalationRules list ID
+
+### Teams Bot Configuration
+
+Teams notifications use Bot Framework SDK (not Graph API) for proactive messaging:
+- Bot is registered in Azure Bot Service
+- Bot ID is the same as the Azure AD App ID
+- Teams app manifest (`teams-app/manifest.json`) includes bot configuration
+- The Help Desk app must be installed in each Team that needs notifications
+
+### Deploying Function Changes
+
+```bash
+cd azure-functions
+func azure functionapp publish helpdesk-notify-func
+```
 
 ## Roadmap / Planned Features
 
