@@ -124,15 +124,26 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
   Other: {},
 };
 
+// Pre-computed category lookups (avoids repeated Object.keys() calls)
+const PROBLEM_TYPES = Object.keys(CATEGORY_HIERARCHY);
+const PROBLEM_TYPE_SUBS: Record<string, string[]> = {};
+const HAS_SUB_CATEGORIES: Record<string, boolean> = {};
+
+for (const problemType of PROBLEM_TYPES) {
+  const subs = CATEGORY_HIERARCHY[problemType];
+  const subKeys = subs ? Object.keys(subs) : [];
+  PROBLEM_TYPE_SUBS[problemType] = subKeys;
+  HAS_SUB_CATEGORIES[problemType] = subKeys.length > 0;
+}
+
 // Get all ProblemType options (top level)
 export function getProblemTypes(): string[] {
-  return Object.keys(CATEGORY_HIERARCHY);
+  return PROBLEM_TYPES;
 }
 
 // Get ProblemTypeSub options for a given ProblemType
 export function getProblemTypeSubs(problemType: string): string[] {
-  const subs = CATEGORY_HIERARCHY[problemType];
-  return subs ? Object.keys(subs) : [];
+  return PROBLEM_TYPE_SUBS[problemType] || [];
 }
 
 // Get ProblemTypeSub2 options for a given ProblemType and ProblemTypeSub
@@ -147,8 +158,7 @@ export function getProblemTypeSub2s(
 
 // Check if a ProblemType has sub-categories
 export function hasSubCategories(problemType: string): boolean {
-  const subs = CATEGORY_HIERARCHY[problemType];
-  return subs ? Object.keys(subs).length > 0 : false;
+  return HAS_SUB_CATEGORIES[problemType] ?? false;
 }
 
 // Check if a ProblemTypeSub has sub2 categories

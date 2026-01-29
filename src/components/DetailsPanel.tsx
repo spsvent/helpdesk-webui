@@ -127,25 +127,35 @@ export default function DetailsPanel({
   }, [problemType, problemTypeSub]);
 
   // Check for changes
+  // Track changes - only depend on specific ticket fields that are compared
+  const ticketStatus = ticket.status;
+  const ticketPriority = ticket.priority;
+  const ticketCategory = ticket.category;
+  const ticketProblemType = ticket.problemType;
+  const ticketProblemTypeSub = ticket.problemTypeSub || "";
+  const ticketProblemTypeSub2 = ticket.problemTypeSub2 || "";
+  const ticketAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email || "";
+
   useEffect(() => {
     const basicChanges =
-      status !== ticket.status ||
-      priority !== ticket.priority;
+      status !== ticketStatus ||
+      priority !== ticketPriority;
 
-    // Compare assignee email to detect changes (check both originalAssignedTo and assignedTo)
-    const currentAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email || "";
-    const assigneeChanged = (selectedAssignee?.email || "") !== currentAssigneeEmail;
+    // Compare assignee email to detect changes
+    const assigneeChanged = (selectedAssignee?.email || "") !== ticketAssigneeEmail;
 
     const adminChanges = isAdmin && (
-      category !== ticket.category ||
-      problemType !== ticket.problemType ||
-      problemTypeSub !== (ticket.problemTypeSub || "") ||
-      problemTypeSub2 !== (ticket.problemTypeSub2 || "") ||
+      category !== ticketCategory ||
+      problemType !== ticketProblemType ||
+      problemTypeSub !== ticketProblemTypeSub ||
+      problemTypeSub2 !== ticketProblemTypeSub2 ||
       assigneeChanged
     );
 
     setHasChanges(basicChanges || !!adminChanges);
-  }, [status, priority, category, problemType, problemTypeSub, problemTypeSub2, selectedAssignee, ticket, isAdmin]);
+  }, [status, priority, category, problemType, problemTypeSub, problemTypeSub2, selectedAssignee,
+      ticketStatus, ticketPriority, ticketCategory, ticketProblemType, ticketProblemTypeSub,
+      ticketProblemTypeSub2, ticketAssigneeEmail, isAdmin]);
 
   // Auto-assign when department changes
   useEffect(() => {

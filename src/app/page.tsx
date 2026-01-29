@@ -170,6 +170,16 @@ export default function Home() {
     return sortTickets(filtered, filters.sort);
   }, [rbacFilteredTickets, filters]);
 
+  // Pre-compute ticket IDs and index map for O(1) lookups in checkbox handler
+  const { ticketIds, ticketIndexMap } = useMemo(() => {
+    const ids = filteredAndSortedTickets.map((t) => t.id);
+    const indexMap = new Map<string, number>();
+    for (let i = 0; i < ids.length; i++) {
+      indexMap.set(ids[i], i);
+    }
+    return { ticketIds: ids, ticketIndexMap: indexMap };
+  }, [filteredAndSortedTickets]);
+
   // Handle bulk checkbox toggle (with shift-click range selection)
   const handleToggleCheck = useCallback(
     (ticketId: string, shiftKey: boolean) => {
@@ -177,12 +187,11 @@ export default function Home() {
         const newSet = new Set(prev);
 
         if (shiftKey && lastCheckedId) {
-          // Range selection - find indices and select all between
-          const ticketIds = filteredAndSortedTickets.map((t) => t.id);
-          const lastIndex = ticketIds.indexOf(lastCheckedId);
-          const currentIndex = ticketIds.indexOf(ticketId);
+          // Range selection - use O(1) index lookup
+          const lastIndex = ticketIndexMap.get(lastCheckedId);
+          const currentIndex = ticketIndexMap.get(ticketId);
 
-          if (lastIndex !== -1 && currentIndex !== -1) {
+          if (lastIndex !== undefined && currentIndex !== undefined) {
             const start = Math.min(lastIndex, currentIndex);
             const end = Math.max(lastIndex, currentIndex);
             for (let i = start; i <= end; i++) {
@@ -202,7 +211,7 @@ export default function Home() {
       });
       setLastCheckedId(ticketId);
     },
-    [lastCheckedId, filteredAndSortedTickets]
+    [lastCheckedId, ticketIds, ticketIndexMap]
   );
 
   // Clear bulk selection

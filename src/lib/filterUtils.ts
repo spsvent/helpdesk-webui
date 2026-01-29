@@ -9,22 +9,21 @@ import { TicketFilters, SortOption, DateRange, DEFAULT_FILTERS } from "@/types/f
 export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket[] {
   return tickets.filter((ticket) => {
     // Search filter (title, description, requester, assignee, ticket ID, location)
+    // Uses short-circuit evaluation - returns early on first match
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      const matchesSearch =
-        ticket.title.toLowerCase().includes(searchLower) ||
-        ticket.description.toLowerCase().includes(searchLower) ||
-        ticket.requester.displayName.toLowerCase().includes(searchLower) ||
-        (ticket.originalRequester?.toLowerCase().includes(searchLower) ?? false) ||
-        // Search by ticket ID (with or without # prefix)
-        ticket.id === searchLower.replace(/^#/, "") ||
-        ticket.id.includes(searchLower.replace(/^#/, "")) ||
-        // Search by assignee name
-        (ticket.assignedTo?.displayName?.toLowerCase().includes(searchLower) ?? false) ||
-        (ticket.originalAssignedTo?.toLowerCase().includes(searchLower) ?? false) ||
-        // Search by location
-        (ticket.location?.toLowerCase().includes(searchLower) ?? false);
-      if (!matchesSearch) return false;
+      const searchId = searchLower.replace(/^#/, "");
+
+      // Check each field in order of likelihood, short-circuit on first match
+      if (ticket.title.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.id === searchId || ticket.id.includes(searchId)) { /* match */ }
+      else if (ticket.requester.displayName.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.originalRequester?.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.assignedTo?.displayName?.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.originalAssignedTo?.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.location?.toLowerCase().includes(searchLower)) { /* match */ }
+      else if (ticket.description.toLowerCase().includes(searchLower)) { /* match - check last as it's usually longest */ }
+      else return false;
     }
 
     // Status filter (multi-select)
