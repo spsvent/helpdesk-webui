@@ -144,6 +144,19 @@
   --color-scrollbar: #5A4840;
 }
 
+/* Dark mode form field text fix - ensure readable text in inputs */
+.dark input,
+.dark textarea,
+.dark select {
+  color: #1a1a1a !important;
+  background-color: #ffffff !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+
 /* Custom styles for helpdesk UI */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
