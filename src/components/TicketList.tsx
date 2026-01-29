@@ -29,9 +29,9 @@ function getStatusBadgeClass(status: Ticket["status"]): string {
 function getPriorityIndicator(priority: Ticket["priority"]): { label: string; className: string } | null {
   switch (priority) {
     case "Urgent":
-      return { label: "URGENT", className: "text-red-600 font-bold" };
+      return { label: "URGENT", className: "priority-badge-urgent text-red-600 font-bold px-1.5 py-0.5 bg-red-50 rounded" };
     case "High":
-      return { label: "HIGH", className: "text-orange-600 font-semibold" };
+      return { label: "HIGH", className: "priority-badge-high text-orange-600 font-semibold px-1.5 py-0.5 bg-orange-50 rounded" };
     default:
       return null;
   }

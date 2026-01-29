@@ -263,6 +263,59 @@ h3 { font-size: 1.25rem; line-height: 1.3; }
   @apply font-semibold;
 }
 
+/* Urgent priority pulse animation */
+@keyframes urgent-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.priority-badge-urgent {
+  position: relative;
+  animation: urgent-pulse 2s ease-in-out infinite;
+}
+
+.priority-badge-urgent::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: var(--color-brand-red);
+  opacity: 0;
+  animation: urgent-glow 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes urgent-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.15);
+  }
+}
+
+/* High priority subtle pulse */
+.priority-badge-high {
+  animation: high-pulse 3s ease-in-out infinite;
+}
+
+@keyframes high-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 /* Comment cards */
 .comment-card {
   background-color: var(--color-bg-card);
