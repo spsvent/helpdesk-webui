@@ -226,6 +226,13 @@ body {
   border-color: color-mix(in srgb, var(--color-brand-primary) 20%, white);
 }
 
+/* Dark mode comment cards - ensure readable text on light backgrounds */
+.dark .comment-card,
+.dark .comment-card-internal,
+.dark .comment-card-description {
+  color: #1a1a1a;
+}
+
 /* User avatar */
 .avatar {
   background-color: var(--color-brand-primary);
