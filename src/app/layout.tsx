@@ -96,9 +96,12 @@ export default function RootLayout({
           <link rel="icon" href="/icon.svg" type="image/svg+xml" />
           <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
           <link rel="manifest" href="/manifest.json" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
           <title>SkyPark Help Desk</title>
         </head>
-        <body className="bg-bg-subtle min-h-screen">
+        <body className="bg-bg-subtle min-h-screen font-body">
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
@@ -121,9 +124,12 @@ export default function RootLayout({
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <title>SkyPark Help Desk</title>
       </head>
-      <body className="bg-bg-subtle min-h-screen">
+      <body className="bg-bg-subtle min-h-screen font-body">
         <ThemeProvider>
           <MsalProvider instance={msalInstance}>
             <RBACProvider>

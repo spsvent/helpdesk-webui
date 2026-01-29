@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'display': ['Fraunces', 'Georgia', 'serif'],
+        'body': ['Nunito', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
       colors: {
         // Theme-aware colors using CSS variables
         'brand-primary': 'var(--color-brand-primary)',
