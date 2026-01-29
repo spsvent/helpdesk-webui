@@ -297,7 +297,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const requesterEmail = accounts[0].username;
 
     // Update ticket status to Pending
-    const updatedTicket = await requestApproval(client, ticket.id, requesterName);
+    const updatedTicket = await requestApproval(client, ticket.id, requesterName, requesterEmail);
     onUpdate(updatedTicket);
 
     // Log approval request
@@ -344,6 +344,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       ticket.id,
       decision,
       approverName,
+      approverEmail,
       notes
     );
     onUpdate(updatedTicket);

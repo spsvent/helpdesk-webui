@@ -219,10 +219,17 @@ export interface CreateTicketData {
   assigneeEmail?: string; // Auto-assignment target
 }
 
+// Options for ticket creation (creator info for auto-approval)
+export interface CreateTicketOptions {
+  isAdmin?: boolean;
+  creatorEmail?: string;
+}
+
 export async function createTicket(
   client: Client,
   ticketData: CreateTicketData,
-  requesterEmail?: string
+  requesterEmail?: string,
+  options?: CreateTicketOptions
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items`;
 
@@ -255,9 +262,21 @@ export async function createTicket(
     fields.OriginalAssignedTo = ticketData.assigneeEmail;
   }
 
-  // Request Approval Gate: Request tickets automatically require approval
-  // Problem tickets go through without approval (existing behavior)
-  if (ticketData.category === "Request") {
+  // Approval workflow logic:
+  // - Any ticket created by admin: auto-approved by the creating admin
+  // - Request tickets by non-admins: require approval (Pending status)
+  // - Problem tickets by non-admins: no approval workflow needed
+  if (options?.isAdmin && options?.creatorEmail) {
+    // Auto-approve all tickets created by admins
+    fields.ApprovalStatus = "Approved";
+    fields.ApprovalDate = new Date().toISOString();
+    // Set the admin as the approver
+    const adminSiteUserId = await getSiteUserId(client, options.creatorEmail);
+    if (adminSiteUserId) {
+      fields.ApprovedByLookupId = adminSiteUserId;
+    }
+  } else if (ticketData.category === "Request") {
+    // Non-admin Request tickets require approval
     fields.ApprovalStatus = "Pending";
     fields.ApprovalRequestedDate = new Date().toISOString();
   }
@@ -302,16 +321,25 @@ export async function getUserPhoto(client: Client, userId?: string): Promise<str
 export async function requestApproval(
   client: Client,
   ticketId: string,
-  requesterName: string
+  requesterName: string,
+  requesterEmail: string
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
 
-  const item = await client.api(endpoint).patch({
-    fields: {
-      ApprovalStatus: "Pending",
-      ApprovalRequestedDate: new Date().toISOString(),
-    },
-  });
+  // Look up the site user ID for the Person field
+  const siteUserId = await getSiteUserId(client, requesterEmail);
+
+  const fields: Record<string, unknown> = {
+    ApprovalStatus: "Pending",
+    ApprovalRequestedDate: new Date().toISOString(),
+  };
+
+  // Set the ApprovalRequestedBy Person field if we found the user
+  if (siteUserId) {
+    fields.ApprovalRequestedByLookupId = siteUserId;
+  }
+
+  const item = await client.api(endpoint).patch({ fields });
 
   return mapToTicket(item);
 }
@@ -322,14 +350,23 @@ export async function processApprovalDecision(
   ticketId: string,
   decision: "Approved" | "Denied" | "Changes Requested",
   approverName: string,
+  approverEmail: string,
   notes?: string
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+
+  // Look up the site user ID for the Person field
+  const siteUserId = await getSiteUserId(client, approverEmail);
 
   const fields: Record<string, unknown> = {
     ApprovalStatus: decision,
     ApprovalDate: new Date().toISOString(),
   };
+
+  // Set the ApprovedBy Person field if we found the user
+  if (siteUserId) {
+    fields.ApprovedByLookupId = siteUserId;
+  }
 
   if (notes) {
     fields.ApprovalNotes = notes;

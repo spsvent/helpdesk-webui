@@ -7,7 +7,8 @@ import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
-import { getGraphClient, createTicket, CreateTicketData, addAssignmentComment, logActivity } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity } from "@/lib/graphClient";
+import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
@@ -38,6 +39,8 @@ export default function NewTicketPage() {
   const router = useRouter();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+  const { permissions } = useRBAC();
+  const isAdmin = permissions?.role === "admin";
 
   const [formData, setFormData] = useState<CreateTicketData>({
     title: "",
@@ -228,10 +231,17 @@ export default function NewTicketPage() {
         assigneeEmail = assigneeResult?.email || null;
       }
 
+      // Build options for ticket creation (auto-approval for admin Problem tickets)
+      const createOptions: CreateTicketOptions = {
+        isAdmin,
+        creatorEmail: requesterEmail,
+      };
+
       const newTicket = await createTicket(
         client,
         { ...formData, assigneeEmail: assigneeEmail || undefined },
-        requesterEmail
+        requesterEmail,
+        createOptions
       );
 
       // Parallelize post-creation activities for faster response
