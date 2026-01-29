@@ -7,7 +7,7 @@ import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
-import { getGraphClient, createTicket, CreateTicketData, getUserByEmail, addAssignmentComment, logActivity } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, addAssignmentComment, logActivity } from "@/lib/graphClient";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import {
@@ -265,9 +265,12 @@ export default function NewTicketPage() {
         postCreationTasks.push(
           (async () => {
             try {
-              // Try to look up user, but don't require it (might be a group)
-              const assignee = await getUserByEmail(client, assigneeEmail);
-              const assigneeName = assignee?.displayName || assigneeEmail.split('@')[0].replace(/[._]/g, ' ');
+              // Derive display name from email - skip API lookup to avoid 404s for groups
+              // Format: "itav@domain.com" -> "Itav", "john.doe@domain.com" -> "John Doe"
+              const localPart = assigneeEmail.split('@')[0];
+              const assigneeName = localPart
+                .replace(/[._]/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
 
               // Send email
               await sendNewTicketEmail(client, newTicket, assigneeEmail, assigneeName);
