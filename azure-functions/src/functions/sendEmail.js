@@ -60,7 +60,7 @@ app.http("SendEmail", {
 
     try {
       const body = await request.json();
-      const { to, subject, htmlContent, conversationId } = body;
+      const { to, subject, htmlContent } = body;
 
       if (!to || !subject || !htmlContent) {
         return {
@@ -77,14 +77,9 @@ app.http("SendEmail", {
       // Send email from the shared mailbox
       const endpoint = `/users/${config.senderEmail}/sendMail`;
 
-      // Build internet message headers for email threading
-      // This allows email clients like Outlook to group emails by ticket
-      const internetMessageHeaders = conversationId
-        ? [
-            { name: "In-Reply-To", value: `<${conversationId}>` },
-            { name: "References", value: `<${conversationId}>` },
-          ]
-        : undefined;
+      // Note: Standard email threading headers (In-Reply-To, References) are not
+      // supported by Microsoft Graph - it requires custom headers to start with 'x-'.
+      // Email threading will rely on subject matching instead.
 
       await client.api(endpoint).post({
         message: {
@@ -96,8 +91,6 @@ app.http("SendEmail", {
           toRecipients: Array.isArray(to)
             ? to.map((email) => ({ emailAddress: { address: email } }))
             : [{ emailAddress: { address: to } }],
-          // Add threading headers if conversationId is provided
-          ...(internetMessageHeaders && { internetMessageHeaders }),
         },
         saveToSentItems: true,
       });
