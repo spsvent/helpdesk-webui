@@ -30,6 +30,12 @@ interface GraphMemberOfResponse {
 // Cached RBAC config
 let rbacConfig: RBACConfig | null = null;
 
+// Cached user group memberships (per session, keyed by user email)
+let userGroupMembershipsCache: { email: string; groups: string[] } | null = null;
+
+// Cached group member emails (keyed by joined group IDs)
+let groupMemberEmailsCache: { key: string; emails: string[] } | null = null;
+
 /**
  * Initialize/fetch the RBAC configuration from SharePoint
  */
@@ -43,8 +49,14 @@ export async function initRBACConfig(client: Client): Promise<RBACConfig> {
 /**
  * Fetch the current user's group memberships from Microsoft Graph
  * Filters to only include allowed groups from RBAC config
+ * Caches result per user email to avoid repeated API calls
  */
-export async function getUserGroupMemberships(client: Client): Promise<string[]> {
+export async function getUserGroupMemberships(client: Client, userEmail?: string): Promise<string[]> {
+  // Check cache first (if we have the user email)
+  if (userEmail && userGroupMembershipsCache && userGroupMembershipsCache.email === userEmail) {
+    return userGroupMembershipsCache.groups;
+  }
+
   try {
     // Ensure RBAC config is loaded
     const config = await initRBACConfig(client);
@@ -61,7 +73,14 @@ export async function getUserGroupMemberships(client: Client): Promise<string[]>
       .map((group) => group.id);
 
     // Filter to only allowed groups
-    return filterAllowedGroups(allGroupIds, config);
+    const groups = filterAllowedGroups(allGroupIds, config);
+
+    // Cache the result
+    if (userEmail) {
+      userGroupMembershipsCache = { email: userEmail, groups };
+    }
+
+    return groups;
   } catch (error) {
     console.error("Failed to fetch group memberships:", error);
     return [];
@@ -81,9 +100,9 @@ export async function getUserPermissions(
     return createAdminPermissions(email, displayName, []);
   }
 
-  // Fetch RBAC config and group memberships
+  // Fetch RBAC config and group memberships (with caching by email)
   const config = await initRBACConfig(client);
-  const groupIds = await getUserGroupMemberships(client);
+  const groupIds = await getUserGroupMemberships(client, email);
 
   // Check if admin group member
   if (groupIds.some((id) => config.adminGroupIds.has(id))) {
@@ -319,9 +338,9 @@ export function canDeleteTicket(permissions: UserPermissions): boolean {
  * Get list of all users in the user's groups (for ticket visibility)
  * This requires additional Graph API calls to list group members
  * Only fetches members from visibility groups (not department/admin groups)
+ * Caches result per group set to avoid repeated API calls
  */
 export async function getGroupMemberEmails(client: Client, groupIds: string[]): Promise<string[]> {
-  const emails: string[] = [];
   const config = rbacConfig;
 
   // If config not loaded, groupIds should already be filtered visibility groups
@@ -335,23 +354,47 @@ export async function getGroupMemberEmails(client: Client, groupIds: string[]): 
     );
   }
 
-  for (const groupId of relevantGroupIds) {
+  // Create cache key from sorted group IDs
+  const cacheKey = [...relevantGroupIds].sort().join(",");
+
+  // Check cache first
+  if (groupMemberEmailsCache && groupMemberEmailsCache.key === cacheKey) {
+    return groupMemberEmailsCache.emails;
+  }
+
+  // Fetch members from all groups in parallel
+  const memberPromises = relevantGroupIds.map(async (groupId) => {
     try {
       const response = await client
         .api(`/groups/${groupId}/members`)
         .select("mail,userPrincipalName")
         .get();
 
-      for (const member of response.value) {
-        const email = member.mail || member.userPrincipalName;
-        if (email && !emails.includes(email.toLowerCase())) {
-          emails.push(email.toLowerCase());
-        }
-      }
+      return response.value
+        .map((member: { mail?: string; userPrincipalName?: string }) =>
+          (member.mail || member.userPrincipalName)?.toLowerCase()
+        )
+        .filter(Boolean) as string[];
     } catch (error) {
       console.error(`Failed to fetch members for group ${groupId}:`, error);
+      return [];
+    }
+  });
+
+  const allMemberArrays = await Promise.all(memberPromises);
+
+  // Deduplicate emails using Set
+  const emailSet = new Set<string>();
+  for (const members of allMemberArrays) {
+    for (const email of members) {
+      emailSet.add(email);
     }
   }
+
+  const emails = Array.from(emailSet);
+
+  // Cache the result
+  groupMemberEmailsCache = { key: cacheKey, emails };
 
   return emails;
 }

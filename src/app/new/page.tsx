@@ -80,6 +80,16 @@ export default function NewTicketPage() {
     return null;
   }, [instance, accounts]);
 
+  // Pre-fetch auto-assign config on mount (avoid fetch during submit)
+  const [autoAssignConfig, setAutoAssignConfig] = useState<Awaited<ReturnType<typeof fetchAutoAssignConfig>> | null>(null);
+  useEffect(() => {
+    if (graphClient) {
+      fetchAutoAssignConfig(graphClient)
+        .then(setAutoAssignConfig)
+        .catch((err) => console.warn("Failed to pre-fetch auto-assign config:", err));
+    }
+  }, [graphClient]);
+
   // Update sub-category options when problemType changes
   useEffect(() => {
     const subs = getProblemTypeSubs(formData.problemType);
@@ -192,22 +202,18 @@ export default function NewTicketPage() {
       const requesterEmail = accounts[0]?.username;
 
       // Get auto-assignment based on department/category
-      // First try SharePoint rules, then fall back to hardcoded config
+      // Use pre-fetched config, or try to fetch if not available
       let assigneeEmail: string | null = null;
-      try {
-        const autoAssignConfig = await fetchAutoAssignConfig(client);
-        if (autoAssignConfig.rules.length > 0) {
-          assigneeEmail = getSuggestedAssigneeFromConfig(
-            autoAssignConfig,
-            formData.problemType,
-            formData.problemTypeSub || undefined,
-            formData.problemTypeSub2 || undefined,
-            formData.category,
-            formData.priority
-          );
-        }
-      } catch (configError) {
-        console.warn("Failed to fetch SharePoint auto-assign config:", configError);
+      const config = autoAssignConfig ?? await fetchAutoAssignConfig(client).catch(() => null);
+      if (config && config.rules.length > 0) {
+        assigneeEmail = getSuggestedAssigneeFromConfig(
+          config,
+          formData.problemType,
+          formData.problemTypeSub || undefined,
+          formData.problemTypeSub2 || undefined,
+          formData.category,
+          formData.priority
+        );
       }
 
       // Fall back to hardcoded rules if no SharePoint match
@@ -227,86 +233,89 @@ export default function NewTicketPage() {
         requesterEmail
       );
 
-      // Log ticket creation
+      // Parallelize post-creation activities for faster response
       const requesterName = accounts[0]?.name || accounts[0]?.username || "Unknown User";
-      await logActivity(client, {
-        eventType: "ticket_created",
-        ticketId: newTicket.id,
-        ticketNumber: newTicket.ticketNumber?.toString(),
-        actor: requesterEmail,
-        actorName: requesterName,
-        description: `Created ticket: ${newTicket.title}`,
-        details: JSON.stringify({
-          category: formData.category,
-          priority: formData.priority,
-          department: formData.problemType,
-          assignedTo: assigneeEmail || "Unassigned",
-        }),
-      });
 
-      // Send email notification to assignee if there is one
-      if (assigneeEmail) {
-        try {
-          // Try to look up user, but don't require it (might be a group)
-          const assignee = await getUserByEmail(client, assigneeEmail);
-          const assigneeName = assignee?.displayName || assigneeEmail.split('@')[0].replace(/[._]/g, ' ');
+      // Build array of parallel post-creation tasks
+      const postCreationTasks: Promise<void>[] = [];
 
-          // Send email regardless of whether user lookup succeeded (groups have email too)
-          await sendNewTicketEmail(
-            client,
-            newTicket,
-            assigneeEmail,
-            assigneeName
-          );
+      // 1. Log ticket creation (non-blocking)
+      postCreationTasks.push(
+        logActivity(client, {
+          eventType: "ticket_created",
+          ticketId: newTicket.id,
+          ticketNumber: newTicket.ticketNumber?.toString(),
+          actor: requesterEmail,
+          actorName: requesterName,
+          description: `Created ticket: ${newTicket.title}`,
+          details: JSON.stringify({
+            category: formData.category,
+            priority: formData.priority,
+            department: formData.problemType,
+            assignedTo: assigneeEmail || "Unassigned",
+          }),
+        }).catch((err) => console.error("Failed to log ticket creation:", err))
+      );
 
-          // Log email sent
-          await logActivity(client, {
-            eventType: "email_sent",
-            ticketId: newTicket.id,
-            ticketNumber: newTicket.ticketNumber?.toString(),
-            actor: "system",
-            actorName: "System",
-            description: `Assignment notification sent to ${assigneeName}`,
-            details: JSON.stringify({ recipient: assigneeEmail, type: "new_ticket_assignment" }),
-          });
-
-          // Add assignment tracking comment (auto-assigned on creation)
-          await addAssignmentComment(
-            client,
-            parseInt(newTicket.id),
-            "System",
-            assigneeName,
-            assigneeEmail
-          );
-        } catch (emailError) {
-          // Don't fail the ticket creation if email/comment fails
-          console.error("Failed to send assignment email:", emailError);
-        }
-      }
-
-      // Send Teams notification (fire-and-forget, only for Normal+ priority)
+      // 2. Send Teams notification (fire-and-forget)
       sendNewTicketTeamsNotification(client, newTicket);
 
-      // For Request tickets, send approval notification to admins/managers
-      if (formData.category === "Request") {
-        try {
-          await sendApprovalRequestEmail(client, newTicket, requesterName);
+      // 3. Send email notification to assignee if there is one
+      if (assigneeEmail) {
+        postCreationTasks.push(
+          (async () => {
+            try {
+              // Try to look up user, but don't require it (might be a group)
+              const assignee = await getUserByEmail(client, assigneeEmail);
+              const assigneeName = assignee?.displayName || assigneeEmail.split('@')[0].replace(/[._]/g, ' ');
 
-          // Log approval requested
-          await logActivity(client, {
-            eventType: "approval_requested",
-            ticketId: newTicket.id,
-            ticketNumber: newTicket.ticketNumber?.toString(),
-            actor: requesterEmail,
-            actorName: requesterName,
-            description: `Approval request sent to managers`,
-            details: JSON.stringify({ category: "Request" }),
-          });
-        } catch (approvalEmailError) {
-          // Don't fail the ticket creation if approval email fails
-          console.error("Failed to send approval request email:", approvalEmailError);
-        }
+              // Send email
+              await sendNewTicketEmail(client, newTicket, assigneeEmail, assigneeName);
+
+              // Log email sent and add comment in parallel
+              await Promise.all([
+                logActivity(client, {
+                  eventType: "email_sent",
+                  ticketId: newTicket.id,
+                  ticketNumber: newTicket.ticketNumber?.toString(),
+                  actor: "system",
+                  actorName: "System",
+                  description: `Assignment notification sent to ${assigneeName}`,
+                  details: JSON.stringify({ recipient: assigneeEmail, type: "new_ticket_assignment" }),
+                }),
+                addAssignmentComment(client, parseInt(newTicket.id), "System", assigneeName, assigneeEmail),
+              ]);
+            } catch (emailError) {
+              console.error("Failed to send assignment email:", emailError);
+            }
+          })()
+        );
       }
+
+      // 4. For Request tickets, send approval notification
+      if (formData.category === "Request") {
+        postCreationTasks.push(
+          (async () => {
+            try {
+              await sendApprovalRequestEmail(client, newTicket, requesterName);
+              await logActivity(client, {
+                eventType: "approval_requested",
+                ticketId: newTicket.id,
+                ticketNumber: newTicket.ticketNumber?.toString(),
+                actor: requesterEmail,
+                actorName: requesterName,
+                description: `Approval request sent to managers`,
+                details: JSON.stringify({ category: "Request" }),
+              });
+            } catch (approvalEmailError) {
+              console.error("Failed to send approval request email:", approvalEmailError);
+            }
+          })()
+        );
+      }
+
+      // Wait for all post-creation tasks (don't block redirect on failure)
+      await Promise.allSettled(postCreationTasks);
 
       // Redirect to the main page with the new ticket selected
       router.push(`/?ticket=${newTicket.id}`);

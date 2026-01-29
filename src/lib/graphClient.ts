@@ -72,20 +72,33 @@ async function getSiteUserId(client: Client, email: string): Promise<number | nu
 // Archive threshold: 90 days
 const ARCHIVE_DAYS = 90;
 
-function getArchiveDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() - ARCHIVE_DAYS);
-  return date.toISOString();
+// Simple in-memory cache for all tickets (avoids duplicate fetches)
+let ticketsCache: { data: Ticket[]; timestamp: number } | null = null;
+const CACHE_TTL_MS = 5000; // 5 second cache to coalesce rapid fetches
+
+// Fetch all tickets with caching
+async function getAllTicketsCached(client: Client): Promise<Ticket[]> {
+  const now = Date.now();
+  if (ticketsCache && now - ticketsCache.timestamp < CACHE_TTL_MS) {
+    return ticketsCache.data;
+  }
+
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
+  const response: SharePointListResponse = await client.api(endpoint).get();
+  const allTickets = response.value.map(mapToTicket);
+
+  ticketsCache = { data: allTickets, timestamp: now };
+  return allTickets;
+}
+
+// Invalidate tickets cache (call after mutations)
+export function invalidateTicketsCache(): void {
+  ticketsCache = null;
 }
 
 // Fetch active tickets (excludes resolved/closed older than 90 days)
 export async function getTickets(client: Client): Promise<Ticket[]> {
-  // Fetch all tickets without server-side filtering (Status column not indexed)
-  // We'll filter client-side for better reliability
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
-
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  const allTickets = response.value.map(mapToTicket);
+  const allTickets = await getAllTicketsCached(client);
 
   // Filter client-side: show all active tickets + recently resolved/closed (last 90 days)
   const archiveDate = new Date();
@@ -104,11 +117,7 @@ export async function getTickets(client: Client): Promise<Ticket[]> {
 
 // Fetch archived tickets (resolved/closed older than 90 days)
 export async function getArchivedTickets(client: Client): Promise<Ticket[]> {
-  // Fetch all tickets and filter for old resolved/closed ones
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
-
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  const allTickets = response.value.map(mapToTicket);
+  const allTickets = await getAllTicketsCached(client);
 
   // Filter to only include resolved/closed tickets older than 90 days
   const archiveDate = new Date();
@@ -262,6 +271,9 @@ export async function createTicket(
   }
 
   const item = await client.api(endpoint).post({ fields });
+
+  // Invalidate cache after creating new ticket
+  invalidateTicketsCache();
 
   return mapToTicket(item);
 }
@@ -555,76 +567,61 @@ export interface BulkUpdateResult {
   error?: string;
 }
 
-// Bulk update ticket status
+// Bulk update ticket status (parallelized)
 export async function bulkUpdateStatus(
   client: Client,
   ticketIds: string[],
   newStatus: string
 ): Promise<BulkUpdateResult[]> {
-  const results: BulkUpdateResult[] = [];
-
-  for (const ticketId of ticketIds) {
-    try {
-      await updateTicketFields(client, ticketId, { Status: newStatus });
-      results.push({ ticketId, success: true });
-    } catch (error) {
-      results.push({
+  const promises = ticketIds.map((ticketId) =>
+    updateTicketFields(client, ticketId, { Status: newStatus })
+      .then(() => ({ ticketId, success: true as const }))
+      .catch((error) => ({
         ticketId,
-        success: false,
+        success: false as const,
         error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
+      }))
+  );
 
-  return results;
+  return Promise.all(promises);
 }
 
-// Bulk update ticket priority
+// Bulk update ticket priority (parallelized)
 export async function bulkUpdatePriority(
   client: Client,
   ticketIds: string[],
   newPriority: string
 ): Promise<BulkUpdateResult[]> {
-  const results: BulkUpdateResult[] = [];
-
-  for (const ticketId of ticketIds) {
-    try {
-      await updateTicketFields(client, ticketId, { Priority: newPriority });
-      results.push({ ticketId, success: true });
-    } catch (error) {
-      results.push({
+  const promises = ticketIds.map((ticketId) =>
+    updateTicketFields(client, ticketId, { Priority: newPriority })
+      .then(() => ({ ticketId, success: true as const }))
+      .catch((error) => ({
         ticketId,
-        success: false,
+        success: false as const,
         error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
+      }))
+  );
 
-  return results;
+  return Promise.all(promises);
 }
 
-// Bulk reassign tickets
+// Bulk reassign tickets (parallelized)
 export async function bulkReassign(
   client: Client,
   ticketIds: string[],
   assigneeEmail: string
 ): Promise<BulkUpdateResult[]> {
-  const results: BulkUpdateResult[] = [];
-
-  for (const ticketId of ticketIds) {
-    try {
-      await updateTicketFields(client, ticketId, { OriginalAssignedTo: assigneeEmail });
-      results.push({ ticketId, success: true });
-    } catch (error) {
-      results.push({
+  const promises = ticketIds.map((ticketId) =>
+    updateTicketFields(client, ticketId, { OriginalAssignedTo: assigneeEmail })
+      .then(() => ({ ticketId, success: true as const }))
+      .catch((error) => ({
         ticketId,
-        success: false,
+        success: false as const,
         error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
+      }))
+  );
 
-  return results;
+  return Promise.all(promises);
 }
 
 // Get SharePoint user lookup ID for a user (needed for assignee field)
@@ -678,6 +675,9 @@ export async function updateTicketFields(
   const item = await client.api(endpoint).patch({
     fields: filteredUpdates,
   });
+
+  // Invalidate cache after mutation
+  invalidateTicketsCache();
 
   return mapToTicket(item);
 }
