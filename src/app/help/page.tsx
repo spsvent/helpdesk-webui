@@ -531,7 +531,7 @@ const helpSections: HelpSection[] = [
         <p className="mt-4">Each conversation entry shows:</p>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>User avatar and name</li>
-          <li>Timestamp (relative time like &quot;2 hours ago&quot;)</li>
+          <li>Timestamp - relative for today (&quot;2h ago&quot;), &quot;Yesterday&quot;, or full date (Jan 28, 2026)</li>
           <li>Any applicable badges (Description, Internal, Status Change)</li>
           <li>The full message content</li>
         </ul>
@@ -1870,6 +1870,25 @@ const helpSections: HelpSection[] = [
             to query your teams and channels
           </li>
         </ol>
+
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-red-800 font-semibold">⚠️ Critical: Decode URL-Encoded Channel IDs</p>
+          <p className="text-sm text-red-700 mt-2">
+            When copying the ChannelId from a Teams link, you <strong>must decode</strong> URL-encoded characters
+            or notifications will go to the wrong channel:
+          </p>
+          <ul className="list-disc list-inside text-sm text-red-700 mt-2 ml-2">
+            <li><code className="bg-red-100 px-1 rounded">%3A</code> → <code className="bg-red-100 px-1 rounded">:</code> (colon)</li>
+            <li><code className="bg-red-100 px-1 rounded">%40</code> → <code className="bg-red-100 px-1 rounded">@</code> (at sign)</li>
+          </ul>
+          <div className="mt-3 text-sm text-red-700">
+            <strong>Example:</strong>
+            <div className="font-mono text-xs mt-1 bg-red-100 p-2 rounded">
+              ❌ Wrong: 19%3A1234abcd5678%40thread.tacv2<br />
+              ✅ Correct: 19:1234abcd5678@thread.tacv2
+            </div>
+          </div>
+        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">Azure AD Permissions</h4>
         <p>
