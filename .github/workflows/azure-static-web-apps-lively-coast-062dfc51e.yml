@@ -45,9 +45,9 @@ jobs:
           NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "a961cb69-a588-4ca0-aa04-b421ebcc792a"
           NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"
           NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
-          NEXT_PUBLIC_EMAIL_FUNCTION_URL: "https://helpdesk-notify-func.azurewebsites.net/api/sendemail"
+          NEXT_PUBLIC_EMAIL_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail"
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
-          NEXT_PUBLIC_TEAMS_FUNCTION_URL: "https://helpdesk-notify-func.azurewebsites.net/api/sendteamsnotification"
+          NEXT_PUBLIC_TEAMS_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendteamsnotification"
           # Teams Notifications
           NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED: "true"
           NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID: "e95f1cea-76ce-472e-b55c-423f5627c734"
