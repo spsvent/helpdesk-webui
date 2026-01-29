@@ -2,15 +2,38 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
 import { useRBAC } from "@/contexts/RBACContext";
-import AutoAssignRulesManager from "@/components/AutoAssignRulesManager";
-import EscalationRulesManager from "@/components/EscalationRulesManager";
-import TeamsChannelsManager from "@/components/TeamsChannelsManager";
-import ActivityLogManager from "@/components/ActivityLogManager";
+
+// Dynamic imports for Settings tabs - only load the active tab
+const AutoAssignRulesManager = dynamic(
+  () => import("@/components/AutoAssignRulesManager"),
+  { loading: () => <TabLoadingSpinner /> }
+);
+const EscalationRulesManager = dynamic(
+  () => import("@/components/EscalationRulesManager"),
+  { loading: () => <TabLoadingSpinner /> }
+);
+const TeamsChannelsManager = dynamic(
+  () => import("@/components/TeamsChannelsManager"),
+  { loading: () => <TabLoadingSpinner /> }
+);
+const ActivityLogManager = dynamic(
+  () => import("@/components/ActivityLogManager"),
+  { loading: () => <TabLoadingSpinner /> }
+);
+
+function TabLoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { instance, accounts, inProgress } = useMsal();
