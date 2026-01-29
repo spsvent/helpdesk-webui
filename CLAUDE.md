@@ -182,31 +182,83 @@ Location: `azure-functions/` directory in this repo
 
 **Base URL:** `https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net`
 
-> **Note:** This is a Flex Consumption plan function app. Flex Consumption apps use a different URL pattern that includes a unique identifier and regional suffix (not the simple `functionappname.azurewebsites.net` format).
+> **⚠️ IMPORTANT:** This is a **Flex Consumption** plan function app. Flex Consumption apps use a different URL pattern that includes a unique identifier and regional suffix:
+> - ❌ NOT: `helpdesk-notify-func.azurewebsites.net`
+> - ✅ YES: `helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net`
 
-| Function | Endpoint | Purpose |
-|----------|----------|---------|
-| `sendemail` | `/api/sendemail` | Sends email notifications via Microsoft Graph |
-| `sendteamsnotification` | `/api/sendteamsnotification` | Posts to Teams channels via Bot Framework |
-| `checkescalations` | `/api/checkescalations` | Timer-triggered escalation checks |
+| Function | Endpoint | Purpose | Auth |
+|----------|----------|---------|------|
+| `SendEmail` | `/api/sendemail` | Sends email notifications via Microsoft Graph | Anonymous |
+| `SendTeamsNotification` | `/api/sendteamsnotification` | Posts to Teams channels via Bot Framework | Anonymous |
+| `checkEscalations` | Timer trigger | Scheduled escalation checks | N/A |
+| `runEscalationCheck` | `/api/runescalationcheck` | Manual escalation check trigger | Anonymous |
 
-### Function App Configuration
+### Function App Environment Variables
 
-The Azure Function App has these environment variables (set in Azure Portal → Function App → Configuration):
-- `MICROSOFT_APP_ID` - Azure AD app client ID (same as web app)
-- `MICROSOFT_APP_PASSWORD` - Azure AD app client secret
-- `MICROSOFT_APP_TENANT_ID` - Azure AD tenant ID
-- `SITE_ID` - SharePoint site ID
-- `TICKETS_LIST_ID` - SharePoint Tickets list ID
-- `ESCALATION_LIST_ID` - SharePoint EscalationRules list ID
+Set these in **Azure Portal → Function Apps → helpdesk-notify-func → Settings → Environment variables**:
+
+#### For Email Function (SendEmail)
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `AZURE_CLIENT_ID` | Azure AD app registration client ID | `06fcde50-24bf-4d53-...` |
+| `AZURE_CLIENT_SECRET` | Azure AD app registration client secret | (secret value) |
+| `AZURE_TENANT_ID` | Azure AD tenant ID | `f0db97c1-2010-4d0c-...` |
+| `SENDER_EMAIL` | Shared mailbox to send from | `supportdesk@skyparksantasvillage.com` |
+
+#### For Teams Notification Function (SendTeamsNotification)
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `BOT_APP_ID` | Bot's Azure AD app ID (same as AZURE_CLIENT_ID) | `06fcde50-24bf-4d53-...` |
+| `BOT_APP_SECRET` | Bot's client secret (same as AZURE_CLIENT_SECRET) | (secret value) |
+| `AZURE_TENANT_ID` | Azure AD tenant ID | `f0db97c1-2010-4d0c-...` |
+
+#### For Escalation Functions
+| Variable | Description |
+|----------|-------------|
+| `SHAREPOINT_SITE_ID` | SharePoint site ID |
+| `TICKETS_LIST_ID` | Tickets list GUID |
+| `ESCALATION_LIST_ID` | EscalationRules list GUID |
+| `COMMENTS_LIST_ID` | TicketComments list GUID |
+| `APP_URL` | Web app URL for email links |
+
+### Azure AD App Permissions Required
+
+The Azure AD app registration needs these **Application permissions** (not Delegated) with **admin consent**:
+
+| Permission | Purpose |
+|------------|---------|
+| `Mail.Send` | Send emails from shared mailbox |
+| `Sites.ReadWrite.All` | Read/write SharePoint lists |
+| `User.Read.All` | Look up user information |
 
 ### Teams Bot Configuration
 
-Teams notifications use Bot Framework SDK (not Graph API) for proactive messaging:
-- Bot is registered in Azure Bot Service
-- Bot ID is the same as the Azure AD App ID
-- Teams app manifest (`teams-app/manifest.json`) includes bot configuration
-- The Help Desk app must be installed in each Team that needs notifications
+Teams notifications use **Bot Framework SDK** (not Graph API) for proactive messaging.
+
+#### Why Bot Framework Instead of Graph API?
+- Graph API requires a user context to post messages
+- Bot Framework allows app-only (proactive) messaging to channels
+- Bot can post without any user being signed in
+
+#### Setup Requirements
+1. **Azure Bot Service** - Register the bot in Azure Portal
+2. **Bot Channel Registration** - Enable the Teams channel
+3. **Teams App Manifest** - `teams-app/manifest.json` includes bot configuration (v1.3.0+)
+4. **App Installation** - The Help Desk Teams app must be installed in each Team that needs notifications
+
+#### Bot Configuration in manifest.json
+```json
+{
+  "bots": [
+    {
+      "botId": "06fcde50-24bf-4d53-838d-ecc035653d8f",
+      "scopes": ["team"],
+      "supportsFiles": false,
+      "isNotificationOnly": true
+    }
+  ]
+}
+```
 
 ### Deploying Function Changes
 
@@ -214,6 +266,82 @@ Teams notifications use Bot Framework SDK (not Graph API) for proactive messagin
 cd azure-functions
 func azure functionapp publish helpdesk-notify-func
 ```
+
+**After deployment, verify functions are listed:**
+- SendEmail
+- SendTeamsNotification
+- checkEscalations
+- runEscalationCheck
+
+### Testing Functions Manually
+
+**Test email:**
+```bash
+curl -X POST "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"test@example.com","subject":"Test","htmlContent":"<p>Test</p>"}'
+```
+
+**Test Teams notification:**
+```bash
+curl -X POST "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendteamsnotification" \
+  -H "Content-Type: application/json" \
+  -d '{"teamId":"...","channelId":"...","card":{...}}'
+```
+
+## Troubleshooting
+
+### Common Issues and Fixes
+
+#### "NEXT_PUBLIC_* not configured" or using wrong URL
+**Cause:** Environment variables set in Azure Portal instead of workflow file.
+**Fix:** Edit `.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml` and add/update variables in the `env:` section.
+
+#### CORS errors when calling Azure Functions
+**Cause:** Functions not deployed or CORS not configured.
+**Fix:**
+1. Ensure functions are deployed: `func azure functionapp publish helpdesk-notify-func`
+2. Functions have CORS headers built-in (code handles OPTIONS requests)
+
+#### 401 Unauthorized from Azure Functions
+**Cause:** Functions set to `authLevel: "function"` requiring a function key.
+**Fix:** Functions should use `authLevel: "anonymous"` (they have internal security via app credentials).
+
+#### 500 Internal Server Error from SendEmail
+**Cause:** Usually missing environment variables or Graph API permission issues.
+**Fix:**
+1. Check all env vars are set in Function App Configuration
+2. Verify `Mail.Send` application permission has admin consent
+3. Check Application Insights logs: `az monitor app-insights query --app helpdesk-notify-func ...`
+
+#### "The internet message header name should start with 'x-'"
+**Cause:** Microsoft Graph API doesn't allow standard email headers like `In-Reply-To`.
+**Fix:** Don't use standard headers. Email threading relies on subject line matching.
+
+#### Requester field not saving in SharePoint
+**Cause:** The `EMail` field in User Information List is not indexed.
+**Fix:** Use the `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly` header (already implemented in `getSiteUserId`).
+
+#### Teams notification "Bot not part of conversation roster"
+**Cause:** Help Desk Teams app not installed in the target Team.
+**Fix:** Install the Help Desk app in each Team that needs notifications.
+
+#### DNS resolution failed for function app
+**Cause:** Using wrong URL format for Flex Consumption function app.
+**Fix:** Use the full URL with unique identifier: `helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net`
+
+### Viewing Function Logs
+
+**Via Azure CLI:**
+```bash
+az monitor app-insights query \
+  --app helpdesk-notify-func \
+  --resource-group SupportDesk \
+  --analytics-query "traces | where timestamp > ago(1h) | order by timestamp desc | take 50"
+```
+
+**Via Azure Portal:**
+Function Apps → helpdesk-notify-func → Functions → [function name] → Monitor → Logs
 
 ## Roadmap / Planned Features
 
