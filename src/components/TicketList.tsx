@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState, useEffect, useRef } from "react";
 import { Ticket } from "@/types/ticket";
 import { formatRelativeDate } from "@/lib/dateUtils";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
@@ -46,6 +46,20 @@ function TicketList({
   checkedIds = new Set(),
   onToggleCheck,
 }: TicketListProps) {
+  // Track if we should animate (only on initial load)
+  const [shouldAnimate, setShouldAnimate] = useState(true);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    // Only animate once on initial mount
+    if (!hasAnimated.current && tickets.length > 0) {
+      hasAnimated.current = true;
+      // Disable animation after it completes (approx 500ms)
+      const timer = setTimeout(() => setShouldAnimate(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [tickets.length]);
+
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent, ticketId: string) => {
       e.stopPropagation();
@@ -85,7 +99,9 @@ function TicketList({
           key={ticket.id}
           className={`ticket-item flex items-start gap-2 p-4 cursor-pointer ${
             isSelected ? "ticket-item--selected" : ""
-          } ${isChecked ? "ticket-item--checked" : ""}`}
+          } ${isChecked ? "ticket-item--checked" : ""} ${
+            shouldAnimate ? "ticket-item--animate" : ""
+          }`}
           onClick={() => onSelect(ticket)}
         >
           {showCheckboxes && (
