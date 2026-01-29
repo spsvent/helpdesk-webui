@@ -78,12 +78,14 @@ function TicketList({
     <div className="divide-y divide-border">
       {tickets.map((ticket) => {
         const priorityIndicator = getPriorityIndicator(ticket.priority);
+        const isSelected = selectedId === ticket.id;
+        const isChecked = checkedIds.has(ticket.id);
         return (
         <div
           key={ticket.id}
-          className={`flex items-start gap-2 p-4 hover:bg-bg-subtle transition-colors cursor-pointer ${
-            selectedId === ticket.id ? "bg-brand-primary/10 border-l-4 border-brand-primary" : ""
-          } ${checkedIds.has(ticket.id) ? "bg-brand-primary/5" : ""}`}
+          className={`ticket-item flex items-start gap-2 p-4 cursor-pointer ${
+            isSelected ? "ticket-item--selected" : ""
+          } ${isChecked ? "ticket-item--checked" : ""}`}
           onClick={() => onSelect(ticket)}
         >
           {showCheckboxes && (
