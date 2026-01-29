@@ -180,6 +180,10 @@ The app uses Azure Functions for backend operations that require server-side cre
 
 Location: `azure-functions/` directory in this repo
 
+**Base URL:** `https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net`
+
+> **Note:** This is a Flex Consumption plan function app. Flex Consumption apps use a different URL pattern that includes a unique identifier and regional suffix (not the simple `functionappname.azurewebsites.net` format).
+
 | Function | Endpoint | Purpose |
 |----------|----------|---------|
 | `sendemail` | `/api/sendemail` | Sends email notifications via Microsoft Graph |
