@@ -110,6 +110,29 @@ export default function DetailsPanel({
   const [hasChanges, setHasChanges] = useState(false);
   const [autoAssignSuggestion, setAutoAssignSuggestion] = useState<string | null>(null);
 
+  // Reset all local state when ticket changes (e.g., user selects a different ticket)
+  useEffect(() => {
+    setStatus(ticket.status);
+    setPriority(ticket.priority);
+    setCategory(ticket.category);
+    setProblemType(ticket.problemType);
+    setProblemTypeSub(ticket.problemTypeSub || "");
+    setProblemTypeSub2(ticket.problemTypeSub2 || "");
+    setSelectedAssignee(
+      ticket.assignedTo ? {
+        displayName: ticket.originalAssignedTo?.split('<')[0].trim() || ticket.assignedTo.displayName,
+        email: ticket.assignedTo.email || ticket.originalAssignedTo || "",
+      } : ticket.originalAssignedTo ? {
+        displayName: ticket.originalAssignedTo.includes('@')
+          ? ticket.originalAssignedTo.split('@')[0].replace(/[._]/g, ' ')
+          : ticket.originalAssignedTo,
+        email: ticket.originalAssignedTo,
+      } : null
+    );
+    setHasChanges(false);
+    setAutoAssignSuggestion(null);
+  }, [ticket.id]);
+
   // Update sub-category options when problemType changes
   useEffect(() => {
     const subs = getProblemTypeSubs(problemType);
