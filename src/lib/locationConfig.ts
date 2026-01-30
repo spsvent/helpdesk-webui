@@ -19,6 +19,7 @@ export const LOCATION_OPTIONS = [
   "Fantasy Forest",
   "Frozen Falls",
   "Gingerbread House Bakery",
+  "Grounds Office",
   "Kringle's Coffee & Gifts",
   "Magic Tree Bouldering Room",
   "Merry Moments Photo Shoppe",
