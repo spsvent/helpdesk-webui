@@ -136,7 +136,7 @@ export default function Home() {
     // Log filter changes for debugging
     const changes = [];
     if (newFilters.search) changes.push(`search: "${newFilters.search}"`);
-    if (newFilters.department !== "All") changes.push(`dept: ${newFilters.department}`);
+    if (newFilters.problemType) changes.push(`dept: ${newFilters.problemType}`);
     if (newFilters.status.length < 5) changes.push(`status: ${newFilters.status.join(",")}`);
     if (changes.length > 0) {
       debugCapture.logAction("Filter tickets", changes.join(", "));

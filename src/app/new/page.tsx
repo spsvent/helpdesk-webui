@@ -124,7 +124,7 @@ export default function NewTicketPage() {
     setProblemTypeSubs(subs);
     // Only reset sub selection if current value is not valid for the new problemType
     setFormData((prev) => {
-      const currentSubIsValid = subs.includes(prev.problemTypeSub);
+      const currentSubIsValid = prev.problemTypeSub && subs.includes(prev.problemTypeSub);
       if (currentSubIsValid) {
         return prev; // Keep the current valid selection
       }
@@ -143,7 +143,7 @@ export default function NewTicketPage() {
       setProblemTypeSub2s(sub2s);
       // Only reset sub2 selection if current value is not valid
       setFormData((prev) => {
-        const currentSub2IsValid = sub2s.includes(prev.problemTypeSub2);
+        const currentSub2IsValid = prev.problemTypeSub2 && sub2s.includes(prev.problemTypeSub2);
         if (currentSub2IsValid) {
           return prev; // Keep the current valid selection
         }

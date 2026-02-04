@@ -84,11 +84,17 @@ class DebugCaptureService {
 
     // Intercept fetch for network errors
     const originalFetch = window.fetch;
+    const getUrlFromInput = (input: RequestInfo | URL): string => {
+      if (typeof input === "string") return input;
+      if (input instanceof URL) return input.href;
+      if (input instanceof Request) return input.url;
+      return "unknown";
+    };
     window.fetch = async (...args) => {
       try {
         const response = await originalFetch.apply(window, args);
         if (!response.ok && response.status >= 400) {
-          const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "unknown";
+          const url = getUrlFromInput(args[0]);
           this.errors.push({
             timestamp: new Date().toISOString(),
             type: "network",
@@ -99,7 +105,7 @@ class DebugCaptureService {
         }
         return response;
       } catch (error) {
-        const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "unknown";
+        const url = getUrlFromInput(args[0]);
         this.errors.push({
           timestamp: new Date().toISOString(),
           type: "network",
