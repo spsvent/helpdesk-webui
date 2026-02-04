@@ -19,6 +19,7 @@ import BulkActionToolbar from "@/components/BulkActionToolbar";
 import DarkModeToggle from "@/components/DarkModeToggle";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useRBAC } from "@/contexts/RBACContext";
+import { debugCapture } from "@/lib/debugCapture";
 
 export default function Home() {
   const { instance, accounts, inProgress } = useMsal();
@@ -52,6 +53,9 @@ export default function Home() {
   // Switch to detail view when ticket is selected on mobile
   const handleSelectTicket = useCallback((ticket: Ticket | null) => {
     setSelectedTicket(ticket);
+    if (ticket) {
+      debugCapture.logAction("View ticket", `#${ticket.ticketNumber} - ${ticket.title}`);
+    }
     if (ticket && isMobile) {
       setMobileView("detail");
     }
@@ -129,6 +133,14 @@ export default function Home() {
   // Memoized filter change handler
   const handleFiltersChange = useCallback((newFilters: TicketFilters) => {
     setFilters(newFilters);
+    // Log filter changes for debugging
+    const changes = [];
+    if (newFilters.search) changes.push(`search: "${newFilters.search}"`);
+    if (newFilters.department !== "All") changes.push(`dept: ${newFilters.department}`);
+    if (newFilters.status.length < 5) changes.push(`status: ${newFilters.status.join(",")}`);
+    if (changes.length > 0) {
+      debugCapture.logAction("Filter tickets", changes.join(", "));
+    }
   }, []);
 
   // Load archived tickets (resolved/closed older than 90 days)

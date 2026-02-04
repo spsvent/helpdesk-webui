@@ -333,11 +333,30 @@ h3 { font-size: 1.25rem; line-height: 1.3; }
   border-color: color-mix(in srgb, var(--color-brand-primary) 20%, white);
 }
 
-/* Dark mode comment cards - ensure readable text on light backgrounds */
-.dark .comment-card,
-.dark .comment-card-internal,
+/* Dark mode comment cards - darker backgrounds for better contrast with green text */
+.dark .comment-card {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.dark .comment-card-internal {
+  background-color: color-mix(in srgb, var(--color-brand-yellow) 15%, var(--color-bg-card));
+  border-color: color-mix(in srgb, var(--color-brand-yellow) 30%, var(--color-bg-card));
+  color: var(--color-text-primary);
+}
+
 .dark .comment-card-description {
-  color: #1a1a1a;
+  background-color: color-mix(in srgb, var(--color-brand-primary) 20%, var(--color-bg-card));
+  border-color: color-mix(in srgb, var(--color-brand-primary) 35%, var(--color-bg-card));
+  color: var(--color-text-primary);
+}
+
+/* Dark mode badges - brighter green for better contrast */
+.dark .comment-card .badge.text-brand-primary,
+.dark .comment-card-description .badge.text-brand-primary {
+  color: #7DC954;
+  background-color: color-mix(in srgb, var(--color-brand-primary) 25%, transparent);
 }
 
 /* User avatar */

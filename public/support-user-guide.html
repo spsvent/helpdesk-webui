@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyPark Help Desk - Support Staff Guide</title>
+    <style>
+        /* SkyPark Brand Fonts */
+        @font-face {
+            font-family: 'Brandon';
+            src: url('fonts/BRANDON_LIGHT.OTF') format('opentype');
+            font-weight: 300;
+        }
+        @font-face {
+            font-family: 'Brandon';
+            src: url('fonts/BRANDON_MED.OTF') format('opentype');
+            font-weight: 500;
+        }
+        @font-face {
+            font-family: 'Brandon';
+            src: url('fonts/BRANDON_BLD.OTF') format('opentype');
+            font-weight: 700;
+        }
+        @font-face {
+            font-family: 'Bebas Neue';
+            src: url('fonts/BEBASNEUE.OTF') format('opentype');
+        }
+
+        /* Print Optimization for 8.5x11 Double-Sided */
+        @media print {
+            @page {
+                size: letter;
+                margin: 0.5in;
+            }
+            @page :left {
+                margin-left: 0.625in;
+                margin-right: 0.5in;
+            }
+            @page :right {
+                margin-left: 0.5in;
+                margin-right: 0.625in;
+            }
+            body {
+                font-size: 10.5pt;
+                line-height: 1.5;
+                padding: 0;
+                max-width: none;
+            }
+            .page-break {
+                page-break-before: always;
+                break-before: page;
+            }
+            .no-print { display: none !important; }
+            .keep-together {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            h1 { font-size: 20pt; }
+            h2 {
+                font-size: 14pt;
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+            h3 {
+                font-size: 11pt;
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+            .screenshot-placeholder {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .cover-page {
+                height: 100vh;
+                page-break-after: always;
+                break-after: page;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Brandon', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 300;
+            line-height: 1.6;
+            max-width: 8in;
+            margin: 0 auto;
+            padding: 0.25in 0.35in;
+            color: #1a1a1a;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Brandon', 'Segoe UI', sans-serif;
+            font-weight: 700;
+        }
+
+        h1 {
+            color: #2D5016;
+            border-bottom: 3px solid #2D5016;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        h2 {
+            color: #2D5016;
+            border-bottom: 1px solid #D4DBC8;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+
+        h3 {
+            color: #4A7C23;
+            margin-top: 20px;
+        }
+
+        /* Cover Page Styles */
+        .cover-page {
+            display: flex;
+            flex-direction: column;
+            min-height: 9in;
+            padding: 0;
+        }
+
+        .cover-header {
+            text-align: center;
+            padding: 0.5in 0 0.3in 0;
+            border-bottom: 4px solid #2D5016;
+        }
+
+        .cover-header h1 {
+            font-family: 'Bebas Neue', 'Brandon', sans-serif;
+            font-size: 42pt;
+            color: #2D5016;
+            margin: 0;
+            border: none;
+            letter-spacing: 2px;
+        }
+
+        .cover-header .subtitle {
+            font-family: 'Brandon', sans-serif;
+            font-weight: 500;
+            font-size: 16pt;
+            color: #4A7C23;
+            margin-top: 8px;
+        }
+
+        .cover-content {
+            flex: 1;
+            padding: 0.4in 0;
+        }
+
+        .policy-section {
+            margin-bottom: 0.35in;
+        }
+
+        .policy-section h2 {
+            font-family: 'Brandon', sans-serif;
+            font-weight: 700;
+            font-size: 13pt;
+            color: #2D5016;
+            border-bottom: 2px solid #4A7C23;
+            padding-bottom: 4px;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .policy-section p, .policy-section li {
+            font-size: 10.5pt;
+            line-height: 1.45;
+            margin-bottom: 6px;
+        }
+
+        .policy-section ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .policy-section li {
+            margin-bottom: 4px;
+        }
+
+        .policy-box {
+            background: #FFF8E1;
+            border: 2px solid #F57C00;
+            border-radius: 6px;
+            padding: 12px 15px;
+            margin: 12px 0;
+        }
+
+        .policy-box.important {
+            background: #FFEBEE;
+            border-color: #C62828;
+        }
+
+        .policy-box.info {
+            background: #E8F5E9;
+            border-color: #2D5016;
+        }
+
+        .policy-box strong {
+            color: #C62828;
+        }
+
+        .policy-box.info strong {
+            color: #2D5016;
+        }
+
+        .cover-footer {
+            text-align: center;
+            padding-top: 0.2in;
+            border-top: 2px solid #D4DBC8;
+            font-size: 9pt;
+            color: #666;
+        }
+
+        .header-info {
+            background: #F5F7F2;
+            border: 1px solid #D4DBC8;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header-info p {
+            margin: 5px 0;
+        }
+
+        .screenshot-placeholder {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .screenshot-placeholder img {
+            max-width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .tip-box {
+            background: #E8F4FD;
+            border-left: 4px solid #2196F3;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .tip-box strong {
+            color: #1565C0;
+        }
+
+        .warning-box {
+            background: #FFF8E1;
+            border-left: 4px solid #FFC107;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .warning-box strong {
+            color: #F57C00;
+        }
+
+        .steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .steps li {
+            counter-increment: step-counter;
+            margin-bottom: 15px;
+            padding-left: 45px;
+            position: relative;
+        }
+
+        .steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: #2D5016;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-new { background: #E8F5E9; color: #2D5016; }
+        .badge-progress { background: #E3F2FD; color: #1565C0; }
+        .badge-hold { background: #F5F5F5; color: #616161; }
+        .badge-resolved { background: #E8F5E9; color: #2E7D32; }
+        .badge-closed { background: #ECEFF1; color: #546E7A; }
+        .badge-approved { background: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th, td {
+            border: 1px solid #D4DBC8;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #F5F7F2;
+            color: #2D5016;
+        }
+
+        .toc {
+            background: #F5F7F2;
+            border: 1px solid #D4DBC8;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            color: #2D5016;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            padding: 5px 0;
+            border-bottom: 1px dotted #D4DBC8;
+        }
+
+        .toc li:last-child {
+            border-bottom: none;
+        }
+
+        .toc a {
+            color: #2D5016;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #D4DBC8;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- SOP COVER PAGE -->
+    <div class="cover-page">
+        <div class="cover-header">
+            <h1>STANDARD OPERATING PROCEDURE</h1>
+            <div class="subtitle">SkyPark Help Desk System</div>
+        </div>
+
+        <div class="cover-content">
+            <div class="policy-section">
+                <h2>Accessing the Help Desk</h2>
+                <div class="policy-box info">
+                    <strong>Preferred Access Method:</strong> The Help Desk is available as an app in <strong>Microsoft Teams</strong>. Look for the Help Desk icon in your Teams sidebar. This is the recommended way to access the system.
+                </div>
+                <p>Alternative access: <a href="https://tickets.spsvent.net">https://tickets.spsvent.net</a></p>
+            </div>
+
+            <div class="policy-section">
+                <h2>Ticket Creation Authorization</h2>
+                <div class="policy-box important">
+                    <strong>Important:</strong> Having a SkyPark email address does NOT authorize you to create tickets.
+                </div>
+                <p><strong>Who May Create Tickets:</strong></p>
+                <ul>
+                    <li><strong>Managers</strong> and <strong>Supervisors</strong> are authorized to create tickets</li>
+                    <li>Managers/Supervisors are responsible for creating tickets on behalf of their staff</li>
+                    <li>General staff members should report issues to their Manager or Supervisor, who will then create the appropriate ticket</li>
+                </ul>
+            </div>
+
+            <div class="policy-section">
+                <h2>Request vs. Problem Tickets</h2>
+                <p>There are two types of tickets, and they follow different approval workflows:</p>
+                <table style="font-size: 10pt;">
+                    <tr>
+                        <th style="width: 20%;">Type</th>
+                        <th style="width: 40%;">Workflow</th>
+                        <th style="width: 40%;">Support Staff Action</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Request</strong></td>
+                        <td>Requires General Manager approval before appearing in your assigned tickets</td>
+                        <td>Will only see approved requests; proceed with work as assigned</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Problem</strong></td>
+                        <td>Goes directly to Support Staff without approval gate</td>
+                        <td>Appears immediately, but <em>may still require approval before resolution</em></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="policy-section">
+                <h2>Support Staff Responsibilities</h2>
+                <div class="policy-box">
+                    <strong>Approval Requirement:</strong> Even when a ticket appears in your queue, you must ensure that work is approved by Admin Staff (General Managers) before proceeding with resolution. When in doubt, verify approval before taking action.
+                </div>
+                <ul>
+                    <li>Review assigned tickets promptly</li>
+                    <li>Verify approval status before beginning work on any ticket</li>
+                    <li>Document all work performed via comments</li>
+                    <li>Update ticket status appropriately as work progresses</li>
+                    <li>Escalate to management if clarification is needed</li>
+                </ul>
+            </div>
+
+            <div class="policy-section">
+                <h2>Project & Purchase Approvals</h2>
+                <div class="policy-box info">
+                    <strong>For Managers/Supervisors:</strong> Approvals for new projects and purchases must go through General Managers. Use the <strong>Request</strong> category when creating tickets for these items—the built-in approval workflow will route them to GMs for review.
+                </div>
+                <p><strong>When submitting project or purchase requests, include:</strong></p>
+                <ul>
+                    <li>Specific and detailed description of what is needed</li>
+                    <li>Images or attachments (reference materials, screenshots, product links)</li>
+                    <li>Estimated costs or budget requirements</li>
+                    <li>Business justification or reason for the request</li>
+                </ul>
+                <p style="font-size: 9pt; color: #666;"><em>See Section 7: Creating New Tickets (pg. 7) for detailed instructions.</em></p>
+            </div>
+        </div>
+
+        <div class="cover-footer">
+            <p><strong>Document Version:</strong> 1.0 &nbsp;|&nbsp; <strong>Last Updated:</strong> February 2026 &nbsp;|&nbsp; <strong>For Internal Use Only</strong></p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- GUIDE CONTENT BEGINS -->
+    <h1>SkyPark Help Desk</h1>
+    <p style="font-size: 1.2em; color: #4A7C23; margin-top: -10px;">Support Staff User Guide</p>
+
+    <div class="header-info">
+        <p><strong>Document Version:</strong> 1.0</p>
+        <p><strong>Last Updated:</strong> February 2026</p>
+        <p><strong>Audience:</strong> Support Staff (Non-Admin Users)</p>
+        <p><strong>Preferred Access:</strong> Microsoft Teams App (sidebar)</p>
+        <p><strong>Web URL:</strong> <a href="https://tickets.spsvent.net">https://tickets.spsvent.net</a></p>
+    </div>
+
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#signing-in">1. Signing In</a></li>
+            <li><a href="#dashboard">2. Understanding the Dashboard</a></li>
+            <li><a href="#viewing-tickets">3. Viewing Tickets</a></li>
+            <li><a href="#filtering">4. Filtering & Searching Tickets</a></li>
+            <li><a href="#ticket-details">5. Working with Ticket Details</a></li>
+            <li><a href="#comments">6. Adding Comments</a></li>
+            <li><a href="#creating-tickets">7. Creating New Tickets</a></li>
+            <li><a href="#status-badges">8. Understanding Status Badges</a></li>
+        </ul>
+    </div>
+
+    <!-- Section 1: Signing In -->
+    <h2 id="signing-in">1. Signing In</h2>
+
+    <p>Access the Help Desk system using your SkyPark Microsoft account credentials.</p>
+
+    <h3>Preferred Method: Microsoft Teams</h3>
+    <ol class="steps">
+        <li>Open <strong>Microsoft Teams</strong></li>
+        <li>Look for the <strong>Help Desk</strong> app icon in the left sidebar</li>
+        <li>Click the icon to open the Help Desk within Teams</li>
+        <li>You'll be automatically signed in with your Teams credentials</li>
+    </ol>
+
+    <div class="tip-box">
+        <strong>Recommended:</strong> Using the Teams app is the preferred way to access the Help Desk as it integrates with your existing workflow and keeps you signed in automatically.
+    </div>
+
+    <h3>Alternative: Web Browser Access</h3>
+    <ol class="steps">
+        <li>Open your web browser and navigate to <strong>https://tickets.spsvent.net</strong></li>
+        <li>Click the <strong>"Sign in with Microsoft"</strong> button</li>
+        <li>Enter your SkyPark email address and password when prompted</li>
+        <li>If prompted, complete any multi-factor authentication (MFA) steps</li>
+        <li>You will be redirected to the main dashboard</li>
+    </ol>
+
+    <div class="tip-box">
+        <strong>Tip:</strong> If you're already signed into other Microsoft 365 applications, you may be signed in automatically.
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 2: Dashboard -->
+    <h2 id="dashboard">2. Understanding the Dashboard</h2>
+
+    <p>After signing in, you'll see the main dashboard with the following areas:</p>
+
+    <div class="screenshot-placeholder">
+        <img src="guide-images/01-dashboard.png?v=2" alt="Main Dashboard View" onerror="this.style.display='none'; this.parentElement.innerHTML='<p><em>Screenshot: Main Dashboard showing ticket list on left, detail area on right, header with + New button, Help link, user name with Support badge, and Sign out</em></p>';">
+    </div>
+
+    <h3>Header Bar</h3>
+    <table>
+        <tr>
+            <th>Element</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><strong>+ New</strong> button</td>
+            <td>Create a new support ticket</td>
+        </tr>
+        <tr>
+            <td><strong>Help</strong> link</td>
+            <td>Access the online help documentation</td>
+        </tr>
+        <tr>
+            <td><strong>Your Name</strong></td>
+            <td>Shows your logged-in account name</td>
+        </tr>
+        <tr>
+            <td><strong>Support</strong> badge</td>
+            <td>Indicates your role (Support Staff)</td>
+        </tr>
+        <tr>
+            <td><strong>Sign out</strong></td>
+            <td>Log out of the Help Desk</td>
+        </tr>
+    </table>
+
+    <h3>Left Sidebar - Ticket List</h3>
+    <ul>
+        <li><strong>Search bar</strong> - Search tickets by title, number, or content</li>
+        <li><strong>View tabs</strong> - Active Tickets, By Priority, All Tickets, Open Only</li>
+        <li><strong>Sort dropdown</strong> - Change how tickets are ordered</li>
+        <li><strong>Filters button</strong> - Open advanced filtering options</li>
+        <li><strong>Ticket list</strong> - Scrollable list of tickets you have access to view</li>
+    </ul>
+
+    <h3>Main Content Area</h3>
+    <p>Shows the selected ticket's details, conversation history, and comment input area.</p>
+
+    <div class="page-break"></div>
+
+    <!-- Section 3: Viewing Tickets -->
+    <h2 id="viewing-tickets">3. Viewing Tickets</h2>
+
+    <p>As a Support Staff member, you can <strong>view ALL tickets</strong> in the system, regardless of department. However, your ability to <strong>edit</strong> tickets depends on your department assignment:</p>
+
+    <ul>
+        <li><strong>View:</strong> You can see all tickets across all departments</li>
+        <li><strong>Edit:</strong> You can only modify tickets in your assigned department(s)</li>
+        <li><strong>Comment:</strong> You can add comments to any ticket you can view</li>
+    </ul>
+
+    <div class="tip-box">
+        <strong>Tip:</strong> Tickets you cannot edit will show a "Read only" badge in the header.
+    </div>
+
+    <h3>Ticket List Information</h3>
+    <p>Each ticket in the list shows:</p>
+    <ul>
+        <li><strong>Title</strong> - Brief description of the issue</li>
+        <li><strong>Status badge</strong> - Current status (New, In Progress, etc.)</li>
+        <li><strong>Approval badge</strong> - Shows if approved/pending (for Requests)</li>
+        <li><strong>Department</strong> - Which team handles this ticket (Tech, Operations, etc.)</li>
+        <li><strong>Requester name</strong> - Who submitted the ticket</li>
+        <li><strong>Date/Time</strong> - When the ticket was created or last updated</li>
+    </ul>
+
+    <h3>Selecting a Ticket</h3>
+    <ol class="steps">
+        <li>Click on any ticket in the left sidebar</li>
+        <li>The ticket details will appear in the main content area</li>
+        <li>The selected ticket will be highlighted with a green left border</li>
+    </ol>
+
+    <div class="tip-box">
+        <strong>Tip:</strong> Tickets marked "Your ticket" are ones you submitted. Tickets marked "Read only" can be viewed but not modified by you.
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 4: Filtering -->
+    <h2 id="filtering">4. Filtering & Searching Tickets</h2>
+
+    <h3>Quick Search</h3>
+    <p>Use the search bar at the top of the ticket list to quickly find tickets:</p>
+    <ul>
+        <li>Search by ticket title keywords</li>
+        <li>Search by ticket number (e.g., "#234")</li>
+        <li>Search by requester name</li>
+    </ul>
+
+    <h3>View Tabs</h3>
+    <table>
+        <tr>
+            <th>Tab</th>
+            <th>Shows</th>
+        </tr>
+        <tr>
+            <td><strong>Active Tickets</strong></td>
+            <td>All non-closed tickets (default view)</td>
+        </tr>
+        <tr>
+            <td><strong>By Priority</strong></td>
+            <td>Tickets grouped by priority level</td>
+        </tr>
+        <tr>
+            <td><strong>All Tickets</strong></td>
+            <td>All tickets including closed ones</td>
+        </tr>
+        <tr>
+            <td><strong>Open Only</strong></td>
+            <td>Only New and In Progress tickets</td>
+        </tr>
+    </table>
+
+    <h3>Advanced Filters</h3>
+    <p>Click the <strong>"Filters"</strong> button to access advanced filtering options:</p>
+
+    <div class="screenshot-placeholder">
+        <img src="guide-images/03-filters.png?v=2" alt="Filter Panel" style="max-width: 50%;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p><em>Screenshot: Filter panel showing Status toggles (New, In Progress, On Hold, Resolved, Closed), Priority filters (Urgent, High, Normal, Low), Department dropdown, Category selection (All, Request, Problem), Assignee dropdown, Location dropdown, and Date Range selector</em></p>';">
+    </div>
+
+    <ul>
+        <li><strong>Status</strong> - Filter by New, In Progress, On Hold, Resolved, Closed</li>
+        <li><strong>Priority</strong> - Filter by Urgent, High, Normal, Low</li>
+        <li><strong>Department</strong> - Filter by Tech, Operations, Marketing, etc.</li>
+        <li><strong>Category</strong> - Filter by Request or Problem</li>
+        <li><strong>Assignee</strong> - Filter by who the ticket is assigned to</li>
+        <li><strong>Location</strong> - Filter by park location</li>
+        <li><strong>Date Range</strong> - Filter by when tickets were created</li>
+    </ul>
+
+    <div class="tip-box">
+        <strong>Tip:</strong> Since you can see all tickets, use filters to focus on what matters:
+        <ul style="margin: 5px 0 0 0;">
+            <li>Filter by <strong>Department</strong> to see only your team's tickets</li>
+            <li>Filter by <strong>Assignee</strong> to see tickets assigned to specific people</li>
+            <li>Use <strong>Status</strong> filters to focus on open/active tickets</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 5: Ticket Details -->
+    <h2 id="ticket-details">5. Working with Ticket Details</h2>
+
+    <p>When you select a ticket, the detail view shows comprehensive information.</p>
+
+    <div class="screenshot-placeholder">
+        <img src="guide-images/02-ticket-detail.png?v=2" alt="Ticket Detail View" style="max-width: 5.5in;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p><em>Screenshot: Ticket detail view showing conversation thread with description (green), comments, internal notes (yellow Internal badge), and Details panel on right with Status, Priority, Assignee, Requester, Category, Department, Location, Created/Updated dates</em></p>';">
+    </div>
+
+    <h3>Ticket Header</h3>
+    <ul>
+        <li><strong>Title</strong> - The ticket subject</li>
+        <li><strong>Ticket Number</strong> - Unique identifier (e.g., #234)</li>
+        <li><strong>Status Badge</strong> - Current status</li>
+        <li><strong>Approval Badge</strong> - For Requests: Pending Approval or Approved</li>
+        <li><strong>Category Path</strong> - Department / Sub-Category / Specific Type</li>
+        <li><strong>Priority</strong> - Normal, High, or Urgent</li>
+    </ul>
+
+    <h3>Conversation Thread</h3>
+    <p>The main area shows the full conversation history:</p>
+    <ul>
+        <li><strong>Description</strong> (green background) - Original ticket description</li>
+        <li><strong>Comments</strong> - All replies and updates</li>
+        <li><strong>Internal Notes</strong> (marked "Internal") - Staff-only comments hidden from requesters</li>
+        <li><strong>System Messages</strong> - Automatic notifications (assignments, approvals, etc.)</li>
+    </ul>
+
+    <h3>Details Panel (Right Side)</h3>
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>Status</td>
+            <td>Current ticket status (editable if assigned to you)</td>
+        </tr>
+        <tr>
+            <td>Priority</td>
+            <td>Urgency level (editable if assigned to you)</td>
+        </tr>
+        <tr>
+            <td>Assignee</td>
+            <td>Person or group responsible for the ticket</td>
+        </tr>
+        <tr>
+            <td>Requester</td>
+            <td>Person who submitted the ticket</td>
+        </tr>
+        <tr>
+            <td>Category</td>
+            <td>Request or Problem</td>
+        </tr>
+        <tr>
+            <td>Department</td>
+            <td>Which team handles this ticket</td>
+        </tr>
+        <tr>
+            <td>Location</td>
+            <td>Where the issue is occurring</td>
+        </tr>
+        <tr>
+            <td>Created</td>
+            <td>When the ticket was submitted</td>
+        </tr>
+        <tr>
+            <td>Last Updated</td>
+            <td>Most recent activity on the ticket</td>
+        </tr>
+    </table>
+
+    <div class="warning-box">
+        <strong>Note:</strong> If you see "Read only" on a ticket, you can view it and add comments, but cannot change status, priority, or other fields. This applies to tickets outside your assigned department.
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 6: Comments -->
+    <h2 id="comments">6. Adding Comments</h2>
+
+    <p>Comments allow you to communicate about tickets with requesters and other staff.</p>
+
+    <h3>Adding a Public Comment</h3>
+    <ol class="steps">
+        <li>Select the ticket you want to comment on</li>
+        <li>Scroll to the comment input area at the bottom of the conversation</li>
+        <li>Type your message in the "Add a comment..." text box</li>
+        <li>Click the <strong>"Post Comment"</strong> button</li>
+    </ol>
+
+    <div class="tip-box">
+        <strong>Tip:</strong> Public comments are visible to the requester and will send them an email notification.
+    </div>
+
+    <h3>Adding an Internal Note</h3>
+    <p>Internal notes are only visible to support staff and managers - the requester cannot see them.</p>
+
+    <ol class="steps">
+        <li>Select the ticket you want to comment on</li>
+        <li>Check the box labeled <strong>"Internal note (hidden from requester - only managers & assigned staff can see)"</strong></li>
+        <li>Type your internal message</li>
+        <li>Click the <strong>"Post Comment"</strong> button</li>
+    </ol>
+
+    <p>Internal notes appear with a yellow "Internal" badge and are useful for:</p>
+    <ul>
+        <li>Sharing technical details with other staff</li>
+        <li>Documenting troubleshooting steps</li>
+        <li>Coordinating with team members</li>
+        <li>Recording sensitive information</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <!-- Section 7: Creating Tickets -->
+    <h2 id="creating-tickets">7. Creating New Tickets</h2>
+
+    <p>As a Support Staff member, you can create tickets for yourself or on behalf of others.</p>
+
+    <h3>Creating a New Ticket</h3>
+
+    <div class="screenshot-placeholder">
+        <img src="guide-images/04-new-ticket.png?v=2" alt="New Ticket Form" style="max-width: 50%;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p><em>Screenshot: New Ticket form showing Title field, Description textarea, Category selection (Problem/Request), Department dropdown, Sub-Category dropdown, Specific Type dropdown, Assigned To preview showing team members who will be notified, Priority options (Low, Normal, High, Urgent), and Location dropdown</em></p>';">
+    </div>
+
+    <ol class="steps">
+        <li>Click the <strong>"+ New"</strong> button in the header</li>
+        <li>Enter a clear, descriptive <strong>Title</strong> for the issue</li>
+        <li>Provide detailed information in the <strong>Description</strong> field</li>
+        <li>Select the <strong>Category</strong>:
+            <ul>
+                <li><strong>Problem</strong> - Something is broken or not working</li>
+                <li><strong>Request</strong> - Need something new, changed, or set up</li>
+            </ul>
+        </li>
+        <li>Choose the appropriate <strong>Department</strong> (Tech, Operations, etc.)</li>
+        <li>Select a <strong>Sub-Category</strong> that best matches the issue</li>
+        <li>Optionally select a <strong>Specific Type</strong> if available</li>
+        <li>Set the <strong>Priority</strong> level:
+            <ul>
+                <li><strong>Low</strong> - Nice to have, no rush</li>
+                <li><strong>Normal</strong> - Standard priority (default)</li>
+                <li><strong>High</strong> - Important, needs prompt attention</li>
+                <li><strong>Urgent</strong> - Critical business impact, drop everything</li>
+            </ul>
+        </li>
+        <li>Select the <strong>Location</strong> where the issue is occurring</li>
+        <li>Click <strong>"Submit Ticket"</strong></li>
+    </ol>
+
+    <div class="warning-box">
+        <strong>Important:</strong> Tickets categorized as "Request" require General Manager approval before support staff can work on them. You'll be notified when it's approved.
+    </div>
+
+    <div class="keep-together">
+    <h3>Project & Purchase Requests</h3>
+    <p>When creating tickets for new projects or purchases that require approval, be thorough in your initial submission:</p>
+
+    <div class="tip-box">
+        <strong>Include the following in your description:</strong>
+        <ul style="margin: 8px 0 0 0;">
+            <li><strong>Specific details</strong> - Exactly what is needed and why</li>
+            <li><strong>Images/attachments</strong> - Photos, screenshots, product links, or reference materials</li>
+            <li><strong>Estimated costs</strong> - Budget requirements, quotes, or price ranges</li>
+            <li><strong>Business justification</strong> - How this benefits operations or addresses a need</li>
+            <li><strong>Timeline</strong> - When this is needed by, if applicable</li>
+        </ul>
+    </div>
+
+    <p>Providing complete information upfront helps General Managers make informed approval decisions and reduces back-and-forth delays.</p>
+    </div>
+
+    <h3>Auto-Assignment Preview</h3>
+    <p>Before submitting, the form shows who will be notified based on your category selections. This helps ensure the right people see your ticket.</p>
+
+    <div class="page-break"></div>
+
+    <!-- Section 8: Status Badges -->
+    <h2 id="status-badges">8. Understanding Status Badges</h2>
+
+    <h3>Ticket Status</h3>
+    <table>
+        <tr>
+            <th>Status</th>
+            <th>Meaning</th>
+        </tr>
+        <tr>
+            <td><span class="badge badge-new">New</span></td>
+            <td>Ticket has been submitted but not yet started</td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-progress">In Progress</span></td>
+            <td>Someone is actively working on this ticket</td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-hold">On Hold</span></td>
+            <td>Work is paused, waiting for something (parts, information, etc.)</td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-resolved">Resolved</span></td>
+            <td>The issue has been fixed/completed</td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-closed">Closed</span></td>
+            <td>Ticket is complete and archived</td>
+        </tr>
+    </table>
+
+    <h3>Approval Status (Requests Only)</h3>
+    <table>
+        <tr>
+            <th>Badge</th>
+            <th>Meaning</th>
+        </tr>
+        <tr>
+            <td><span class="badge" style="background: #FFF8E1; color: #F57C00; border: 1px solid #FFE082;">Pending Approval</span></td>
+            <td>Request is waiting for manager approval</td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-approved">Approved</span></td>
+            <td>Request has been approved and work can proceed</td>
+        </tr>
+        <tr>
+            <td><span class="badge" style="background: #FFEBEE; color: #C62828; border: 1px solid #EF9A9A;">Denied</span></td>
+            <td>Request was not approved</td>
+        </tr>
+    </table>
+
+    <h3>Priority Indicators</h3>
+    <table>
+        <tr>
+            <th>Priority</th>
+            <th>Visual Indicator</th>
+            <th>Expected Response</th>
+        </tr>
+        <tr>
+            <td>Low</td>
+            <td>Gray text</td>
+            <td>When time permits</td>
+        </tr>
+        <tr>
+            <td>Normal</td>
+            <td>Standard text</td>
+            <td>Normal workflow</td>
+        </tr>
+        <tr>
+            <td>High</td>
+            <td>Orange text</td>
+            <td>Prompt attention</td>
+        </tr>
+        <tr>
+            <td>Urgent</td>
+            <td>Red text with pulse animation</td>
+            <td>Immediate action required</td>
+        </tr>
+    </table>
+
+    <footer>
+        <p>SkyPark Help Desk - Support Staff Guide</p>
+        <p>For additional help, click the "Help" link in the application or contact your supervisor.</p>
+        <p class="no-print">To print this guide: Use Ctrl+P (Windows) or Cmd+P (Mac)</p>
+    </footer>
+
+</body>
+</html>

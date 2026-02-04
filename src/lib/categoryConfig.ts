@@ -15,6 +15,7 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
     "Lighting Control": ["Show Lighting", "Automated/Programmed Lighting"],
     POS: ["Hardware - POS", "Software - POS"],
     IT: ["Hardware - IT", "Software - IT", "Networking", "Photo System"],
+    HelpDesk: ["Bug Report", "Feature Request", "Usability Issue"],
     "User Access": ["Password Reset", "Account Creation/Removal", "Permissions Request"],
     Other: [],
   },

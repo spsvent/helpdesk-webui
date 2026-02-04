@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { debugCapture, formatDebugForTicket } from "@/lib/debugCapture";
+import { useRBAC } from "@/contexts/RBACContext";
 
 interface HelpSection {
   id: string;
@@ -1954,10 +1957,222 @@ const helpSections: HelpSection[] = [
       </div>
     ),
   },
+  {
+    id: "report-issue",
+    title: "Report an Issue",
+    content: "REPORT_ISSUE_PLACEHOLDER",
+  },
 ];
+
+function ReportIssueSection() {
+  const router = useRouter();
+  const errorCount = debugCapture.getErrorCount();
+
+  const handleReportIssue = () => {
+    // Log the action
+    debugCapture.logAction("Report Issue clicked", "From help page");
+
+    // Get the debug bundle
+    const debugText = formatDebugForTicket();
+
+    // Store pre-fill data in sessionStorage
+    const preFillData = {
+      title: "Help Desk Application Issue",
+      description: `Please describe the issue you encountered:\n\n---\n\n${debugText}`,
+      category: "Problem",
+      priority: "Normal",
+      problemType: "Tech",
+      problemTypeSub: "HelpDesk",
+    };
+
+    sessionStorage.setItem("newTicketPreFill", JSON.stringify(preFillData));
+
+    // Navigate to new ticket page
+    router.push("/new");
+  };
+
+  return (
+    <div className="space-y-4">
+      <p>
+        Encountered a bug or issue with the Help Desk application itself? Use the
+        button below to automatically create a support ticket with diagnostic
+        information attached.
+      </p>
+
+      <h4 className="font-semibold text-text-primary mt-6">
+        What Gets Captured
+      </h4>
+      <p>
+        When you click &quot;Report Issue&quot;, the following diagnostic information is
+        automatically included in your ticket:
+      </p>
+      <ul className="list-disc list-inside space-y-2 ml-4">
+        <li>
+          <strong>Console Errors:</strong> JavaScript errors and warnings that
+          occurred during your session
+        </li>
+        <li>
+          <strong>Page Information:</strong> Current URL, screen size, and browser
+          details
+        </li>
+        <li>
+          <strong>Recent Actions:</strong> Navigation and key actions you took
+          before the issue
+        </li>
+        <li>
+          <strong>Network Failures:</strong> Any API requests that failed
+        </li>
+        <li>
+          <strong>Session Duration:</strong> How long you&apos;ve been using the app
+        </li>
+      </ul>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+        <p className="text-sm text-yellow-800">
+          <strong>Privacy Note:</strong> No passwords, personal data, or sensitive
+          ticket content is captured. Only technical debugging information is
+          included.
+        </p>
+      </div>
+
+      <h4 className="font-semibold text-text-primary mt-6">
+        Current Session Status
+      </h4>
+      <div className="bg-bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-secondary">Errors captured this session:</p>
+            <p className={`text-2xl font-bold ${errorCount > 0 ? "text-red-600" : "text-green-600"}`}>
+              {errorCount}
+            </p>
+          </div>
+          <button
+            onClick={handleReportIssue}
+            className="px-6 py-3 bg-brand-primary text-white rounded-lg font-medium hover:bg-brand-primary-light transition-colors flex items-center gap-2"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            Report Issue
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+        <p className="text-sm text-blue-800">
+          <strong>Tip:</strong> Before clicking &quot;Report Issue&quot;, try to reproduce
+          the problem if possible. This ensures the relevant errors are captured
+          in the diagnostic report.
+        </p>
+      </div>
+
+      <h4 className="font-semibold text-text-primary mt-6">
+        What to Include in Your Description
+      </h4>
+      <p>
+        After clicking the button, you&apos;ll be taken to the new ticket form with
+        debug information pre-filled. Please also describe:
+      </p>
+      <ol className="list-decimal list-inside space-y-2 ml-4">
+        <li>What you were trying to do when the issue occurred</li>
+        <li>What you expected to happen</li>
+        <li>What actually happened (error messages, unexpected behavior)</li>
+        <li>Whether the issue happens consistently or intermittently</li>
+      </ol>
+    </div>
+  );
+}
+
+// Staff Resources section - only shown to admin and support staff
+const staffResourcesSection: HelpSection = {
+  id: "staff-resources",
+  title: "Staff Resources",
+  content: (
+    <div className="space-y-4">
+      <p>
+        Documentation and guides for Support Staff and Administrators.
+      </p>
+
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+        <p className="text-sm text-green-800">
+          <strong>Note:</strong> This section is only visible to Support Staff and Administrators.
+        </p>
+      </div>
+
+      <h4 className="font-semibold text-text-primary mt-6">
+        Support Staff User Guide
+      </h4>
+      <p>
+        Comprehensive guide covering ticket management, workflows, and standard operating procedures for support staff.
+      </p>
+      <ul className="list-disc list-inside space-y-2 ml-4">
+        <li>Standard Operating Procedures (SOP) for ticket handling</li>
+        <li>Ticket creation authorization policies</li>
+        <li>Request vs. Problem workflow differences</li>
+        <li>Project and purchase approval requirements</li>
+        <li>Step-by-step instructions with screenshots</li>
+      </ul>
+
+      <div className="flex gap-3 mt-4">
+        <a
+          href="/support-user-guide.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-dark transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          View Guide
+        </a>
+        <a
+          href="/support-user-guide.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-border text-text-primary rounded-lg hover:bg-gray-50 transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            const printWindow = window.open('/support-user-guide.html', '_blank');
+            if (printWindow) {
+              printWindow.onload = () => {
+                printWindow.print();
+              };
+            }
+          }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print Guide
+        </a>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+        <p className="text-sm text-blue-800">
+          <strong>Tip:</strong> The guide is optimized for double-sided printing on 8.5&quot; x 11&quot; paper. Use your browser&apos;s print function or click &quot;Print Guide&quot; above.
+        </p>
+      </div>
+    </div>
+  ),
+};
 
 export default function HelpPage() {
   const [activeSection, setActiveSection] = useState("getting-started");
+  const { permissions, loading } = useRBAC();
+
+  // Build sections list - include staff resources for admin and support roles
+  const isStaff = !loading && (permissions.role === "admin" || permissions.role === "support");
+  const allSections = isStaff ? [...helpSections, staffResourcesSection] : helpSections;
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
@@ -1985,7 +2200,7 @@ export default function HelpPage() {
               Topics
             </h2>
             <ul className="space-y-1">
-              {helpSections.map((section) => (
+              {allSections.map((section) => (
                 <li key={section.id}>
                   <button
                     onClick={() => setActiveSection(section.id)}
@@ -2006,7 +2221,7 @@ export default function HelpPage() {
         {/* Content area */}
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-3xl">
-            {helpSections.map((section) => (
+            {allSections.map((section) => (
               <div
                 key={section.id}
                 className={activeSection === section.id ? "block" : "hidden"}
@@ -2015,7 +2230,11 @@ export default function HelpPage() {
                   {section.title}
                 </h2>
                 <div className="prose prose-slate max-w-none text-text-primary">
-                  {section.content}
+                  {section.id === "report-issue" ? (
+                    <ReportIssueSection />
+                  ) : (
+                    section.content
+                  )}
                 </div>
               </div>
             ))}

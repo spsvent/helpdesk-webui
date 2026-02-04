@@ -42,15 +42,39 @@ export default function NewTicketPage() {
   const { permissions } = useRBAC();
   const isAdmin = permissions?.role === "admin";
 
-  const [formData, setFormData] = useState<CreateTicketData>({
-    title: "",
-    description: "",
-    category: "Request",
-    priority: "Normal",
-    problemType: "Tech",
-    problemTypeSub: "",
-    problemTypeSub2: "",
-    location: "",
+  const [formData, setFormData] = useState<CreateTicketData>(() => {
+    // Check for pre-fill data from debug report
+    if (typeof window !== "undefined") {
+      const preFillData = sessionStorage.getItem("newTicketPreFill");
+      if (preFillData) {
+        sessionStorage.removeItem("newTicketPreFill");
+        try {
+          const parsed = JSON.parse(preFillData);
+          return {
+            title: parsed.title || "",
+            description: parsed.description || "",
+            category: parsed.category || "Problem",
+            priority: parsed.priority || "Normal",
+            problemType: parsed.problemType || "Tech",
+            problemTypeSub: parsed.problemTypeSub || "",
+            problemTypeSub2: parsed.problemTypeSub2 || "",
+            location: parsed.location || "",
+          };
+        } catch {
+          // Invalid JSON, use defaults
+        }
+      }
+    }
+    return {
+      title: "",
+      description: "",
+      category: "Request",
+      priority: "Normal",
+      problemType: "Tech",
+      problemTypeSub: "",
+      problemTypeSub2: "",
+      location: "",
+    };
   });
 
   // Cascading dropdown options
@@ -98,12 +122,18 @@ export default function NewTicketPage() {
   useEffect(() => {
     const subs = getProblemTypeSubs(formData.problemType);
     setProblemTypeSubs(subs);
-    // Reset sub selections when parent changes
-    setFormData((prev) => ({
-      ...prev,
-      problemTypeSub: subs.length > 0 ? subs[0] : "",
-      problemTypeSub2: "",
-    }));
+    // Only reset sub selection if current value is not valid for the new problemType
+    setFormData((prev) => {
+      const currentSubIsValid = subs.includes(prev.problemTypeSub);
+      if (currentSubIsValid) {
+        return prev; // Keep the current valid selection
+      }
+      return {
+        ...prev,
+        problemTypeSub: subs.length > 0 ? subs[0] : "",
+        problemTypeSub2: "",
+      };
+    });
   }, [formData.problemType]);
 
   // Update sub2 options when problemTypeSub changes
@@ -111,11 +141,17 @@ export default function NewTicketPage() {
     if (formData.problemType && formData.problemTypeSub) {
       const sub2s = getProblemTypeSub2s(formData.problemType, formData.problemTypeSub);
       setProblemTypeSub2s(sub2s);
-      // Reset sub2 selection when parent changes
-      setFormData((prev) => ({
-        ...prev,
-        problemTypeSub2: "",
-      }));
+      // Only reset sub2 selection if current value is not valid
+      setFormData((prev) => {
+        const currentSub2IsValid = sub2s.includes(prev.problemTypeSub2);
+        if (currentSub2IsValid) {
+          return prev; // Keep the current valid selection
+        }
+        return {
+          ...prev,
+          problemTypeSub2: "",
+        };
+      });
     } else {
       setProblemTypeSub2s([]);
     }

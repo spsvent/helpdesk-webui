@@ -8,6 +8,7 @@ import { initializeTeamsAuth } from "@/lib/teamsAuth";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { debugCapture } from "@/lib/debugCapture";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -21,6 +22,9 @@ export default function RootLayout({
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
+    // Initialize debug capture for error tracking
+    debugCapture.initialize();
+
     // Initialize MSAL and handle any redirect response
     const initializeMsal = async () => {
       try {
