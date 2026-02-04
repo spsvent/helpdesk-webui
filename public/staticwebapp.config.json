@@ -1,0 +1,17 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/images/*.{png,jpg,gif,svg}",
+      "/fonts/*",
+      "/guide-images/*",
+      "/*.html",
+      "/*.json"
+    ]
+  },
+  "mimeTypes": {
+    ".json": "application/json",
+    ".html": "text/html",
+    ".otf": "font/otf"
+  }
+}
