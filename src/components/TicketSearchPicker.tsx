@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient, searchTicketsForMerge } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
+import { formatRelativeDate } from "@/lib/dateUtils";
 
 interface TicketSearchPickerProps {
   excludeIds: string[];
@@ -163,8 +164,9 @@ export default function TicketSearchPicker({
                   <div className="text-sm text-text-primary truncate mt-0.5">
                     {ticket.title}
                   </div>
-                  <div className="text-xs text-text-secondary truncate">
-                    {ticket.originalRequester || ticket.requester.displayName}
+                  <div className="flex items-center justify-between text-xs text-text-secondary">
+                    <span className="truncate">{ticket.originalRequester || ticket.requester.displayName}</span>
+                    <span className="shrink-0 ml-2">{formatRelativeDate(ticket.created)}</span>
                   </div>
                 </li>
               ))}

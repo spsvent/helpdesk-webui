@@ -105,6 +105,7 @@ function TicketList({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-1">
               <h3 className="font-medium text-text-primary line-clamp-1">
+                <span className="text-text-secondary font-normal">#{ticket.ticketNumber}</span>{" "}
                 {ticket.title}
               </h3>
               {priorityIndicator && (
