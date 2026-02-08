@@ -80,6 +80,24 @@ export interface SharePointListResponse {
   "@odata.nextLink"?: string;
 }
 
+// Extract display name from a SharePoint Person/Lookup field.
+// Graph API may return these as an object with LookupValue, or as a plain string.
+function getPersonDisplayName(field: unknown): string {
+  if (!field) return "";
+  if (typeof field === "string") return field;
+  if (typeof field === "object") {
+    const obj = field as Record<string, unknown>;
+    return (obj.LookupValue as string) || (obj.Title as string) || (obj.Email as string) || "";
+  }
+  return "";
+}
+
+function getPersonEmail(field: unknown): string {
+  if (!field || typeof field !== "object") return "";
+  const obj = field as Record<string, unknown>;
+  return (obj.Email as string) || "";
+}
+
 // Transform SharePoint response to Ticket
 export function mapToTicket(item: SharePointListItem): Ticket {
   const fields = item.fields as Record<string, unknown>;
@@ -96,11 +114,11 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     problemTypeSub: fields.ProblemTypeSub as string | undefined,
     problemTypeSub2: fields.ProblemTypeSub2 as string | undefined,
     assignedTo: fields.AssignedTo ? {
-      displayName: (fields.AssignedTo as Record<string, unknown>)?.LookupValue as string || "",
-      email: "",
+      displayName: getPersonDisplayName(fields.AssignedTo),
+      email: getPersonEmail(fields.AssignedTo),
     } : undefined,
     requester: {
-      displayName: (fields.Requester as Record<string, unknown>)?.LookupValue as string || item.createdBy.user.displayName,
+      displayName: getPersonDisplayName(fields.Requester) || item.createdBy.user.displayName,
       email: item.createdBy.user.email || "",
     },
     originalRequester: fields.OriginalRequester as string | undefined,
@@ -116,13 +134,13 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     // Approval workflow fields
     approvalStatus: (fields.ApprovalStatus as ApprovalStatus) || "None",
     approvalRequestedBy: fields.ApprovalRequestedBy ? {
-      displayName: ((fields.ApprovalRequestedBy as Record<string, unknown>)?.LookupValue as string) || "",
-      email: ((fields.ApprovalRequestedBy as Record<string, unknown>)?.Email as string) || "",
+      displayName: getPersonDisplayName(fields.ApprovalRequestedBy),
+      email: getPersonEmail(fields.ApprovalRequestedBy),
     } : undefined,
     approvalRequestedDate: fields.ApprovalRequestedDate as string | undefined,
     approvedBy: fields.ApprovedBy ? {
-      displayName: ((fields.ApprovedBy as Record<string, unknown>)?.LookupValue as string) || "",
-      email: ((fields.ApprovedBy as Record<string, unknown>)?.Email as string) || "",
+      displayName: getPersonDisplayName(fields.ApprovedBy),
+      email: getPersonEmail(fields.ApprovedBy),
     } : undefined,
     approvalDate: fields.ApprovalDate as string | undefined,
     approvalNotes: fields.ApprovalNotes as string | undefined,

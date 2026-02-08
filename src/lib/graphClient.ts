@@ -146,7 +146,18 @@ export async function getComments(client: Client, ticketId: number): Promise<Com
   const endpoint = `/sites/${SITE_ID}/lists/${COMMENTS_LIST_ID}/items?$expand=fields&$filter=fields/TicketID eq ${ticketId}&$orderby=createdDateTime asc`;
 
   const response: SharePointListResponse = await client.api(endpoint).get();
-  return response.value.map(mapToComment);
+  const comments = response.value.map(mapToComment);
+
+  // Sort by effective date (originalCreated for migrated comments, created otherwise)
+  // The API orders by createdDateTime which is the SharePoint item creation date,
+  // but migrated comments may have originalCreated dates that differ from their SP creation date
+  comments.sort((a, b) => {
+    const dateA = new Date(a.originalCreated || a.created).getTime();
+    const dateB = new Date(b.originalCreated || b.created).getTime();
+    return dateA - dateB;
+  });
+
+  return comments;
 }
 
 // Add a comment to a ticket
