@@ -7,6 +7,7 @@ import {
   getGraphClient,
   getComments,
   addComment,
+  getTicket,
   requestApproval,
   processApprovalDecision,
   getAttachments,
@@ -288,6 +289,21 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     }
   };
 
+  // Handle merge complete - re-fetch ticket and comments
+  const handleMergeComplete = async () => {
+    if (!accounts[0]) return;
+
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const updatedTicket = await getTicket(client, ticket.id);
+      onUpdate(updatedTicket);
+      const ticketComments = await getComments(client, parseInt(ticket.id));
+      setComments(ticketComments);
+    } catch (e) {
+      console.error("Failed to refresh after merge:", e);
+    }
+  };
+
   // Handle requesting approval
   const handleRequestApproval = async () => {
     if (!accounts[0]) return;
@@ -520,6 +536,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUploadAttachment={handleUploadAttachment}
               onDeleteAttachment={handleDeleteAttachment}
               onDownloadAttachment={handleDownloadAttachment}
+              onMergeComplete={handleMergeComplete}
               saveRef={detailsPanelSaveRef}
             />
           </aside>

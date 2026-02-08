@@ -28,6 +28,7 @@ import ApprovalActionPanel from "./ApprovalActionPanel";
 import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
+import MergeTicketPanel from "./MergeTicketPanel";
 import { formatDateTime } from "@/lib/dateUtils";
 import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
 import {
@@ -47,6 +48,8 @@ interface DetailsPanelProps {
   onUploadAttachment?: (file: File) => Promise<boolean>;
   onDeleteAttachment?: (filename: string) => Promise<void>;
   onDownloadAttachment?: (filename: string) => Promise<void>;
+  // Merge
+  onMergeComplete?: () => void;
   // Expose save functionality to parent (for Post Comment to also save)
   saveRef?: React.MutableRefObject<{ save: () => Promise<void>; hasChanges: boolean } | null>;
 }
@@ -73,6 +76,7 @@ export default function DetailsPanel({
   onUploadAttachment,
   onDeleteAttachment,
   onDownloadAttachment,
+  onMergeComplete,
   saveRef,
 }: DetailsPanelProps) {
   const { instance, accounts } = useMsal();
@@ -488,6 +492,14 @@ export default function DetailsPanel({
           {/* Approval History */}
           <ApprovalHistory ticket={ticket} />
 
+          <hr className="border-border" />
+        </>
+      )}
+
+      {/* Merge Ticket */}
+      {canEdit && onMergeComplete && (
+        <>
+          <MergeTicketPanel ticket={ticket} onMergeComplete={onMergeComplete} />
           <hr className="border-border" />
         </>
       )}

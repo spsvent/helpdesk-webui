@@ -492,6 +492,7 @@ export default function Home() {
               selectedIds={Array.from(checkedIds)}
               onClearSelection={clearBulkSelection}
               onActionComplete={handleBulkActionComplete}
+              tickets={filteredAndSortedTickets}
             />
           )}
 

@@ -1570,7 +1570,8 @@ export type ActivityEventType =
   | "approval_requested"
   | "approval_approved"
   | "approval_rejected"
-  | "escalation_triggered";
+  | "escalation_triggered"
+  | "ticket_merged";
 
 export interface ActivityLogEntry {
   id: string;
@@ -1707,6 +1708,192 @@ export async function getTicketActivityLog(
   return getActivityLog(client, { ticketId, limit: 500 });
 }
 
+// ============================================================================
+// TICKET MERGE FUNCTIONS
+// ============================================================================
+
+export interface MergeTicketsResult {
+  copiedComments: number;
+  errors: string[];
+}
+
+export interface BulkMergeResult {
+  ticketId: string;
+  ticketNumber?: string;
+  success: boolean;
+  copiedComments?: number;
+  error?: string;
+}
+
+// Merge secondary ticket into primary ticket
+export async function mergeTickets(
+  client: Client,
+  secondaryId: string,
+  secondaryNumber: string,
+  primaryId: string,
+  primaryNumber: string,
+  actor: { email: string; name?: string }
+): Promise<MergeTicketsResult> {
+  const errors: string[] = [];
+  let copiedComments = 0;
+
+  // 1. Fetch comments from secondary ticket
+  let secondaryComments: Comment[] = [];
+  try {
+    secondaryComments = await getComments(client, parseInt(secondaryId));
+  } catch (e) {
+    errors.push(`Failed to fetch comments from #${secondaryNumber}: ${e instanceof Error ? e.message : "Unknown error"}`);
+    return { copiedComments: 0, errors };
+  }
+
+  // 2. Copy each comment to primary ticket with merge prefix
+  for (const comment of secondaryComments) {
+    try {
+      const authorName = comment.originalAuthor || comment.createdBy.displayName;
+      const commentDate = comment.originalCreated || comment.created;
+      const formattedDate = new Date(commentDate).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const prefixedBody = `[Merged from #${secondaryNumber}] Originally by ${authorName} on ${formattedDate}\n\n${comment.commentBody}`;
+      await addComment(client, parseInt(primaryId), prefixedBody, comment.isInternal);
+      copiedComments++;
+    } catch (e) {
+      errors.push(`Failed to copy comment ${comment.id}: ${e instanceof Error ? e.message : "Unknown error"}`);
+    }
+  }
+
+  // 3. Add merge reference comments to both tickets
+  try {
+    await addComment(
+      client,
+      parseInt(primaryId),
+      `🔗 Merged from #${secondaryNumber} — ${copiedComments} comment${copiedComments !== 1 ? "s" : ""} copied`,
+      true
+    );
+  } catch (e) {
+    errors.push(`Failed to add merge reference to primary: ${e instanceof Error ? e.message : "Unknown error"}`);
+  }
+
+  try {
+    await addComment(
+      client,
+      parseInt(secondaryId),
+      `🔗 Merged into #${primaryNumber} — this ticket has been closed`,
+      true
+    );
+  } catch (e) {
+    errors.push(`Failed to add merge reference to secondary: ${e instanceof Error ? e.message : "Unknown error"}`);
+  }
+
+  // 4. Close the secondary ticket
+  try {
+    await updateTicketFields(client, secondaryId, { Status: "Closed" });
+  } catch (e) {
+    errors.push(`Failed to close secondary ticket: ${e instanceof Error ? e.message : "Unknown error"}`);
+  }
+
+  // 5. Log activity for both tickets (non-blocking)
+  logActivity(client, {
+    eventType: "ticket_merged",
+    ticketId: primaryId,
+    ticketNumber: primaryNumber,
+    actor: actor.email,
+    actorName: actor.name,
+    description: `Ticket #${secondaryNumber} merged into #${primaryNumber} (${copiedComments} comments copied)`,
+    details: JSON.stringify({ secondaryId, secondaryNumber, primaryId, primaryNumber, copiedComments }),
+  }).catch((e) => console.error("Failed to log merge activity for primary:", e));
+
+  logActivity(client, {
+    eventType: "ticket_merged",
+    ticketId: secondaryId,
+    ticketNumber: secondaryNumber,
+    actor: actor.email,
+    actorName: actor.name,
+    description: `Ticket #${secondaryNumber} merged into #${primaryNumber} and closed`,
+    details: JSON.stringify({ secondaryId, secondaryNumber, primaryId, primaryNumber, copiedComments }),
+  }).catch((e) => console.error("Failed to log merge activity for secondary:", e));
+
+  return { copiedComments, errors };
+}
+
+// Bulk merge multiple secondary tickets into a primary ticket (sequential to avoid throttling)
+export async function bulkMergeTickets(
+  client: Client,
+  secondaryTickets: { id: string; ticketNumber: string }[],
+  primaryId: string,
+  primaryNumber: string,
+  actor: { email: string; name?: string }
+): Promise<BulkMergeResult[]> {
+  const results: BulkMergeResult[] = [];
+
+  for (const secondary of secondaryTickets) {
+    try {
+      const result = await mergeTickets(
+        client,
+        secondary.id,
+        secondary.ticketNumber,
+        primaryId,
+        primaryNumber,
+        actor
+      );
+      results.push({
+        ticketId: secondary.id,
+        ticketNumber: secondary.ticketNumber,
+        success: result.errors.length === 0,
+        copiedComments: result.copiedComments,
+        error: result.errors.length > 0 ? result.errors.join("; ") : undefined,
+      });
+    } catch (e) {
+      results.push({
+        ticketId: secondary.id,
+        ticketNumber: secondary.ticketNumber,
+        success: false,
+        error: e instanceof Error ? e.message : "Unknown error",
+      });
+    }
+  }
+
+  return results;
+}
+
+// Search tickets for merge target (client-side filter on cached tickets)
+export async function searchTicketsForMerge(
+  client: Client,
+  query: string,
+  excludeIds: string[]
+): Promise<Ticket[]> {
+  const allTickets = await getAllTicketsCached(client);
+
+  const lowerQuery = query.toLowerCase();
+  const excludeSet = new Set(excludeIds);
+
+  return allTickets
+    .filter((ticket) => {
+      // Exclude specified IDs (current ticket, already-selected tickets)
+      if (excludeSet.has(ticket.id)) return false;
+
+      // Exclude closed/resolved tickets
+      if (ticket.status === "Closed" || ticket.status === "Resolved") return false;
+
+      // Match on ticket number, title, or requester name
+      const ticketNum = ticket.ticketNumber?.toString() || ticket.id;
+      const title = ticket.title.toLowerCase();
+      const requester = (ticket.originalRequester || ticket.requester.displayName).toLowerCase();
+
+      return (
+        ticketNum.includes(lowerQuery) ||
+        title.includes(lowerQuery) ||
+        requester.includes(lowerQuery)
+      );
+    })
+    .slice(0, 10); // Max 10 results
+}
+
 // Create the ActivityLog SharePoint list
 export async function createActivityLogList(client: Client): Promise<string> {
   const listData = {
@@ -1760,6 +1947,7 @@ export async function createActivityLogList(client: Client): Promise<string> {
           "approval_approved",
           "approval_rejected",
           "escalation_triggered",
+          "ticket_merged",
         ],
         displayAs: "dropDownMenu",
       },

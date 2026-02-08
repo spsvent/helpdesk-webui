@@ -1315,6 +1315,93 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "merging-tickets",
+    title: "Merging Tickets",
+    content: (
+      <div className="space-y-4">
+        <p>
+          When duplicate tickets are submitted for the same issue, you can merge them
+          to consolidate all comments and close the duplicate. This keeps your ticket
+          history organized and avoids losing any information.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Who Can Merge Tickets?</h4>
+        <div className="space-y-3 mt-3">
+          <div className="flex items-start gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 shrink-0">
+              Support
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">Single ticket merge</p>
+              <p className="text-gray-600 mt-1">Can merge tickets from the ticket detail view.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 border border-purple-200 bg-purple-50 rounded-lg">
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 shrink-0">
+              Admin
+            </span>
+            <div className="text-sm">
+              <p className="font-medium">Single merge + Bulk merge</p>
+              <p className="text-gray-600 mt-1">Can merge from ticket detail view and also bulk merge multiple tickets from the ticket list.</p>
+            </div>
+          </div>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Merging from Ticket Detail</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open the ticket you want to merge (the duplicate)</li>
+          <li>
+            In the Details panel on the right, click the <strong>&quot;Merge Ticket&quot;</strong> button
+          </li>
+          <li>Search for the target ticket by number, title, or requester name</li>
+          <li>Select the target ticket from the results</li>
+          <li>Review the confirmation message and click <strong>&quot;Confirm Merge&quot;</strong></li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Bulk Merging (Admin Only)</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Select 2 or more tickets using the checkboxes in the ticket list</li>
+          <li>
+            Click the <strong>&quot;Merge&quot;</strong> button in the bulk action toolbar
+          </li>
+          <li>Choose which ticket should be the <strong>primary</strong> (the one that stays open)</li>
+          <li>Confirm the merge &mdash; all other selected tickets will be merged into the primary</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Happens When Tickets Are Merged</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            All comments from the duplicate ticket are <strong>copied</strong> to the primary ticket,
+            each prefixed with the original author and timestamp
+          </li>
+          <li>
+            A reference note is added to both tickets indicating the merge
+          </li>
+          <li>
+            The duplicate ticket is <strong>closed</strong> automatically
+          </li>
+          <li>
+            The merge is recorded in the Activity Log
+          </li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> The merge search only shows open tickets (not Closed or Resolved)
+            to prevent merging into inactive tickets.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> You cannot merge a ticket that is already closed. If you need to
+            merge a closed ticket, reopen it first by changing its status.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "admin-rbac",
     title: "Admin: Managing Visibility Groups",
     content: (

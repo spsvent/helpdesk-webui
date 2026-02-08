@@ -7,11 +7,14 @@ import {
   bulkUpdateStatus,
   bulkUpdatePriority,
   bulkReassign,
+  bulkMergeTickets,
   BulkUpdateResult,
+  BulkMergeResult,
   searchUsersAndGroups,
   OrgUser,
   OrgGroup,
 } from "@/lib/graphClient";
+import { Ticket } from "@/types/ticket";
 
 // Combined type for search results
 type SearchResult = (OrgUser & { type: "user" }) | (OrgGroup & { type: "group" });
@@ -20,6 +23,7 @@ interface BulkActionToolbarProps {
   selectedIds: string[];
   onClearSelection: () => void;
   onActionComplete: () => void;
+  tickets?: Ticket[];
 }
 
 const STATUS_OPTIONS = ["New", "In Progress", "On Hold", "Resolved", "Closed"];
@@ -29,21 +33,28 @@ export default function BulkActionToolbar({
   selectedIds,
   onClearSelection,
   onActionComplete,
+  tickets,
 }: BulkActionToolbarProps) {
   const { instance, accounts } = useMsal();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const [showMergeMenu, setShowMergeMenu] = useState(false);
+  const [showMergeConfirm, setShowMergeConfirm] = useState(false);
+  const [mergePrimaryId, setMergePrimaryId] = useState<string | null>(null);
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [assigneeResults, setAssigneeResults] = useState<SearchResult[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [lastResults, setLastResults] = useState<BulkUpdateResult[] | null>(null);
+  const [lastMergeResults, setLastMergeResults] = useState<BulkMergeResult[] | null>(null);
 
   const closeAllMenus = () => {
     setShowStatusMenu(false);
     setShowPriorityMenu(false);
     setShowAssignMenu(false);
+    setShowMergeMenu(false);
+    setShowMergeConfirm(false);
   };
 
   const handleBulkStatus = async (newStatus: string) => {
@@ -152,8 +163,70 @@ export default function BulkActionToolbar({
     }
   };
 
+  // Handle selecting primary for merge
+  const handleSelectMergePrimary = (primaryId: string) => {
+    setMergePrimaryId(primaryId);
+    setShowMergeMenu(false);
+    setShowMergeConfirm(true);
+  };
+
+  // Handle bulk merge confirm
+  const handleBulkMerge = async () => {
+    if (!accounts[0] || !mergePrimaryId || !tickets) return;
+    closeAllMenus();
+    setIsProcessing(true);
+
+    const primaryTicket = tickets.find((t) => t.id === mergePrimaryId);
+    if (!primaryTicket) {
+      setIsProcessing(false);
+      return;
+    }
+
+    const secondaryTickets = selectedIds
+      .filter((id) => id !== mergePrimaryId)
+      .map((id) => {
+        const t = tickets.find((ticket) => ticket.id === id);
+        return {
+          id,
+          ticketNumber: (t?.ticketNumber || id).toString(),
+        };
+      });
+
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const results = await bulkMergeTickets(
+        client,
+        secondaryTickets,
+        primaryTicket.id,
+        (primaryTicket.ticketNumber || primaryTicket.id).toString(),
+        {
+          email: accounts[0].username,
+          name: accounts[0].name || accounts[0].username,
+        }
+      );
+      setLastMergeResults(results);
+
+      const mergeSuccessCount = results.filter((r) => r.success).length;
+      if (mergeSuccessCount > 0) {
+        onActionComplete();
+      }
+    } catch (error) {
+      console.error("Bulk merge failed:", error);
+    } finally {
+      setIsProcessing(false);
+      setMergePrimaryId(null);
+    }
+  };
+
+  // Get selected tickets data for merge UI
+  const selectedTickets = tickets
+    ? selectedIds.map((id) => tickets.find((t) => t.id === id)).filter(Boolean) as Ticket[]
+    : [];
+
   const successCount = lastResults?.filter((r) => r.success).length ?? 0;
   const errorCount = lastResults?.filter((r) => !r.success).length ?? 0;
+  const mergeSuccessCount = lastMergeResults?.filter((r) => r.success).length ?? 0;
+  const mergeErrorCount = lastMergeResults?.filter((r) => !r.success).length ?? 0;
 
   if (selectedIds.length === 0) return null;
 
@@ -273,6 +346,70 @@ export default function BulkActionToolbar({
           )}
         </div>
 
+        {/* Merge dropdown (requires 2+ selected) */}
+        {selectedIds.length >= 2 && tickets && (
+          <div className="relative">
+            <button
+              onClick={() => {
+                closeAllMenus();
+                setShowMergeMenu(!showMergeMenu);
+              }}
+              disabled={isProcessing}
+              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              Merge
+            </button>
+            {showMergeMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-bg-card rounded-lg shadow-lg border border-border py-1 z-50 min-w-[280px]">
+                <div className="px-3 py-2 text-xs text-text-secondary font-medium border-b border-border">
+                  Select primary ticket (others will merge into it):
+                </div>
+                {selectedTickets.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleSelectMergePrimary(t.id)}
+                    className="w-full px-3 py-2 text-left hover:bg-bg-subtle transition-colors"
+                  >
+                    <div className="text-sm font-medium text-text-primary">
+                      #{t.ticketNumber || t.id}
+                    </div>
+                    <div className="text-xs text-text-secondary truncate">
+                      {t.title}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {showMergeConfirm && mergePrimaryId && (
+              <div className="absolute top-full left-0 mt-1 bg-bg-card rounded-lg shadow-lg border border-border p-3 z-50 min-w-[280px]">
+                <div className="text-sm font-medium text-text-primary mb-2">
+                  Confirm Bulk Merge
+                </div>
+                <div className="text-sm text-text-secondary mb-3">
+                  {selectedIds.length - 1} ticket{selectedIds.length - 1 !== 1 ? "s" : ""} will be merged into #{tickets.find((t) => t.id === mergePrimaryId)?.ticketNumber || mergePrimaryId} and closed.
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleBulkMerge}
+                    className="flex-1 px-3 py-1.5 bg-teal-600 text-white text-sm rounded font-medium hover:bg-teal-700 transition-colors"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMergeConfirm(false);
+                      setMergePrimaryId(null);
+                    }}
+                    className="px-3 py-1.5 border border-border text-text-secondary text-sm rounded hover:bg-bg-subtle transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {isProcessing && (
           <div className="flex items-center gap-2 text-sm">
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -293,12 +430,24 @@ export default function BulkActionToolbar({
             )}
           </span>
         )}
+
+        {lastMergeResults && !isProcessing && (
+          <span className="text-sm">
+            {mergeSuccessCount > 0 && (
+              <span className="text-green-200">{mergeSuccessCount} merged</span>
+            )}
+            {mergeErrorCount > 0 && (
+              <span className="text-red-200 ml-2">{mergeErrorCount} failed</span>
+            )}
+          </span>
+        )}
       </div>
 
       <button
         onClick={() => {
           onClearSelection();
           setLastResults(null);
+          setLastMergeResults(null);
         }}
         className="text-white/80 hover:text-white transition-colors"
       >
