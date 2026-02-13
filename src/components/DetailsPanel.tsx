@@ -29,8 +29,12 @@ import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
 import MergeTicketPanel from "./MergeTicketPanel";
+import PurchaseStatusBadge from "./PurchaseStatusBadge";
+import PurchaseActionPanel from "./PurchaseActionPanel";
+import ReceiveActionPanel from "./ReceiveActionPanel";
 import { formatDateTime } from "@/lib/dateUtils";
 import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
+import { PurchaseStatus } from "@/types/ticket";
 import {
   sendStatusChangeTeamsNotification,
   sendPriorityEscalationTeamsNotification,
@@ -41,7 +45,19 @@ interface DetailsPanelProps {
   onUpdate: (ticket: Ticket) => void;
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
-  onApprovalDecision?: (decision: "Approved" | "Denied" | "Changes Requested", notes?: string) => Promise<void>;
+  onApprovalDecision?: (decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered", notes?: string) => Promise<void>;
+  // Purchase workflow
+  onMarkPurchased?: (data: {
+    vendor: string;
+    confirmationNum: string;
+    actualCost: number;
+    expectedDelivery: string;
+    notes?: string;
+  }) => Promise<void>;
+  onMarkReceived?: (data: {
+    receivedDate: string;
+    notes?: string;
+  }) => Promise<void>;
   // Attachments
   attachments: Attachment[];
   attachmentsLoading?: boolean;
@@ -71,6 +87,8 @@ export default function DetailsPanel({
   canEdit = true,
   onRequestApproval,
   onApprovalDecision,
+  onMarkPurchased,
+  onMarkReceived,
   attachments,
   attachmentsLoading = false,
   onUploadAttachment,
@@ -80,7 +98,7 @@ export default function DetailsPanel({
   saveRef,
 }: DetailsPanelProps) {
   const { instance, accounts } = useMsal();
-  const { canRequestApproval, canApprove, permissions } = useRBAC();
+  const { canRequestApproval, canApprove, canPurchaseTicket, canReceiveTicket, permissions } = useRBAC();
   const isAdmin = permissions?.role === "admin";
 
   // Basic fields (support staff can edit)
@@ -478,7 +496,11 @@ export default function DetailsPanel({
         <>
           {/* Approval Actions for Admins */}
           {canApprove() && onApprovalDecision && (
-            <ApprovalActionPanel ticket={ticket} onDecision={onApprovalDecision} />
+            <ApprovalActionPanel
+              ticket={ticket}
+              isPurchaseRequest={ticket.isPurchaseRequest}
+              onDecision={onApprovalDecision}
+            />
           )}
 
           {/* Request Approval Button for Support Staff */}
@@ -728,6 +750,135 @@ export default function DetailsPanel({
           </label>
           <span className="text-sm">{formatDateTime(ticket.dueDate)}</span>
         </div>
+      )}
+
+      {/* Purchase Details Section */}
+      {ticket.isPurchaseRequest && ticket.purchaseStatus && (
+        <>
+          <hr className="border-border" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs text-text-secondary uppercase tracking-wide font-semibold">
+                Purchase Details
+              </label>
+              <PurchaseStatusBadge status={ticket.purchaseStatus as PurchaseStatus} size="sm" />
+            </div>
+
+            {/* Always visible purchase info */}
+            {ticket.purchaseItemUrl && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Item Link</label>
+                <a
+                  href={ticket.purchaseItemUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-brand-blue hover:underline break-all"
+                >
+                  {ticket.purchaseItemUrl}
+                </a>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {ticket.purchaseQuantity && (
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Quantity</label>
+                  <span className="text-sm">{ticket.purchaseQuantity}</span>
+                </div>
+              )}
+              {ticket.purchaseEstCostPerItem != null && (
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Est. Cost/Item</label>
+                  <span className="text-sm">${ticket.purchaseEstCostPerItem.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            {ticket.purchaseQuantity && ticket.purchaseEstCostPerItem != null && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Est. Total</label>
+                <span className="text-sm font-medium">
+                  ${(ticket.purchaseQuantity * ticket.purchaseEstCostPerItem).toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {ticket.purchaseJustification && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Justification</label>
+                <p className="text-sm whitespace-pre-wrap">{ticket.purchaseJustification}</p>
+              </div>
+            )}
+
+            {ticket.purchaseProject && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Project</label>
+                <span className="text-sm">{ticket.purchaseProject}</span>
+              </div>
+            )}
+
+            {/* After purchase info */}
+            {ticket.purchaseVendor && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Vendor</label>
+                <span className="text-sm">{ticket.purchaseVendor}</span>
+              </div>
+            )}
+
+            {ticket.purchaseConfirmationNum && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Confirmation #</label>
+                <span className="text-sm font-mono">{ticket.purchaseConfirmationNum}</span>
+              </div>
+            )}
+
+            {ticket.purchaseActualCost != null && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Actual Cost</label>
+                <span className="text-sm font-medium">${ticket.purchaseActualCost.toFixed(2)}</span>
+              </div>
+            )}
+
+            {ticket.purchaseExpectedDelivery && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Expected Delivery</label>
+                <span className="text-sm">{formatDateTime(ticket.purchaseExpectedDelivery)}</span>
+              </div>
+            )}
+
+            {ticket.purchaseNotes && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Purchase Notes</label>
+                <p className="text-sm whitespace-pre-wrap">{ticket.purchaseNotes}</p>
+              </div>
+            )}
+
+            {/* After receipt info */}
+            {ticket.receivedDate && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Received Date</label>
+                <span className="text-sm">{formatDateTime(ticket.receivedDate)}</span>
+              </div>
+            )}
+
+            {ticket.receivedNotes && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Receiving Notes</label>
+                <p className="text-sm whitespace-pre-wrap">{ticket.receivedNotes}</p>
+              </div>
+            )}
+
+            {/* Purchaser action panel */}
+            {canPurchaseTicket(ticket) && onMarkPurchased && (
+              <PurchaseActionPanel onMarkPurchased={onMarkPurchased} />
+            )}
+
+            {/* Inventory action panel */}
+            {canReceiveTicket(ticket) && onMarkReceived && (
+              <ReceiveActionPanel onMarkReceived={onMarkReceived} />
+            )}
+          </div>
+        </>
       )}
 
       <hr className="border-border" />

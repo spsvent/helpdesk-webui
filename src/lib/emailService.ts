@@ -8,6 +8,12 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc5
 // General Managers group ID from environment
 const GENERAL_MANAGERS_GROUP_ID = process.env.NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID || "";
 
+// Purchaser group ID from environment
+const PURCHASER_GROUP_ID = process.env.NEXT_PUBLIC_PURCHASER_GROUP_ID || "";
+
+// Inventory group ID from environment
+const INVENTORY_GROUP_ID = process.env.NEXT_PUBLIC_INVENTORY_GROUP_ID || "";
+
 // Email template styles
 const emailStyles = `
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
@@ -94,6 +100,18 @@ function generateApprovalRequestEmail(
         ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${escapeHtml(ticket.description.substring(0, 300))}${ticket.description.length > 300 ? "..." : ""}</p>` : ""}
       </div>
 
+      ${ticket.isPurchaseRequest ? `
+      <div class="ticket-info">
+        <h3 style="color: #1e3a5f;">Purchase Request Details</h3>
+        ${ticket.purchaseItemUrl ? `<p><span class="label">Item URL:</span> <a href="${escapeHtml(ticket.purchaseItemUrl)}" style="color: #1e3a5f;">${escapeHtml(ticket.purchaseItemUrl)}</a></p>` : ""}
+        ${ticket.purchaseQuantity ? `<p><span class="label">Quantity:</span> ${ticket.purchaseQuantity}</p>` : ""}
+        ${ticket.purchaseEstCostPerItem ? `<p><span class="label">Est. Cost Per Item:</span> $${ticket.purchaseEstCostPerItem.toFixed(2)}</p>` : ""}
+        ${ticket.purchaseQuantity && ticket.purchaseEstCostPerItem ? `<p><span class="label">Est. Total Cost:</span> $${(ticket.purchaseQuantity * ticket.purchaseEstCostPerItem).toFixed(2)}</p>` : ""}
+        ${ticket.purchaseJustification ? `<p><span class="label">Justification:</span> ${escapeHtml(ticket.purchaseJustification)}</p>` : ""}
+        ${ticket.purchaseProject ? `<p><span class="label">Project:</span> ${escapeHtml(ticket.purchaseProject)}</p>` : ""}
+      </div>
+      ` : ""}
+
       <div class="actions">
         <a href="${approveUrl}" class="btn btn-approve">Approve</a>
         <a href="${denyUrl}" class="btn btn-deny">Deny</a>
@@ -116,16 +134,18 @@ function generateApprovalRequestEmail(
 // Generate approval decision notification email HTML
 function generateDecisionEmail(
   ticket: Ticket,
-  decision: "Approved" | "Denied" | "Changes Requested",
+  decision: string,
   approverName: string,
   notes?: string
 ): string {
   const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
 
-  const badgeClass = decision === "Approved" ? "badge-approved" :
+  const badgeClass = decision.startsWith("Approved") ? "badge-approved" :
                      decision === "Denied" ? "badge-denied" : "badge-changes";
 
   const decisionText = decision === "Approved" ? "has been approved" :
+                       decision === "Approved with Changes" ? "has been approved with changes" :
+                       decision === "Approved & Ordered" ? "has been approved and ordered" :
                        decision === "Denied" ? "has been denied" :
                        "requires changes";
 
@@ -199,13 +219,12 @@ export async function sendApprovalRequestEmail(
 export async function sendDecisionEmail(
   client: Client,
   ticket: Ticket,
-  decision: "Approved" | "Denied" | "Changes Requested",
+  decision: string,
   approverName: string,
   requesterEmail: string,
   notes?: string
 ): Promise<void> {
-  const decisionWord = decision === "Changes Requested" ? "Changes Requested" : decision;
-  const subject = `[${decisionWord}] Ticket #${ticket.id}: ${ticket.title}`;
+  const subject = `[${decision}] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateDecisionEmail(ticket, decision, approverName, notes);
   const conversationId = getTicketConversationId(ticket.id);
 
@@ -477,5 +496,275 @@ export async function sendStatusChangeEmail(
   const subject = `[${ticket.status}] Ticket #${ticket.id}: ${ticket.title}`;
   const htmlContent = generateStatusChangeEmail(ticket, oldStatus, changedByName);
   const conversationId = getTicketConversationId(ticket.id);
+  await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
+}
+
+// ============================================
+// Purchase Workflow Email Functions
+// ============================================
+
+// Get members of the Purchaser group
+export async function getPurchaserEmails(client: Client): Promise<string[]> {
+  if (!PURCHASER_GROUP_ID) {
+    console.warn("PURCHASER_GROUP_ID not configured");
+    return [];
+  }
+
+  try {
+    const response = await client
+      .api(`/groups/${PURCHASER_GROUP_ID}/members`)
+      .select("mail,userPrincipalName")
+      .get();
+
+    const emails: string[] = [];
+    for (const member of response.value) {
+      const email = member.mail || member.userPrincipalName;
+      if (email) {
+        emails.push(email);
+      }
+    }
+    return emails;
+  } catch (error) {
+    console.error("Failed to get purchaser emails:", error);
+    return [];
+  }
+}
+
+// Get members of the Inventory group
+export async function getInventoryEmails(client: Client): Promise<string[]> {
+  if (!INVENTORY_GROUP_ID) {
+    console.warn("INVENTORY_GROUP_ID not configured");
+    return [];
+  }
+
+  try {
+    const response = await client
+      .api(`/groups/${INVENTORY_GROUP_ID}/members`)
+      .select("mail,userPrincipalName")
+      .get();
+
+    const emails: string[] = [];
+    for (const member of response.value) {
+      const email = member.mail || member.userPrincipalName;
+      if (email) {
+        emails.push(email);
+      }
+    }
+    return emails;
+  } catch (error) {
+    console.error("Failed to get inventory emails:", error);
+    return [];
+  }
+}
+
+// Generate purchase approved notification email HTML
+function generatePurchaseApprovedEmail(
+  ticket: Ticket,
+  approverName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">Purchase Request Approved</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p style="text-align: center; margin-bottom: 16px;">
+        <span class="badge badge-approved">Approved</span>
+      </p>
+
+      <p>A purchase request has been approved by <strong>${escapeHtml(approverName)}</strong> and is ready for ordering.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p><span class="label">Requester:</span> ${escapeHtml(ticket.requester.displayName)}</p>
+        ${ticket.purchaseItemUrl ? `<p><span class="label">Item URL:</span> <a href="${escapeHtml(ticket.purchaseItemUrl)}" style="color: #1e3a5f;">${escapeHtml(ticket.purchaseItemUrl)}</a></p>` : ""}
+        ${ticket.purchaseQuantity ? `<p><span class="label">Quantity:</span> ${ticket.purchaseQuantity}</p>` : ""}
+        ${ticket.purchaseEstCostPerItem ? `<p><span class="label">Est. Cost Per Item:</span> $${ticket.purchaseEstCostPerItem.toFixed(2)}</p>` : ""}
+        ${ticket.purchaseQuantity && ticket.purchaseEstCostPerItem ? `<p><span class="label">Est. Total Cost:</span> $${(ticket.purchaseQuantity * ticket.purchaseEstCostPerItem).toFixed(2)}</p>` : ""}
+        ${ticket.purchaseJustification ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Justification:</span><br>${escapeHtml(ticket.purchaseJustification)}</p>` : ""}
+        ${ticket.purchaseProject ? `<p><span class="label">Project:</span> ${escapeHtml(ticket.purchaseProject)}</p>` : ""}
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+      <p>Please do not reply directly to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Send purchase approved notification to purchaser group
+export async function sendPurchaseApprovedEmail(
+  client: Client,
+  ticket: Ticket,
+  approverName: string
+): Promise<void> {
+  const purchaserEmails = await getPurchaserEmails(client);
+
+  if (purchaserEmails.length === 0) {
+    console.warn("No purchaser emails found - cannot send purchase approved notification");
+    return;
+  }
+
+  const subject = `[Purchase Approved] Ticket #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generatePurchaseApprovedEmail(ticket, approverName);
+  const conversationId = getTicketConversationId(ticket.id);
+
+  const sendPromises = purchaserEmails.map((email) =>
+    sendEmail(client, email, subject, htmlContent, conversationId).catch((error) => {
+      console.error(`Failed to send purchase approved notification to ${email}:`, error);
+    })
+  );
+
+  await Promise.all(sendPromises);
+}
+
+// Generate purchase ordered notification email HTML
+function generatePurchaseOrderedEmail(
+  ticket: Ticket,
+  purchaserName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">Purchase Order Placed</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p>A purchase has been ordered by <strong>${escapeHtml(purchaserName)}</strong> and is awaiting delivery.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p><span class="label">Requester:</span> ${escapeHtml(ticket.requester.displayName)}</p>
+        ${ticket.purchaseVendor ? `<p><span class="label">Vendor:</span> ${escapeHtml(ticket.purchaseVendor)}</p>` : ""}
+        ${ticket.purchaseConfirmationNum ? `<p><span class="label">Confirmation #:</span> ${escapeHtml(ticket.purchaseConfirmationNum)}</p>` : ""}
+        ${ticket.purchaseActualCost ? `<p><span class="label">Actual Cost:</span> $${ticket.purchaseActualCost.toFixed(2)}</p>` : ""}
+        ${ticket.purchaseExpectedDelivery ? `<p><span class="label">Expected Delivery:</span> ${escapeHtml(ticket.purchaseExpectedDelivery)}</p>` : ""}
+        ${ticket.purchaseItemUrl ? `<p><span class="label">Item URL:</span> <a href="${escapeHtml(ticket.purchaseItemUrl)}" style="color: #1e3a5f;">${escapeHtml(ticket.purchaseItemUrl)}</a></p>` : ""}
+        ${ticket.purchaseQuantity ? `<p><span class="label">Quantity:</span> ${ticket.purchaseQuantity}</p>` : ""}
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+      <p>Please do not reply directly to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Send purchase ordered notification to inventory group
+export async function sendPurchaseOrderedEmail(
+  client: Client,
+  ticket: Ticket,
+  purchaserName: string
+): Promise<void> {
+  const inventoryEmails = await getInventoryEmails(client);
+
+  if (inventoryEmails.length === 0) {
+    console.warn("No inventory emails found - cannot send purchase ordered notification");
+    return;
+  }
+
+  const subject = `[Purchase Ordered] Ticket #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generatePurchaseOrderedEmail(ticket, purchaserName);
+  const conversationId = getTicketConversationId(ticket.id);
+
+  const sendPromises = inventoryEmails.map((email) =>
+    sendEmail(client, email, subject, htmlContent, conversationId).catch((error) => {
+      console.error(`Failed to send purchase ordered notification to ${email}:`, error);
+    })
+  );
+
+  await Promise.all(sendPromises);
+}
+
+// Generate purchase received notification email HTML
+function generatePurchaseReceivedEmail(
+  ticket: Ticket,
+  receiverName: string
+): string {
+  const viewUrl = `${APP_URL}?ticket=${ticket.id}`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>${emailStyles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">Your Purchase Has Been Received</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">SkyPark Help Desk</p>
+    </div>
+    <div class="content">
+      <p>Great news! Your purchase request has been received and is ready for pickup or delivery.</p>
+
+      <div class="ticket-info">
+        <h3>Ticket #${ticket.id}: ${escapeHtml(ticket.title)}</h3>
+        <p><span class="label">Received by:</span> ${escapeHtml(receiverName)}</p>
+        ${ticket.receivedDate ? `<p><span class="label">Received Date:</span> ${escapeHtml(ticket.receivedDate)}</p>` : ""}
+        ${ticket.receivedNotes ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Notes:</span><br>${escapeHtml(ticket.receivedNotes)}</p>` : ""}
+        ${ticket.purchaseItemUrl ? `<p><span class="label">Item:</span> <a href="${escapeHtml(ticket.purchaseItemUrl)}" style="color: #1e3a5f;">${escapeHtml(ticket.purchaseItemUrl)}</a></p>` : ""}
+        ${ticket.purchaseQuantity ? `<p><span class="label">Quantity:</span> ${ticket.purchaseQuantity}</p>` : ""}
+      </div>
+
+      <div class="actions">
+        <a href="${viewUrl}" class="btn btn-view">View Ticket</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from SkyPark Help Desk.</p>
+      <p>Please do not reply directly to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Send purchase received notification to the original requester
+export async function sendPurchaseReceivedEmail(
+  client: Client,
+  ticket: Ticket,
+  receiverName: string
+): Promise<void> {
+  const requesterEmail = ticket.requester.email;
+
+  if (!requesterEmail) {
+    console.warn("No requester email found - cannot send purchase received notification");
+    return;
+  }
+
+  const subject = `[Purchase Received] Ticket #${ticket.id}: ${ticket.title}`;
+  const htmlContent = generatePurchaseReceivedEmail(ticket, receiverName);
+  const conversationId = getTicketConversationId(ticket.id);
+
   await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
 }

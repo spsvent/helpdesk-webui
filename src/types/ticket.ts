@@ -3,6 +3,9 @@
 // Approval workflow status
 export type ApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Changes Requested";
 
+// Purchase request workflow status
+export type PurchaseStatus = "Pending Approval" | "Approved" | "Approved with Changes" | "Ordered" | "Purchased" | "Received" | "Denied";
+
 export interface Ticket {
   id: string;
   ticketNumber?: number;  // Auto-generated ticket number
@@ -30,6 +33,24 @@ export interface Ticket {
   approvedBy?: User;
   approvalDate?: string;
   approvalNotes?: string;
+  // Purchase request fields
+  isPurchaseRequest?: boolean;
+  purchaseItemUrl?: string;
+  purchaseQuantity?: number;
+  purchaseEstCostPerItem?: number;
+  purchaseJustification?: string;
+  purchaseProject?: string;
+  purchaseStatus?: PurchaseStatus;
+  purchaseVendor?: string;
+  purchaseConfirmationNum?: string;
+  purchaseActualCost?: number;
+  purchaseNotes?: string;
+  purchaseExpectedDelivery?: string;
+  purchasedDate?: string;
+  purchasedByEmail?: string;
+  receivedDate?: string;
+  receivedNotes?: string;
+  receivedByEmail?: string;
 }
 
 export interface Comment {
@@ -144,6 +165,24 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     } : undefined,
     approvalDate: fields.ApprovalDate as string | undefined,
     approvalNotes: fields.ApprovalNotes as string | undefined,
+    // Purchase request fields
+    isPurchaseRequest: fields.IsPurchaseRequest as boolean | undefined,
+    purchaseItemUrl: fields.PurchaseItemUrl as string | undefined,
+    purchaseQuantity: fields.PurchaseQuantity as number | undefined,
+    purchaseEstCostPerItem: fields.PurchaseEstCostPerItem as number | undefined,
+    purchaseJustification: fields.PurchaseJustification as string | undefined,
+    purchaseProject: fields.PurchaseProject as string | undefined,
+    purchaseStatus: fields.PurchaseStatus as PurchaseStatus | undefined,
+    purchaseVendor: fields.PurchaseVendor as string | undefined,
+    purchaseConfirmationNum: fields.PurchaseConfirmationNum as string | undefined,
+    purchaseActualCost: fields.PurchaseActualCost as number | undefined,
+    purchaseNotes: fields.PurchaseNotes as string | undefined,
+    purchaseExpectedDelivery: fields.PurchaseExpectedDelivery as string | undefined,
+    purchasedDate: fields.PurchasedDate as string | undefined,
+    purchasedByEmail: fields.PurchasedByEmail as string | undefined,
+    receivedDate: fields.ReceivedDate as string | undefined,
+    receivedNotes: fields.ReceivedNotes as string | undefined,
+    receivedByEmail: fields.ReceivedByEmail as string | undefined,
   };
 }
 

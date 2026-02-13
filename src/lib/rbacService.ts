@@ -104,6 +104,10 @@ export async function getUserPermissions(
   const config = await initRBACConfig(client);
   const groupIds = await getUserGroupMemberships(client, email);
 
+  // Check purchaser/inventory membership (applies to any role)
+  const isPurchaser = groupIds.some((id) => config.purchaserGroupIds.has(id));
+  const isInventory = groupIds.some((id) => config.inventoryGroupIds.has(id));
+
   // Check if admin group member
   if (groupIds.some((id) => config.adminGroupIds.has(id))) {
     return createAdminPermissions(email, displayName, groupIds);
@@ -114,18 +118,24 @@ export async function getUserPermissions(
     const departments = getDepartmentsForGroupsFromConfig(groupIds, config);
     const subtypeRestrictions = getSubtypeRestrictionsFromConfig(groupIds, config);
 
-    return createSupportPermissions(
+    const perms = createSupportPermissions(
       email,
       displayName,
       groupIds,
       departments,
       subtypeRestrictions
     );
+    perms.isPurchaser = isPurchaser;
+    perms.isInventory = isInventory;
+    return perms;
   }
 
   // Regular user - store only visibility groups for ticket sharing
   const visibilityGroupIds = getVisibilityGroupIds(groupIds, config);
-  return createUserPermissions(email, displayName, visibilityGroupIds);
+  const perms = createUserPermissions(email, displayName, visibilityGroupIds);
+  perms.isPurchaser = isPurchaser;
+  perms.isInventory = isInventory;
+  return perms;
 }
 
 /**
@@ -493,4 +503,36 @@ export function isVisibleWithApprovalGate(
 
   // All other tickets are visible
   return true;
+}
+
+// ============================================
+// Purchase Workflow Permission Functions
+// ============================================
+
+/**
+ * Check if user can mark a purchase request as purchased
+ * - Must be a purchaser or admin
+ * - Ticket must be a purchase request with status "Approved" or "Approved with Changes"
+ */
+export function canPurchase(
+  permissions: UserPermissions,
+  ticket: Ticket
+): boolean {
+  if (!permissions.isPurchaser) return false;
+  if (!ticket.isPurchaseRequest) return false;
+  return ticket.purchaseStatus === "Approved" || ticket.purchaseStatus === "Approved with Changes";
+}
+
+/**
+ * Check if user can mark a purchase request as received
+ * - Must be inventory or admin
+ * - Ticket must be a purchase request with status "Purchased" or "Ordered"
+ */
+export function canMarkReceived(
+  permissions: UserPermissions,
+  ticket: Ticket
+): boolean {
+  if (!permissions.isInventory) return false;
+  if (!ticket.isPurchaseRequest) return false;
+  return ticket.purchaseStatus === "Purchased" || ticket.purchaseStatus === "Ordered";
 }

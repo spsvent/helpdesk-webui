@@ -228,6 +228,13 @@ export interface CreateTicketData {
   problemTypeSub2?: string;
   location?: string;
   assigneeEmail?: string; // Auto-assignment target
+  // Purchase request fields
+  isPurchaseRequest?: boolean;
+  purchaseItemUrl?: string;
+  purchaseQuantity?: number;
+  purchaseEstCostPerItem?: number;
+  purchaseJustification?: string;
+  purchaseProject?: string;
 }
 
 // Options for ticket creation (creator info for auto-approval)
@@ -264,6 +271,17 @@ export async function createTicket(
   }
   if (ticketData.location) {
     fields.Location = ticketData.location;
+  }
+
+  // Purchase request fields
+  if (ticketData.isPurchaseRequest) {
+    fields.IsPurchaseRequest = true;
+    fields.PurchaseStatus = "Pending Approval";
+    if (ticketData.purchaseItemUrl) fields.PurchaseItemUrl = ticketData.purchaseItemUrl;
+    if (ticketData.purchaseQuantity) fields.PurchaseQuantity = ticketData.purchaseQuantity;
+    if (ticketData.purchaseEstCostPerItem) fields.PurchaseEstCostPerItem = ticketData.purchaseEstCostPerItem;
+    if (ticketData.purchaseJustification) fields.PurchaseJustification = ticketData.purchaseJustification;
+    if (ticketData.purchaseProject) fields.PurchaseProject = ticketData.purchaseProject;
   }
 
   // Auto-assignment: store the assignee email in OriginalAssignedTo field
@@ -359,19 +377,47 @@ export async function requestApproval(
 export async function processApprovalDecision(
   client: Client,
   ticketId: string,
-  decision: "Approved" | "Denied" | "Changes Requested",
+  decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
   approverName: string,
   approverEmail: string,
-  notes?: string
+  notes?: string,
+  isPurchaseRequest: boolean = false
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
 
   // Look up the site user ID for the Person field
   const siteUserId = await getSiteUserId(client, approverEmail);
 
+  // Map decision to approval status
+  let approvalStatus = decision as string;
+
+  // For purchase requests, also update PurchaseStatus
+  const purchaseFields: Record<string, unknown> = {};
+  if (isPurchaseRequest) {
+    switch (decision) {
+      case "Approved":
+        purchaseFields.PurchaseStatus = "Approved";
+        break;
+      case "Approved with Changes":
+        approvalStatus = "Approved";
+        purchaseFields.PurchaseStatus = "Approved with Changes";
+        break;
+      case "Approved & Ordered":
+        approvalStatus = "Approved";
+        purchaseFields.PurchaseStatus = "Ordered";
+        purchaseFields.PurchasedByEmail = approverEmail;
+        purchaseFields.PurchasedDate = new Date().toISOString();
+        break;
+      case "Denied":
+        purchaseFields.PurchaseStatus = "Denied";
+        break;
+    }
+  }
+
   const fields: Record<string, unknown> = {
-    ApprovalStatus: decision,
+    ApprovalStatus: approvalStatus,
     ApprovalDate: new Date().toISOString(),
+    ...purchaseFields,
   };
 
   // Set the ApprovedBy Person field if we found the user
@@ -384,6 +430,42 @@ export async function processApprovalDecision(
   }
 
   const item = await client.api(endpoint).patch({ fields });
+
+  return mapToTicket(item);
+}
+
+// Update purchase-specific fields (for purchaser/inventory updates)
+export async function updatePurchaseFields(
+  client: Client,
+  ticketId: string,
+  updates: Partial<{
+    PurchaseStatus: string;
+    PurchaseVendor: string;
+    PurchaseConfirmationNum: string;
+    PurchaseActualCost: number;
+    PurchaseExpectedDelivery: string;
+    PurchaseNotes: string;
+    PurchasedDate: string;
+    PurchasedByEmail: string;
+    ReceivedDate: string;
+    ReceivedNotes: string;
+    ReceivedByEmail: string;
+  }>
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+
+  const filteredUpdates: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      filteredUpdates[key] = value;
+    }
+  }
+
+  const item = await client.api(endpoint).patch({
+    fields: filteredUpdates,
+  });
+
+  invalidateTicketsCache();
 
   return mapToTicket(item);
 }
@@ -1571,7 +1653,9 @@ export type ActivityEventType =
   | "approval_approved"
   | "approval_rejected"
   | "escalation_triggered"
-  | "ticket_merged";
+  | "ticket_merged"
+  | "purchase_ordered"
+  | "purchase_received";
 
 export interface ActivityLogEntry {
   id: string;

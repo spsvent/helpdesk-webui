@@ -44,6 +44,8 @@ jobs:
           NEXT_PUBLIC_ESCALATION_LIST_ID: "6e3bb1d6-1938-4680-82aa-96223e4d3821"
           NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "a961cb69-a588-4ca0-aa04-b421ebcc792a"
           NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"
+          NEXT_PUBLIC_PURCHASER_GROUP_ID: "6afebd3e-069c-41a2-94d8-6e7b93634bb3"
+          NEXT_PUBLIC_INVENTORY_GROUP_ID: "3c9e89ce-83dd-4c31-a884-01404b81898e"
           NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
           NEXT_PUBLIC_EMAIL_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail"
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
