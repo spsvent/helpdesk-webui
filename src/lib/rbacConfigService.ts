@@ -9,7 +9,7 @@ export interface RBACGroup {
   id: string;
   title: string;
   groupId: string; // Entra group ID
-  groupType: "visibility" | "department" | "admin";
+  groupType: "visibility" | "department" | "admin" | "purchaser" | "inventory";
   department?: string; // ProblemType this group can edit
   problemTypeSub?: string; // Sub-type restriction (e.g., "POS")
   isActive: boolean;
@@ -23,14 +23,18 @@ export interface RBACConfig {
   visibilityGroups: RBACGroup[]; // For regular user ticket sharing
   departmentGroups: RBACGroup[]; // For support staff editing
   adminGroups: RBACGroup[]; // Admin groups
+  purchaserGroups: RBACGroup[]; // Purchase workflow - can mark as purchased
+  inventoryGroups: RBACGroup[]; // Purchase workflow - can mark as received
 
   // Lookup maps for quick access
   groupIdToDepartment: Map<string, string>;
   groupIdToSubtype: Map<string, { problemType: string; problemTypeSub: string }>;
   departmentGroupIds: Set<string>;
   adminGroupIds: Set<string>;
+  purchaserGroupIds: Set<string>;
+  inventoryGroupIds: Set<string>;
 
-  // All elevated group IDs (admin + department)
+  // All elevated group IDs (admin + department + purchaser + inventory)
   elevatedGroupIds: Set<string>;
 }
 
@@ -97,12 +101,16 @@ function parseRBACGroups(items: SharePointRBACGroupItem[]): RBACConfig {
   const visibilityGroups: RBACGroup[] = [];
   const departmentGroups: RBACGroup[] = [];
   const adminGroups: RBACGroup[] = [];
+  const purchaserGroups: RBACGroup[] = [];
+  const inventoryGroups: RBACGroup[] = [];
 
   const allowedGroupIds = new Set<string>();
   const groupIdToDepartment = new Map<string, string>();
   const groupIdToSubtype = new Map<string, { problemType: string; problemTypeSub: string }>();
   const departmentGroupIds = new Set<string>();
   const adminGroupIds = new Set<string>();
+  const purchaserGroupIds = new Set<string>();
+  const inventoryGroupIds = new Set<string>();
 
   for (const item of items) {
     const group: RBACGroup = {
@@ -144,23 +152,39 @@ function parseRBACGroups(items: SharePointRBACGroupItem[]): RBACConfig {
         adminGroups.push(group);
         adminGroupIds.add(group.groupId);
         break;
+
+      case "purchaser":
+        purchaserGroups.push(group);
+        purchaserGroupIds.add(group.groupId);
+        break;
+
+      case "inventory":
+        inventoryGroups.push(group);
+        inventoryGroupIds.add(group.groupId);
+        break;
     }
   }
 
-  // Elevated = admin + department
+  // Elevated = admin + department + purchaser + inventory
   const elevatedGroupIds = new Set<string>();
   adminGroupIds.forEach((id) => elevatedGroupIds.add(id));
   departmentGroupIds.forEach((id) => elevatedGroupIds.add(id));
+  purchaserGroupIds.forEach((id) => elevatedGroupIds.add(id));
+  inventoryGroupIds.forEach((id) => elevatedGroupIds.add(id));
 
   return {
     allowedGroupIds,
     visibilityGroups,
     departmentGroups,
     adminGroups,
+    purchaserGroups,
+    inventoryGroups,
     groupIdToDepartment,
     groupIdToSubtype,
     departmentGroupIds,
     adminGroupIds,
+    purchaserGroupIds,
+    inventoryGroupIds,
     elevatedGroupIds,
   };
 }
@@ -181,10 +205,14 @@ function getFallbackConfig(): RBACConfig {
   const visibilityGroups: RBACGroup[] = [];
   const departmentGroups: RBACGroup[] = [];
   const adminGroups: RBACGroup[] = [];
+  const purchaserGroups: RBACGroup[] = [];
+  const inventoryGroups: RBACGroup[] = [];
   const groupIdToDepartment = new Map<string, string>();
   const groupIdToSubtype = new Map<string, { problemType: string; problemTypeSub: string }>();
   const departmentGroupIds = new Set<string>();
   const adminGroupIds = new Set<string>();
+  const purchaserGroupIds = new Set<string>();
+  const inventoryGroupIds = new Set<string>();
 
   // Admin group
   allowedGroupIds.add(ADMIN_GROUP_ID);
@@ -235,16 +263,22 @@ function getFallbackConfig(): RBACConfig {
   const elevatedGroupIds = new Set<string>();
   adminGroupIds.forEach((id) => elevatedGroupIds.add(id));
   departmentGroupIds.forEach((id) => elevatedGroupIds.add(id));
+  purchaserGroupIds.forEach((id) => elevatedGroupIds.add(id));
+  inventoryGroupIds.forEach((id) => elevatedGroupIds.add(id));
 
   return {
     allowedGroupIds,
     visibilityGroups,
     departmentGroups,
     adminGroups,
+    purchaserGroups,
+    inventoryGroups,
     groupIdToDepartment,
     groupIdToSubtype,
     departmentGroupIds,
     adminGroupIds,
+    purchaserGroupIds,
+    inventoryGroupIds,
     elevatedGroupIds,
   };
 }

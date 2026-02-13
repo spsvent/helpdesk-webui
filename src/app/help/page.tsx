@@ -2045,6 +2045,369 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "attaching-files",
+    title: "Attaching Files",
+    content: (
+      <div className="space-y-4">
+        <p>
+          You can attach files to tickets both during creation and on existing tickets.
+          Files are stored securely in SharePoint and accessible to anyone who can view
+          the ticket.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Attaching Files During Ticket Creation
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Fill out the new ticket form as usual (title, description, etc.)
+          </li>
+          <li>
+            Scroll down to the <strong>Attachments</strong> section before submitting
+          </li>
+          <li>
+            Click to browse for files, or drag and drop files into the upload zone
+          </li>
+          <li>
+            Selected files will appear as staged items &mdash; you can review and
+            remove them before submitting
+          </li>
+          <li>
+            Click <strong>&quot;Submit Ticket&quot;</strong> to create the ticket with
+            the attached files
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Attaching Files to Existing Tickets
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Select the ticket you want to add files to</li>
+          <li>
+            In the <strong>Details panel</strong> on the right, scroll down to the{" "}
+            <strong>Attachments</strong> section
+          </li>
+          <li>
+            Drag and drop files onto the upload zone, or click to browse for files
+          </li>
+          <li>Wait for the upload to complete</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Supported File Types</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Images:</strong> PNG, JPG, GIF, and other common image formats
+          </li>
+          <li>
+            <strong>PDFs:</strong> PDF documents
+          </li>
+          <li>
+            <strong>Documents:</strong> Word (DOC, DOCX), text files (TXT)
+          </li>
+          <li>
+            <strong>Spreadsheets:</strong> Excel (XLS, XLSX), CSV files
+          </li>
+          <li>
+            <strong>Other:</strong> Most common file types are accepted
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">File Size Limit</h4>
+        <p>
+          The maximum file size is <strong>4 MB per file</strong>. Files larger than
+          this will be rejected with an error message.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Files are staged before upload &mdash; you can review
+            and remove any files before submitting. This prevents accidental uploads
+            and lets you double-check that you have the right files attached.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Attachments are helpful for providing screenshots
+            of error messages, relevant documents, receipts, or any visual information
+            that helps explain the issue or request.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "purchase-requests",
+    title: "Purchase Requests",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Purchase requests allow employees to request the purchase of items or
+          services. These requests follow a multi-step approval and fulfillment
+          workflow that includes manager approval, purchasing, and inventory
+          receiving.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Creating a Purchase Request
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Click <strong>&quot;+ New Ticket&quot;</strong> in the header
+          </li>
+          <li>
+            Select <strong>&quot;Request&quot;</strong> as the category
+          </li>
+          <li>
+            Check the <strong>&quot;This is a Purchase Request&quot;</strong> checkbox
+            that appears
+          </li>
+          <li>Fill out the standard ticket fields (title, description, department, etc.)</li>
+          <li>Complete the purchase-specific fields (see below)</li>
+          <li>
+            Click <strong>&quot;Submit Ticket&quot;</strong> to submit your purchase request
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Purchase Request Fields
+        </h4>
+        <div className="ml-4 mt-3 space-y-3">
+          <p>
+            <strong>Quantity</strong> (required): How many items you need
+          </p>
+          <p>
+            <strong>Estimated Cost Per Item</strong> (required): The approximate cost
+            of each item
+          </p>
+          <p>
+            <strong>Justification</strong> (required): Why this purchase is needed
+          </p>
+          <p>
+            <strong>Item Link/URL</strong> (optional): A link to the item online
+          </p>
+          <p>
+            <strong>Project</strong> (optional): The project this purchase is
+            associated with
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> The estimated total cost is calculated automatically
+            by multiplying the quantity by the estimated cost per item. This helps
+            managers quickly evaluate the request.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Purchase Request Workflow
+        </h4>
+        <p>
+          Purchase requests follow a multi-step workflow. Each step sends email
+          notifications to the relevant parties:
+        </p>
+        <div className="space-y-3 mt-3">
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">1. Employee Submits Request</p>
+            <p className="text-sm text-gray-600 mt-1">
+              The employee creates a purchase request ticket with item details,
+              quantity, cost estimate, and justification. The General Manager is
+              notified.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">2. General Manager Reviews</p>
+            <p className="text-sm text-gray-600 mt-1">
+              The General Manager can take one of the following actions:
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4 mt-2 text-sm text-gray-600">
+              <li><strong>Approve:</strong> Sends the request to the purchasing team</li>
+              <li><strong>Deny:</strong> Rejects the request with a reason</li>
+              <li><strong>Approve with Changes:</strong> Approves with modifications noted</li>
+              <li><strong>Approve &amp; Order:</strong> Approves and marks the item as already ordered</li>
+            </ul>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">3. Purchaser Places Order</p>
+            <p className="text-sm text-gray-600 mt-1">
+              The purchasing team places the order and records the vendor name,
+              order confirmation number, actual cost, and expected delivery date.
+              The inventory team is notified.
+            </p>
+          </div>
+          <div className="p-3 border border-gray-200 rounded-lg">
+            <p className="font-medium">4. Inventory Confirms Receipt</p>
+            <p className="text-sm text-gray-600 mt-1">
+              The inventory team confirms that the item has been received,
+              recording the received date and any notes about condition or
+              discrepancies. The original requester is notified.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Email notifications are sent at each step of the
+            workflow, keeping all relevant parties informed of the purchase
+            request&apos;s progress.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "purchase-queue",
+    title: "Purchase Queue (Purchasers)",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Purchase Queue shows approved purchase requests that are waiting to be
+          ordered. This view is primarily used by the purchasing team to manage and
+          fulfill approved requests.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Viewing the Purchase Queue
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            In the ticket list, click the <strong>&quot;Purchase Queue&quot;</strong>{" "}
+            preset view button
+          </li>
+          <li>
+            The list will filter to show only approved purchase requests that have
+            not yet been ordered
+          </li>
+          <li>
+            Click on a purchase request ticket to see the full purchase details in
+            the right panel
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Marking a Purchase as Ordered
+        </h4>
+        <p>
+          When you have placed the order for a purchase request, record the order
+          details:
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Open the purchase request ticket from the Purchase Queue</li>
+          <li>
+            In the right panel, click <strong>&quot;Mark as Purchased&quot;</strong>
+          </li>
+          <li>Fill in the required order details:</li>
+        </ol>
+
+        <div className="ml-8 mt-3 space-y-3">
+          <p>
+            <strong>Vendor Name</strong> (required): The supplier or vendor where the
+            order was placed
+          </p>
+          <p>
+            <strong>Order Confirmation Number</strong> (required): The order or
+            confirmation number from the vendor
+          </p>
+          <p>
+            <strong>Actual Cost</strong> (required): The actual total cost of the
+            order
+          </p>
+          <p>
+            <strong>Expected Delivery Date</strong> (required): When the order is
+            expected to arrive
+          </p>
+          <p>
+            <strong>Notes</strong> (optional): Any additional information about the
+            order
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Once marked as purchased, the inventory team is
+            automatically notified via email so they can prepare to receive the order.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "receiving-orders",
+    title: "Receiving Orders (Inventory)",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The Incoming Orders view shows purchased items that are waiting to be
+          received. This view is used by the inventory team to track and confirm
+          delivery of ordered items.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Viewing Incoming Orders
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            In the ticket list, click the <strong>&quot;Incoming Orders&quot;</strong>{" "}
+            preset view button
+          </li>
+          <li>
+            The list will filter to show only purchased items that have not yet been
+            received
+          </li>
+          <li>
+            Click on a ticket to see the full purchase and order details in the
+            right panel
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Confirming Receipt of an Order
+        </h4>
+        <p>
+          When an ordered item arrives, confirm its receipt:
+        </p>
+        <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
+          <li>Open the ticket from the Incoming Orders view</li>
+          <li>
+            Review the purchase and order details (vendor, confirmation number,
+            expected delivery date)
+          </li>
+          <li>
+            Click <strong>&quot;Mark as Received&quot;</strong> in the right panel
+          </li>
+          <li>Fill in the receipt details:</li>
+        </ol>
+
+        <div className="ml-8 mt-3 space-y-3">
+          <p>
+            <strong>Received Date</strong> (defaults to today): The date the item was
+            received
+          </p>
+          <p>
+            <strong>Notes</strong> (optional): Any notes about condition,
+            discrepancies, or other observations
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Once marked as received, the original requester is
+            automatically notified via email that their purchase has arrived.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Use the Notes field to document any issues with the
+            delivery, such as damaged items, incorrect quantities, or other
+            discrepancies. This creates a record for follow-up if needed.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "report-issue",
     title: "Report an Issue",
     content: "REPORT_ISSUE_PLACEHOLDER",

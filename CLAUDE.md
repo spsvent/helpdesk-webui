@@ -360,6 +360,28 @@ Implementation:
 - Activity Log viewer accessible via Settings → Activity Log
 - Filters by event type, ticket number, result limit
 
+### ✅ Purchase Request Workflow (Completed)
+Multi-stage purchase lifecycle: Request → GM Decision → Purchaser Orders → Inventory Receives
+- ✅ **Purchase request creation** - Toggle on Request tickets, with item URL/qty/cost/justification/project fields
+- ✅ **GM approval decisions** - Approve, Approve with Changes, Approve & Ordered, Deny
+- ✅ **Purchaser workflow** - Mark as purchased with vendor/confirmation/cost/delivery details
+- ✅ **Inventory receiving** - Mark as received with date and notes
+- ✅ **RBAC roles** - Purchaser and Inventory roles via Entra ID groups
+- ✅ **Email notifications** - At each workflow step to relevant parties
+- ✅ **Dashboard presets** - Purchase Queue (purchasers), Incoming Orders (inventory)
+- ✅ **Ticket list indicator** - Shopping cart icon on purchase request tickets
+- ✅ **Purchase status badge** - Color-coded status through the workflow
+
+Implementation:
+- 17 new SharePoint columns on Tickets list (IsPurchaseRequest, PurchaseStatus, PurchaseVendor, etc.)
+- New RBAC group types: `purchaser`, `inventory` in RBACGroups SharePoint list
+- New components: PurchaseStatusBadge, PurchaseActionPanel, ReceiveActionPanel
+- Modified: ApprovalActionPanel (4-button layout for purchases), DetailsPanel (purchase details section)
+- New env vars: `NEXT_PUBLIC_PURCHASER_GROUP_ID`, `NEXT_PUBLIC_INVENTORY_GROUP_ID`
+
+### Planned: Email-based Purchase Auto-Update
+Auto-extract vendor + confirmation # from forwarded confirmation emails to update purchase tickets.
+
 ---
 
 ## Related Documentation

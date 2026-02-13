@@ -28,6 +28,10 @@ export interface UserPermissions {
   canEditAllFields: boolean;
   canSeeAllTickets: boolean;
   canEditOtherDepartment: boolean; // Can edit tickets with ProblemType = "Other"
+
+  // Purchase workflow roles
+  isPurchaser: boolean;
+  isInventory: boolean;
 }
 
 // Context value for the RBAC provider
@@ -49,6 +53,8 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   canEditAllFields: false,
   canSeeAllTickets: false,
   canEditOtherDepartment: false,
+  isPurchaser: false,
+  isInventory: false,
 };
 
 // Helper to create admin permissions
@@ -68,6 +74,8 @@ export function createAdminPermissions(
     canEditAllFields: true,
     canSeeAllTickets: true,
     canEditOtherDepartment: true,
+    isPurchaser: true, // Admins can do everything
+    isInventory: true,
   };
 }
 
@@ -90,6 +98,8 @@ export function createSupportPermissions(
     canEditAllFields: false, // Support can edit assigned tickets but not all fields
     canSeeAllTickets: true, // Support can see all tickets
     canEditOtherDepartment: editableDepartments.length > 0, // If they have any department, they can edit "Other"
+    isPurchaser: false, // Set by getUserPermissions based on group membership
+    isInventory: false,
   };
 }
 
@@ -110,5 +120,7 @@ export function createUserPermissions(
     canEditAllFields: false,
     canSeeAllTickets: false, // Users can only see own + group members' tickets
     canEditOtherDepartment: false,
+    isPurchaser: false, // Set by getUserPermissions based on group membership
+    isInventory: false,
   };
 }

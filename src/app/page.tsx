@@ -9,7 +9,7 @@ import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
 import { getGraphClient, getTickets, getArchivedTickets, getTicket } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
-import { TicketFilters, DEFAULT_FILTERS } from "@/types/filters";
+import { TicketFilters, DEFAULT_FILTERS, PRESET_VIEWS, EMPTY_FILTERS } from "@/types/filters";
 import { filterTickets, sortTickets } from "@/lib/filterUtils";
 import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
@@ -485,6 +485,30 @@ export default function Home() {
             onLoadArchived={loadArchivedTickets}
             tickets={rbacFilteredTickets}
           />
+
+          {/* Purchase workflow preset buttons */}
+          {permissions && (permissions.isPurchaser || permissions.isInventory) && (
+            <div className="px-3 py-2 border-b border-border flex gap-2 flex-wrap">
+              {permissions.isPurchaser && (
+                <button
+                  onClick={() => setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.purchaseQueue.filters } as TicketFilters)}
+                  className="px-3 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors border border-indigo-200"
+                  title={PRESET_VIEWS.purchaseQueue.description}
+                >
+                  Purchase Queue
+                </button>
+              )}
+              {permissions.isInventory && (
+                <button
+                  onClick={() => setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.incomingOrders.filters } as TicketFilters)}
+                  className="px-3 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors border border-emerald-200"
+                  title={PRESET_VIEWS.incomingOrders.description}
+                >
+                  Incoming Orders
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Bulk Action Toolbar (admin only) */}
           {permissions?.role === "admin" && checkedIds.size > 0 && (

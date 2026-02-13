@@ -81,6 +81,16 @@ export default function NewTicketPage() {
   const [problemTypeSubs, setProblemTypeSubs] = useState<string[]>([]);
   const [problemTypeSub2s, setProblemTypeSub2s] = useState<string[]>([]);
 
+  // Purchase request state
+  const [isPurchaseRequest, setIsPurchaseRequest] = useState(false);
+  const [purchaseFields, setPurchaseFields] = useState({
+    itemUrl: "",
+    quantity: "1",
+    estCostPerItem: "",
+    justification: "",
+    project: "",
+  });
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUrgentTooltip, setShowUrgentTooltip] = useState(false);
@@ -228,6 +238,22 @@ export default function NewTicketPage() {
       return;
     }
 
+    // Validate purchase request fields
+    if (isPurchaseRequest) {
+      if (!purchaseFields.quantity || parseInt(purchaseFields.quantity) < 1) {
+        setError("Please enter a valid quantity (at least 1)");
+        return;
+      }
+      if (!purchaseFields.estCostPerItem || parseFloat(purchaseFields.estCostPerItem) <= 0) {
+        setError("Please enter an estimated cost per item");
+        return;
+      }
+      if (!purchaseFields.justification.trim()) {
+        setError("Please provide a justification for the purchase");
+        return;
+      }
+    }
+
     // Validate location is selected
     if (!formData.location) {
       setError("Please select a location");
@@ -273,9 +299,24 @@ export default function NewTicketPage() {
         creatorEmail: requesterEmail,
       };
 
+      // Build ticket data, optionally including purchase fields
+      const ticketData: CreateTicketData = {
+        ...formData,
+        assigneeEmail: assigneeEmail || undefined,
+      };
+
+      if (isPurchaseRequest) {
+        ticketData.isPurchaseRequest = true;
+        ticketData.purchaseItemUrl = purchaseFields.itemUrl || undefined;
+        ticketData.purchaseQuantity = parseInt(purchaseFields.quantity);
+        ticketData.purchaseEstCostPerItem = parseFloat(purchaseFields.estCostPerItem);
+        ticketData.purchaseJustification = purchaseFields.justification;
+        ticketData.purchaseProject = purchaseFields.project || undefined;
+      }
+
       const newTicket = await createTicket(
         client,
-        { ...formData, assigneeEmail: assigneeEmail || undefined },
+        ticketData,
         requesterEmail,
         createOptions
       );
@@ -391,6 +432,11 @@ export default function NewTicketPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Reset purchase request when switching to Problem category
+    if (name === "category" && value === "Problem") {
+      setIsPurchaseRequest(false);
+    }
   };
 
   // Show loading while MSAL initializes
@@ -617,6 +663,124 @@ export default function NewTicketPage() {
                 </div>
               </div>
 
+              {/* Purchase Request Toggle - only shown for Requests */}
+              {formData.category === "Request" && (
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 p-3 border border-amber-300 bg-amber-50 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isPurchaseRequest}
+                      onChange={(e) => setIsPurchaseRequest(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="font-medium text-amber-900">This is a Purchase Request</span>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Check this if you need to purchase an item or service
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Purchase Request Fields */}
+                  {isPurchaseRequest && (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
+                      <h3 className="text-sm font-medium text-amber-900">Purchase Details</h3>
+
+                      {/* Item URL */}
+                      <div>
+                        <label htmlFor="purchaseItemUrl" className="block text-xs font-medium text-amber-800 mb-1">
+                          Item Link/URL <span className="text-amber-600">(optional)</span>
+                        </label>
+                        <input
+                          type="url"
+                          id="purchaseItemUrl"
+                          value={purchaseFields.itemUrl}
+                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, itemUrl: e.target.value }))}
+                          placeholder="https://example.com/product"
+                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                        />
+                      </div>
+
+                      {/* Quantity + Est Cost */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="purchaseQuantity" className="block text-xs font-medium text-amber-800 mb-1">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            id="purchaseQuantity"
+                            value={purchaseFields.quantity}
+                            onChange={(e) => setPurchaseFields((prev) => ({ ...prev, quantity: e.target.value }))}
+                            min="1"
+                            step="1"
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="purchaseEstCost" className="block text-xs font-medium text-amber-800 mb-1">
+                            Est. Cost Per Item <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2 text-sm text-amber-600">$</span>
+                            <input
+                              type="number"
+                              id="purchaseEstCost"
+                              value={purchaseFields.estCostPerItem}
+                              onChange={(e) => setPurchaseFields((prev) => ({ ...prev, estCostPerItem: e.target.value }))}
+                              placeholder="0.00"
+                              step="0.01"
+                              min="0"
+                              className="w-full pl-7 pr-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Estimated Total */}
+                      {purchaseFields.quantity && purchaseFields.estCostPerItem && (
+                        <div className="flex items-center gap-2 p-2 bg-amber-100 rounded-lg">
+                          <span className="text-xs font-medium text-amber-800">Estimated Total:</span>
+                          <span className="text-sm font-bold text-amber-900">
+                            ${(parseInt(purchaseFields.quantity) * parseFloat(purchaseFields.estCostPerItem)).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Justification */}
+                      <div>
+                        <label htmlFor="purchaseJustification" className="block text-xs font-medium text-amber-800 mb-1">
+                          Justification - What is it for? <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          id="purchaseJustification"
+                          value={purchaseFields.justification}
+                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, justification: e.target.value }))}
+                          placeholder="Explain why this purchase is needed..."
+                          rows={3}
+                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                        />
+                      </div>
+
+                      {/* Project */}
+                      <div>
+                        <label htmlFor="purchaseProject" className="block text-xs font-medium text-amber-800 mb-1">
+                          Project <span className="text-amber-600">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="purchaseProject"
+                          value={purchaseFields.project}
+                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, project: e.target.value }))}
+                          placeholder="Project name this is for"
+                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Department (Problem Type) - 3-level cascading dropdowns */}
               <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="text-sm font-medium text-text-primary">
@@ -836,7 +1000,7 @@ export default function NewTicketPage() {
                     disabled={submitting}
                     className="px-6 py-2 bg-brand-blue text-white rounded-lg font-medium hover:bg-brand-blue-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Submitting..." : "Submit Ticket"}
+                    {submitting ? "Submitting..." : isPurchaseRequest ? "Submit Purchase Request" : "Submit Ticket"}
                   </button>
                 </div>
               </div>

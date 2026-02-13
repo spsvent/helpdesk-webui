@@ -121,6 +121,14 @@ function TicketList({
               {ticket.approvalStatus && ticket.approvalStatus !== "None" && (
                 <ApprovalStatusBadge status={ticket.approvalStatus} size="sm" />
               )}
+              {ticket.isPurchaseRequest && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-amber-700 bg-amber-100 rounded-full border border-amber-200" title="Purchase Request">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                  </svg>
+                  $
+                </span>
+              )}
               <span className="text-xs text-text-secondary">
                 {ticket.problemType}
               </span>

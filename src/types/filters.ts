@@ -6,7 +6,7 @@ export type SortOption = "default" | "urgency" | "recent" | "oldest";
 
 export type DateRange = "today" | "week" | "month" | "all";
 
-export type PresetView = "default" | "urgency" | "all" | "open";
+export type PresetView = "default" | "urgency" | "all" | "open" | "purchaseQueue" | "incomingOrders";
 
 export interface TicketFilters {
   search: string;
@@ -20,6 +20,9 @@ export interface TicketFilters {
   location: string | null;         // Filter by location
   dateRange: DateRange;
   sort: SortOption;
+  // Purchase request filters
+  isPurchaseRequest?: boolean;
+  purchaseStatus?: string[];
 }
 
 // Default view: Hide resolved/closed, urgent on top, then by date
@@ -84,6 +87,26 @@ export const PRESET_VIEWS: Record<PresetView, { label: string; description: stri
     filters: {
       status: ["New", "In Progress"],
       sort: "default",
+    },
+  },
+  purchaseQueue: {
+    label: "Purchase Queue",
+    description: "Approved purchases waiting to be ordered",
+    filters: {
+      status: [],
+      sort: "recent",
+      isPurchaseRequest: true,
+      purchaseStatus: ["Approved", "Approved with Changes"],
+    },
+  },
+  incomingOrders: {
+    label: "Incoming Orders",
+    description: "Purchased items waiting to be received",
+    filters: {
+      status: [],
+      sort: "recent",
+      isPurchaseRequest: true,
+      purchaseStatus: ["Purchased", "Ordered"],
     },
   },
 };

@@ -10,13 +10,21 @@ import {
   getTicket,
   requestApproval,
   processApprovalDecision,
+  updatePurchaseFields,
   getAttachments,
   uploadAttachment,
   deleteAttachment,
   downloadAttachment,
   logActivity,
 } from "@/lib/graphClient";
-import { sendApprovalRequestEmail, sendDecisionEmail, sendCommentEmail } from "@/lib/emailService";
+import {
+  sendApprovalRequestEmail,
+  sendDecisionEmail,
+  sendCommentEmail,
+  sendPurchaseApprovedEmail,
+  sendPurchaseOrderedEmail,
+  sendPurchaseReceivedEmail,
+} from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
@@ -345,7 +353,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
   // Handle approval decision
   const handleApprovalDecision = async (
-    decision: "Approved" | "Denied" | "Changes Requested",
+    decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
     notes?: string
   ) => {
     if (!accounts[0]) return;
@@ -361,7 +369,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       decision,
       approverName,
       approverEmail,
-      notes
+      notes,
+      ticket.isPurchaseRequest || false
     );
     onUpdate(updatedTicket);
 
@@ -405,6 +414,107 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         notes
       );
     }
+
+    // For purchase requests, notify the purchaser group when approved
+    if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
+      sendPurchaseApprovedEmail(client, updatedTicket, approverName)
+        .catch((e) => console.error("Failed to send purchase approved email:", e));
+    }
+  };
+
+  // Handle marking a purchase request as purchased
+  const handleMarkPurchased = async (data: {
+    vendor: string;
+    confirmationNum: string;
+    actualCost: number;
+    expectedDelivery: string;
+    notes?: string;
+  }) => {
+    if (!accounts[0]) return;
+
+    const client = getGraphClient(instance, accounts[0]);
+    const purchaserEmail = accounts[0].username;
+    const purchaserName = accounts[0].name || accounts[0].username;
+
+    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
+      PurchaseStatus: "Purchased",
+      PurchaseVendor: data.vendor,
+      PurchaseConfirmationNum: data.confirmationNum,
+      PurchaseActualCost: data.actualCost,
+      PurchaseExpectedDelivery: data.expectedDelivery,
+      PurchaseNotes: data.notes,
+      PurchasedDate: new Date().toISOString(),
+      PurchasedByEmail: purchaserEmail,
+    });
+    onUpdate(updatedTicket);
+
+    // Log activity
+    logActivity(client, {
+      eventType: "purchase_ordered",
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+      actor: purchaserEmail,
+      actorName: purchaserName,
+      description: `Marked as purchased from ${data.vendor} (${data.confirmationNum})`,
+      details: JSON.stringify({
+        vendor: data.vendor,
+        confirmationNum: data.confirmationNum,
+        actualCost: data.actualCost,
+        expectedDelivery: data.expectedDelivery,
+      }),
+    }).catch((e) => console.error("Failed to log purchase activity:", e));
+
+    // Add internal comment
+    const commentText = `**Purchased** by ${purchaserName}\n\nVendor: ${data.vendor}\nConfirmation #: ${data.confirmationNum}\nActual Cost: $${data.actualCost.toFixed(2)}\nExpected Delivery: ${data.expectedDelivery}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    const purchaseComment = await addComment(client, parseInt(ticket.id), commentText, true);
+    setComments((prev) => [...prev, purchaseComment]);
+
+    // Send email notification to inventory team
+    sendPurchaseOrderedEmail(client, updatedTicket, purchaserName)
+      .catch((e) => console.error("Failed to send purchase ordered email:", e));
+  };
+
+  // Handle marking a purchase as received
+  const handleMarkReceived = async (data: {
+    receivedDate: string;
+    notes?: string;
+  }) => {
+    if (!accounts[0]) return;
+
+    const client = getGraphClient(instance, accounts[0]);
+    const receiverEmail = accounts[0].username;
+    const receiverName = accounts[0].name || accounts[0].username;
+
+    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
+      PurchaseStatus: "Received",
+      ReceivedDate: data.receivedDate,
+      ReceivedNotes: data.notes,
+      ReceivedByEmail: receiverEmail,
+    });
+    onUpdate(updatedTicket);
+
+    // Log activity
+    logActivity(client, {
+      eventType: "purchase_received",
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+      actor: receiverEmail,
+      actorName: receiverName,
+      description: `Marked as received on ${data.receivedDate}`,
+      details: JSON.stringify({
+        receivedDate: data.receivedDate,
+        notes: data.notes || null,
+      }),
+    }).catch((e) => console.error("Failed to log receive activity:", e));
+
+    // Add internal comment
+    const commentText = `**Received** by ${receiverName} on ${data.receivedDate}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    const receiveComment = await addComment(client, parseInt(ticket.id), commentText, true);
+    setComments((prev) => [...prev, receiveComment]);
+
+    // Send email notification to the original requester
+    sendPurchaseReceivedEmail(client, updatedTicket, receiverName)
+      .catch((e) => console.error("Failed to send purchase received email:", e));
   };
 
   return (
@@ -531,6 +641,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               canEdit={canEditThisTicket}
               onRequestApproval={handleRequestApproval}
               onApprovalDecision={handleApprovalDecision}
+              onMarkPurchased={handleMarkPurchased}
+              onMarkReceived={handleMarkReceived}
               attachments={attachments}
               attachmentsLoading={attachmentsLoading}
               onUploadAttachment={handleUploadAttachment}
