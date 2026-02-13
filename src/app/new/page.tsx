@@ -7,7 +7,7 @@ import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
-import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity } from "@/lib/graphClient";
+import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity, uploadAttachment, addComment } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
@@ -23,6 +23,8 @@ import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/aut
 import { suggestCategory, getSuggestionMessage } from "@/lib/categorySuggestion";
 import AssigneePreview from "@/components/AssigneePreview";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import AttachmentUpload from "@/components/AttachmentUpload";
+import StagedAttachmentList from "@/components/StagedAttachmentList";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -82,8 +84,21 @@ export default function NewTicketPage() {
   const [problemTypeSub2s, setProblemTypeSub2s] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showUrgentTooltip, setShowUrgentTooltip] = useState(false);
+
+  // Staged files for upload after ticket creation
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+
+  const handleStageFile = async (file: File): Promise<boolean> => {
+    setStagedFiles((prev) => [...prev, file]);
+    return true;
+  };
+
+  const handleRemoveStagedFile = (index: number) => {
+    setStagedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
   const [categorySuggestion, setCategorySuggestion] = useState<{
     category: "Problem" | "Request" | null;
     message: string | null;
@@ -362,6 +377,30 @@ export default function NewTicketPage() {
             }
           })()
         );
+      }
+
+      // 5. Upload staged attachments if any
+      if (stagedFiles.length > 0) {
+        setSubmitStatus(`Uploading ${stagedFiles.length} attachment${stagedFiles.length !== 1 ? "s" : ""}...`);
+        const uploadResults = await Promise.allSettled(
+          stagedFiles.map((file) =>
+            uploadAttachment(client, newTicket.id, file, instance, accounts[0])
+          )
+        );
+
+        const failedUploads = uploadResults.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value === null));
+        if (failedUploads.length > 0) {
+          console.warn(`${failedUploads.length} of ${stagedFiles.length} attachment uploads failed`);
+          // Add internal note about failed uploads
+          postCreationTasks.push(
+            addComment(
+              client,
+              parseInt(newTicket.id),
+              `[System] ${failedUploads.length} of ${stagedFiles.length} attachment(s) failed to upload during ticket creation.`,
+              true
+            ).catch((err) => console.error("Failed to add attachment failure note:", err))
+          );
+        }
       }
 
       // Wait for all post-creation tasks (don't block redirect on failure)
@@ -822,6 +861,21 @@ export default function NewTicketPage() {
                 </p>
               </div>
 
+              {/* Attachments */}
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">
+                  Attachments <span className="text-text-secondary font-normal">(optional)</span>
+                </label>
+                <AttachmentUpload
+                  onUpload={handleStageFile}
+                  disabled={submitting}
+                />
+                <StagedAttachmentList
+                  files={stagedFiles}
+                  onRemove={handleRemoveStagedFile}
+                />
+              </div>
+
               {/* Submit button */}
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
@@ -836,7 +890,7 @@ export default function NewTicketPage() {
                     disabled={submitting}
                     className="px-6 py-2 bg-brand-blue text-white rounded-lg font-medium hover:bg-brand-blue-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Submitting..." : "Submit Ticket"}
+                    {submitting ? (submitStatus || "Submitting...") : (stagedFiles.length > 0 ? `Submit Ticket (${stagedFiles.length} file${stagedFiles.length !== 1 ? "s" : ""})` : "Submit Ticket")}
                   </button>
                 </div>
               </div>
