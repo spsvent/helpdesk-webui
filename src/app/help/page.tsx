@@ -1737,6 +1737,14 @@ const helpSections: HelpSection[] = [
           Normal priority. This helps reduce noise in channels that only need to see critical issues.
         </p>
 
+        <h4 className="font-semibold text-text-primary mt-6">Purchase Request Notifications</h4>
+        <p>
+          Purchase request tickets do <strong>not</strong> trigger a Teams notification when first
+          created. Instead, the Teams notification is sent <strong>after</strong> a GM or
+          administrator approves the purchase request. This prevents premature notifications
+          for requests that may be denied.
+        </p>
+
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-yellow-800">
             <strong>Important:</strong> Teams notifications are &quot;fire-and-forget&quot; - if a
@@ -2402,6 +2410,112 @@ const helpSections: HelpSection[] = [
             <strong>Note:</strong> Use the Notes field to document any issues with the
             delivery, such as damaged items, incorrect quantities, or other
             discrepancies. This creates a record for follow-up if needed.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "request-visibility",
+    title: "Request Visibility by Job Title",
+    content: (
+      <div className="space-y-4">
+        <p>
+          By default, pending Request tickets (awaiting GM approval) are hidden from
+          support staff and regular users. The <strong>Request Visibility</strong> feature
+          allows certain users — identified by keywords in their job title — to see and
+          comment on these pending requests before they are approved.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">How It Works</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            An administrator configures visibility keywords in{" "}
+            <strong>Settings &rarr; Request Visibility</strong> (e.g., &quot;manager&quot;,
+            &quot;supervisor&quot;, &quot;chef&quot;)
+          </li>
+          <li>
+            When a user logs in, the system checks their Entra ID job title against the
+            active keywords
+          </li>
+          <li>
+            If their job title contains any active keyword (case-insensitive), they can see
+            pending Request tickets in their ticket list
+          </li>
+          <li>
+            These users can <strong>view</strong> and <strong>comment on</strong> pending
+            requests, but cannot change the ticket status, assignment, or other fields
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Admin: Configuring Keywords</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Go to <strong>Settings &rarr; Request Visibility</strong></li>
+          <li>Type a keyword (e.g., &quot;manager&quot;) and click <strong>Add Keyword</strong></li>
+          <li>
+            The keyword will match any job title containing that word — for example,
+            &quot;manager&quot; matches &quot;Operations Manager&quot;, &quot;General Manager&quot;,
+            and &quot;Assistant Manager&quot;
+          </li>
+          <li>Toggle keywords on/off without deleting them using the active switch</li>
+          <li>Delete keywords that are no longer needed</li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Keywords are cached for 5 minutes. After adding or
+            changing keywords, users may need to refresh the page for the changes to
+            take effect.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> This feature requires a{" "}
+            <strong>RequestVisibilityKeywords</strong> SharePoint list. If the list has not
+            been created yet, an administrator can create it from the Settings page.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "nudge-approval",
+    title: "Nudge for Approval",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Users who can see pending Request tickets (via the Request Visibility feature)
+          have access to a <strong>Nudge for Approval</strong> button. This sends an email
+          reminder to all General Managers asking them to review and approve the ticket.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">How to Use</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Open a pending Request ticket</li>
+          <li>
+            Look for the <strong>Nudge for Approval</strong> button in the ticket header
+          </li>
+          <li>Click the button to send a reminder email to all GMs</li>
+          <li>
+            The email includes the ticket number, title, and a direct link to view the
+            ticket
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">Cooldown Period</h4>
+        <p>
+          To prevent excessive emails, each ticket can only be nudged once every{" "}
+          <strong>24 hours</strong>. If a nudge was already sent recently, the button will
+          show the remaining cooldown time. The cooldown is tracked per-ticket and
+          per-browser.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> The nudge email is sent to all members of the General
+            Managers group. If you&apos;re unsure whether a GM has already seen the request,
+            check the ticket comments for any GM activity before nudging.
           </p>
         </div>
       </div>

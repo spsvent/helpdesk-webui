@@ -333,8 +333,21 @@ export function canAddComment(
     return true;
   }
 
-  // Regular users can only add comments to their own tickets
-  return isOwnTicket(permissions, ticket);
+  // Regular users can comment on their own tickets
+  if (isOwnTicket(permissions, ticket)) {
+    return true;
+  }
+
+  // Users with matching visibility keywords can comment on pending Request tickets
+  if (
+    permissions.visibilityKeywordMatch &&
+    ticket.category === "Request" &&
+    ticket.approvalStatus === "Pending"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -472,6 +485,7 @@ export function canApproveTickets(permissions: UserPermissions): boolean {
  * - Request tickets with pending approval are hidden from support staff
  * - Admins see all tickets
  * - Users see their own tickets regardless of approval status
+ * - Users whose job title matches visibility keywords can see pending Requests
  */
 export function isVisibleWithApprovalGate(
   permissions: UserPermissions,
@@ -496,6 +510,10 @@ export function isVisibleWithApprovalGate(
   if (ticket.category === "Request" && ticket.approvalStatus === "Pending") {
     // Exception: Users can see their own pending Request tickets
     if (permissions.role === "user" && isOwnTicket(permissions, ticket)) {
+      return true;
+    }
+    // Exception: Users whose job title matches visibility keywords
+    if (permissions.visibilityKeywordMatch) {
       return true;
     }
     return false;

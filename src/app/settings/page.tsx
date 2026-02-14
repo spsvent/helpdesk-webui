@@ -26,6 +26,10 @@ const ActivityLogManager = dynamic(
   () => import("@/components/ActivityLogManager"),
   { loading: () => <TabLoadingSpinner /> }
 );
+const VisibilityKeywordsManager = dynamic(
+  () => import("@/components/VisibilityKeywordsManager"),
+  { loading: () => <TabLoadingSpinner /> }
+);
 
 function TabLoadingSpinner() {
   return (
@@ -39,7 +43,7 @@ export default function SettingsPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const { permissions, loading: rbacLoading } = useRBAC();
-  const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "teams" | "activity-log">("auto-assign");
+  const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "teams" | "activity-log" | "request-visibility">("auto-assign");
 
   // Handle authentication - use Teams SDK popup in Teams (MSAL popups get blocked in desktop app)
   useEffect(() => {
@@ -185,6 +189,16 @@ export default function SettingsPage() {
           >
             Activity Log
           </button>
+          <button
+            onClick={() => setActiveTab("request-visibility")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "request-visibility"
+                ? "border-brand-primary text-brand-primary"
+                : "border-transparent text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Request Visibility
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -192,6 +206,7 @@ export default function SettingsPage() {
         {activeTab === "escalation" && <EscalationRulesManager />}
         {activeTab === "teams" && <TeamsChannelsManager />}
         {activeTab === "activity-log" && <ActivityLogManager />}
+        {activeTab === "request-visibility" && <VisibilityKeywordsManager />}
       </main>
     </div>
   );

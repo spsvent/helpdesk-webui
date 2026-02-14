@@ -32,6 +32,10 @@ export interface UserPermissions {
   // Purchase workflow roles
   isPurchaser: boolean;
   isInventory: boolean;
+
+  // Job title visibility (for seeing pending Request tickets)
+  jobTitle?: string;
+  visibilityKeywordMatch: boolean;
 }
 
 // Context value for the RBAC provider
@@ -55,6 +59,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   canEditOtherDepartment: false,
   isPurchaser: false,
   isInventory: false,
+  visibilityKeywordMatch: false,
 };
 
 // Helper to create admin permissions
@@ -76,6 +81,7 @@ export function createAdminPermissions(
     canEditOtherDepartment: true,
     isPurchaser: true, // Admins can do everything
     isInventory: true,
+    visibilityKeywordMatch: false,
   };
 }
 
@@ -100,6 +106,7 @@ export function createSupportPermissions(
     canEditOtherDepartment: editableDepartments.length > 0, // If they have any department, they can edit "Other"
     isPurchaser: false, // Set by getUserPermissions based on group membership
     isInventory: false,
+    visibilityKeywordMatch: false,
   };
 }
 
@@ -122,5 +129,6 @@ export function createUserPermissions(
     canEditOtherDepartment: false,
     isPurchaser: false, // Set by getUserPermissions based on group membership
     isInventory: false,
+    visibilityKeywordMatch: false,
   };
 }
