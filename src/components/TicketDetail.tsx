@@ -26,6 +26,7 @@ import {
   sendPurchaseReceivedEmail,
 } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
+import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
@@ -436,6 +437,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
       sendPurchaseApprovedEmail(client, updatedTicket, approverName)
         .catch((e) => console.error("Failed to send purchase approved email:", e));
+    }
+
+    // Send Teams notification after approval for purchase requests
+    // (purchase requests skip the Teams notification at creation time)
+    if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes" || decision === "Approved & Ordered")) {
+      sendNewTicketTeamsNotification(client, updatedTicket, { force: true });
     }
   };
 

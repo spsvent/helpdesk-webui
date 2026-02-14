@@ -757,10 +757,18 @@ export async function postToTeamsChannel(
  */
 export function sendNewTicketTeamsNotification(
   client: Client,
-  ticket: Ticket
+  ticket: Ticket,
+  options?: { force?: boolean }
 ): void {
   // Check global kill switch
   if (!TEAMS_NOTIFICATIONS_ENABLED) {
+    return;
+  }
+
+  // Skip Teams notification for purchase requests — notify after GM approval instead
+  // Use force: true to bypass this check (e.g., when sending after approval)
+  if (ticket.isPurchaseRequest && !options?.force) {
+    console.log(`Skipping Teams notification for purchase request ticket #${ticket.ticketNumber || ticket.id} (will notify after approval)`);
     return;
   }
 
