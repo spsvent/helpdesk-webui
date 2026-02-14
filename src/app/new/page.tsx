@@ -430,6 +430,12 @@ export default function NewTicketPage() {
         );
 
         const failedUploads = uploadResults.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value === null));
+        const successfulUploads = uploadResults
+          .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof uploadAttachment>>>> =>
+            r.status === "fulfilled" && r.value !== null
+          )
+          .map((r) => r.value);
+
         if (failedUploads.length > 0) {
           console.warn(`${failedUploads.length} of ${stagedFiles.length} attachment uploads failed`);
           // Add internal note about failed uploads
@@ -440,6 +446,19 @@ export default function NewTicketPage() {
               `[System] ${failedUploads.length} of ${stagedFiles.length} attachment(s) failed to upload during ticket creation.`,
               true
             ).then(() => {}).catch((err) => console.error("Failed to add attachment failure note:", err))
+          );
+        }
+
+        // Add internal note listing successful uploads
+        if (successfulUploads.length > 0) {
+          const fileList = successfulUploads.map((att) => att.name).join(", ");
+          postCreationTasks.push(
+            addComment(
+              client,
+              parseInt(newTicket.id),
+              `[System] ${successfulUploads.length} attachment(s) uploaded during ticket creation: ${fileList}`,
+              true
+            ).then(() => {}).catch((err) => console.error("Failed to add attachment success note:", err))
           );
         }
       }

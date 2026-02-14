@@ -254,8 +254,10 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         setAttachments((prev) => [...prev, attachment]);
 
         // Add system comment noting the attachment upload
-        const uploaderName = accounts[0].name || accounts[0].username;
-        const commentText = `Attachment uploaded: ${attachment.name}`;
+        const sizeStr = attachment.size > 0
+          ? ` (${attachment.size < 1024 ? attachment.size + " B" : attachment.size < 1048576 ? (attachment.size / 1024).toFixed(1) + " KB" : (attachment.size / 1048576).toFixed(1) + " MB"})`
+          : "";
+        const commentText = `[System] Attachment uploaded: ${attachment.name}${sizeStr} — available in the Attachments section above.`;
         const newComment = await addComment(client, parseInt(ticket.id), commentText, true);
         setComments((prev) => [...prev, newComment]);
 
@@ -265,7 +267,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           ticketId: ticket.id,
           ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
           actor: accounts[0].username,
-          actorName: uploaderName,
+          actorName: accounts[0].name || accounts[0].username,
           description: `Attachment uploaded: ${attachment.name}`,
         }).catch((e) => console.error("Failed to log attachment upload:", e));
 
