@@ -27,6 +27,10 @@ import {
 } from "@/lib/rbacService";
 import { UserPermissions, DEFAULT_PERMISSIONS } from "@/types/rbac";
 import { Ticket } from "@/types/ticket";
+import {
+  getActiveKeywords,
+  userMatchesVisibilityKeywords,
+} from "@/lib/visibilityKeywordsService";
 
 interface RBACContextValue {
   permissions: UserPermissions;
@@ -102,6 +106,22 @@ export function RBACProvider({ children }: RBACProviderProps) {
         const displayName = accounts[0].name || email;
 
         const userPermissions = await getUserPermissions(client, email, displayName);
+
+        // Check visibility keywords for non-admin users
+        if (userPermissions.role !== "admin") {
+          try {
+            const [meResponse, keywords] = await Promise.all([
+              client.api("/me").select("jobTitle").get(),
+              getActiveKeywords(client),
+            ]);
+            const jobTitle = meResponse.jobTitle as string | undefined;
+            userPermissions.jobTitle = jobTitle;
+            userPermissions.visibilityKeywordMatch = userMatchesVisibilityKeywords(jobTitle, keywords);
+          } catch (kwErr) {
+            console.warn("Failed to check visibility keywords:", kwErr);
+          }
+        }
+
         setPermissions(userPermissions);
 
         // For regular users, also fetch group member emails for ticket visibility

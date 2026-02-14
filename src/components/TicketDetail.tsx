@@ -30,6 +30,7 @@ import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
+import NudgeApprovalButton from "./NudgeApprovalButton";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -558,6 +559,14 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 </span>
               )}
             </div>
+            {/* Nudge button for keyword-matched users viewing pending requests */}
+            {permissions.visibilityKeywordMatch &&
+              ticket.category === "Request" &&
+              ticket.approvalStatus === "Pending" && (
+                <div className="mt-2">
+                  <NudgeApprovalButton ticket={ticket} />
+                </div>
+              )}
           </div>
         </div>
       </div>
