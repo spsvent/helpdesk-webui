@@ -62,6 +62,21 @@ async function getSiteUserId(client: Client, email: string): Promise<number | nu
     if (response.value && response.value.length > 0) {
       return parseInt(response.value[0].id, 10);
     }
+
+    // Fallback: try matching on UserName (UPN) if EMail didn't match
+    const upnResponse = await client
+      .api(`/sites/${SITE_ID}/lists/User Information List/items`)
+      .header("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly")
+      .filter(`fields/UserName eq '${email}'`)
+      .select("id")
+      .top(1)
+      .get();
+
+    if (upnResponse.value && upnResponse.value.length > 0) {
+      return parseInt(upnResponse.value[0].id, 10);
+    }
+
+    console.warn(`Site user ID not found for ${email}`);
     return null;
   } catch (error) {
     console.error("Failed to get site user ID:", error);
@@ -368,9 +383,18 @@ export async function requestApproval(
     fields.ApprovalRequestedByLookupId = siteUserId;
   }
 
-  const item = await client.api(endpoint).patch({ fields });
+  await client.api(endpoint).patch({ fields });
 
-  return mapToTicket(item);
+  // Re-fetch the ticket to get expanded Person fields (PATCH response doesn't include them)
+  const updated = await client.api(`${endpoint}?$expand=fields`).get();
+  const ticket = mapToTicket(updated);
+
+  // Ensure requester info is set even if Person field didn't resolve
+  if (!ticket.approvalRequestedBy?.displayName) {
+    ticket.approvalRequestedBy = { displayName: requesterName, email: requesterEmail };
+  }
+
+  return ticket;
 }
 
 // Process approval decision (approve/deny/request changes)
@@ -433,7 +457,14 @@ export async function processApprovalDecision(
 
   // Re-fetch the ticket to get expanded Person fields (PATCH response doesn't include them)
   const updated = await client.api(`${endpoint}?$expand=fields`).get();
-  return mapToTicket(updated);
+  const ticket = mapToTicket(updated);
+
+  // Ensure approver info is set even if Person field didn't resolve
+  if (!ticket.approvedBy?.displayName) {
+    ticket.approvedBy = { displayName: approverName, email: approverEmail };
+  }
+
+  return ticket;
 }
 
 // Update purchase-specific fields (for purchaser/inventory updates)
@@ -1775,7 +1806,12 @@ export async function getActivityLog(
     endpoint += `&$filter=${filters.join(" and ")}`;
   }
 
-  const response = await client.api(endpoint).get();
+  // Activity log fields (EventType, TicketNumber, etc.) are not indexed in SharePoint,
+  // so we need the Prefer header to allow filtering on them.
+  const response = await client
+    .api(endpoint)
+    .header("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly")
+    .get();
 
   return (response.value || []).map((item: SharePointActivityLogItem) => ({
     id: item.id,
