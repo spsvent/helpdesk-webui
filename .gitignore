@@ -34,6 +34,9 @@ yarn-error.log*
 *.swp
 *.swo
 
+# Legacy migration scripts
+_legacy/
+
 # OS
 .DS_Store
 Thumbs.db
