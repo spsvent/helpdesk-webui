@@ -439,7 +439,7 @@ export default function NewTicketPage() {
               parseInt(newTicket.id),
               `[System] ${failedUploads.length} of ${stagedFiles.length} attachment(s) failed to upload during ticket creation.`,
               true
-            ).catch((err) => console.error("Failed to add attachment failure note:", err))
+            ).then(() => {}).catch((err) => console.error("Failed to add attachment failure note:", err))
           );
         }
       }
