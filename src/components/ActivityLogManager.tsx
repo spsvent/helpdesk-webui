@@ -71,24 +71,14 @@ export default function ActivityLogManager() {
       const client = getGraphClient(instance, accounts[0]);
       const data = await getActivityLog(client, {
         eventType: filterEventType as ActivityEventType || undefined,
+        ticketNumber: filterTicket || undefined,
         limit: filterLimit,
       });
 
-      // Client-side filter for ticket number/ID
-      let filtered = data;
-      if (filterTicket) {
-        const search = filterTicket.toLowerCase();
-        filtered = data.filter(
-          (e) =>
-            e.ticketNumber?.toLowerCase().includes(search) ||
-            e.ticketId?.toLowerCase().includes(search)
-        );
-      }
-
       // Sort by timestamp descending (most recent first)
-      filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-      setEntries(filtered);
+      setEntries(data);
       setListConfigured(true);
     } catch (err: unknown) {
       const error = err as { message?: string };
