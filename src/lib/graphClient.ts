@@ -429,9 +429,11 @@ export async function processApprovalDecision(
     fields.ApprovalNotes = notes;
   }
 
-  const item = await client.api(endpoint).patch({ fields });
+  await client.api(endpoint).patch({ fields });
 
-  return mapToTicket(item);
+  // Re-fetch the ticket to get expanded Person fields (PATCH response doesn't include them)
+  const updated = await client.api(`${endpoint}?$expand=fields`).get();
+  return mapToTicket(updated);
 }
 
 // Update purchase-specific fields (for purchaser/inventory updates)
@@ -868,7 +870,7 @@ export async function getAttachments(
       return (data.d?.results || []).map((att: Record<string, unknown>) => ({
         name: att.FileName as string,
         contentType: "application/octet-stream",
-        size: (att.Length as number) || 0,
+        size: (att.Length as number) || (att.Size as number) || (att.FileSize as number) || 0,
         contentUrl: att.ServerRelativeUrl as string || "",
       }));
     } catch (error) {
@@ -1734,6 +1736,7 @@ export async function getActivityLog(
   client: Client,
   options?: {
     ticketId?: string;
+    ticketNumber?: string;
     eventType?: ActivityEventType;
     limit?: number;
     startDate?: Date;
@@ -1750,10 +1753,13 @@ export async function getActivityLog(
   const limit = options?.limit || 100;
   endpoint += `&$top=${limit}`;
 
-  // Build filter
+  // Build filter — all filters are server-side so $top applies AFTER filtering
   const filters: string[] = [];
   if (options?.ticketId) {
     filters.push(`fields/TicketId eq '${options.ticketId}'`);
+  }
+  if (options?.ticketNumber) {
+    filters.push(`fields/TicketNumber eq '${options.ticketNumber}'`);
   }
   if (options?.eventType) {
     filters.push(`fields/EventType eq '${options.eventType}'`);

@@ -131,9 +131,11 @@ export default function AttachmentList({
             <p className="text-sm font-medium text-text-primary truncate">
               {attachment.name}
             </p>
-            <p className="text-xs text-text-secondary">
-              {formatFileSize(attachment.size)}
-            </p>
+            {attachment.size > 0 && (
+              <p className="text-xs text-text-secondary">
+                {formatFileSize(attachment.size)}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
