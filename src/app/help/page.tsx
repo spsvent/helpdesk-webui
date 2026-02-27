@@ -494,6 +494,15 @@ const helpSections: HelpSection[] = [
         <p>At the top of the ticket view you&apos;ll see:</p>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
+            <strong>Ticket Type Badge:</strong> Color-coded label showing
+            {" "}<span className="px-1.5 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700">Request</span>,
+            {" "}<span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">Problem</span>, or
+            {" "}<span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Purchase Request</span>
+          </li>
+          <li>
+            <strong>Location Badge:</strong> Shows the ticket location (if set) in a gray badge
+          </li>
+          <li>
             <strong>Ticket Title:</strong> The full title of the ticket
           </li>
           <li>
@@ -545,7 +554,7 @@ const helpSections: HelpSection[] = [
         <p>The right sidebar shows ticket metadata:</p>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
-            <strong>Status:</strong> Dropdown to change ticket status
+            <strong>Status:</strong> Dropdown to change ticket status (New, In Progress, On Hold, Resolved)
           </li>
           <li>
             <strong>Priority:</strong> Dropdown to change priority (Low, Normal, High, Urgent)
@@ -791,7 +800,7 @@ const helpSections: HelpSection[] = [
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-slate-500"></span>
             <span>
-              <strong>Closed:</strong> Ticket complete
+              <strong>Closed:</strong> Administratively closed (merged, duplicate, or bulk-closed by an admin)
             </span>
           </div>
         </div>
@@ -998,7 +1007,7 @@ const helpSections: HelpSection[] = [
             <span className="px-2 py-1 rounded text-xs font-medium bg-slate-500 text-white">
               Closed
             </span>
-            <span>Ticket is complete and archived</span>
+            <span>Administratively closed — set by the system (merge) or by admins via bulk actions</span>
           </div>
         </div>
 
@@ -1264,6 +1273,7 @@ const helpSections: HelpSection[] = [
             <p className="font-medium">Set Status</p>
             <p className="text-sm text-gray-600 mt-1">
               Change the status of all selected tickets to New, In Progress, On Hold, Resolved, or Closed.
+              Note: Closed is only available here in bulk actions — it cannot be set from the individual ticket detail view.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
@@ -1557,11 +1567,11 @@ const helpSections: HelpSection[] = [
             <span className="px-2 py-1 rounded bg-emerald-500 text-white">
               Resolved
             </span>
-            <span>→</span>
-            <span className="px-2 py-1 rounded bg-slate-500 text-white">
-              Closed
-            </span>
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            <span className="px-1.5 py-0.5 rounded bg-slate-500 text-white text-xs">Closed</span>
+            {" "}is set automatically when tickets are merged, or by admins via bulk actions.
+          </p>
         </div>
       </div>
     ),
