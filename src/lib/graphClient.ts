@@ -306,6 +306,15 @@ export async function createTicket(
     fields.OriginalAssignedTo = ticketData.assigneeEmail;
   }
 
+  // Look up requester site user ID once (used for Requester and ApprovalRequestedBy)
+  let requesterSiteUserId: number | null = null;
+  if (requesterEmail) {
+    requesterSiteUserId = await getSiteUserId(client, requesterEmail);
+    if (requesterSiteUserId) {
+      fields.RequesterLookupId = requesterSiteUserId;
+    }
+  }
+
   // Approval workflow logic:
   // - Any ticket created by admin: auto-approved by the creating admin
   // - Request tickets by non-admins: require approval (Pending status)
@@ -323,13 +332,8 @@ export async function createTicket(
     // Non-admin Request tickets require approval
     fields.ApprovalStatus = "Pending";
     fields.ApprovalRequestedDate = new Date().toISOString();
-  }
-
-  // Set Requester field (Person field) using the site user ID
-  if (requesterEmail) {
-    const siteUserId = await getSiteUserId(client, requesterEmail);
-    if (siteUserId) {
-      fields.RequesterLookupId = siteUserId;
+    if (requesterSiteUserId) {
+      fields.ApprovalRequestedByLookupId = requesterSiteUserId;
     }
   }
 

@@ -52,7 +52,7 @@ export default function ApprovalHistory({ ticket }: ApprovalHistoryProps) {
             <div className="flex-1 min-w-0">
               <p className="text-text-primary">
                 <span className="font-medium">
-                  {ticket.approvalRequestedBy?.displayName || "Unknown"}
+                  {ticket.approvalRequestedBy?.displayName || ticket.requester?.displayName || "Unknown"}
                 </span>{" "}
                 requested approval
               </p>
