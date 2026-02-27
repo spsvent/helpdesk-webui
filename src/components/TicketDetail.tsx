@@ -560,6 +560,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               }`}>
                 {ticket.isPurchaseRequest ? "Purchase Request" : ticket.category}
               </span>
+              {ticket.location && (
+                <span className="px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-600">
+                  {ticket.location}
+                </span>
+              )}
               <h1 className="text-lg md:text-xl font-semibold text-text-primary truncate max-w-full">
                 {ticket.title}
               </h1>
