@@ -551,6 +551,15 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-1">
+              <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
+                ticket.isPurchaseRequest
+                  ? "bg-purple-100 text-purple-700"
+                  : ticket.category === "Problem"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-sky-100 text-sky-700"
+              }`}>
+                {ticket.isPurchaseRequest ? "Purchase Request" : ticket.category}
+              </span>
               <h1 className="text-lg md:text-xl font-semibold text-text-primary truncate max-w-full">
                 {ticket.title}
               </h1>
