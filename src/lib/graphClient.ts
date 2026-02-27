@@ -316,14 +316,21 @@ export async function createTicket(
   }
 
   // Approval workflow logic:
-  // - Any ticket created by admin: auto-approved by the creating admin
+  // - Purchase requests always require approval (even from admins)
+  // - Non-purchase tickets created by admin: auto-approved
   // - Request tickets by non-admins: require approval (Pending status)
   // - Problem tickets by non-admins: no approval workflow needed
-  if (options?.isAdmin && options?.creatorEmail) {
-    // Auto-approve all tickets created by admins
+  if (ticketData.isPurchaseRequest) {
+    // Purchase requests always need explicit GM approval
+    fields.ApprovalStatus = "Pending";
+    fields.ApprovalRequestedDate = new Date().toISOString();
+    if (requesterSiteUserId) {
+      fields.ApprovalRequestedByLookupId = requesterSiteUserId;
+    }
+  } else if (options?.isAdmin && options?.creatorEmail) {
+    // Auto-approve non-purchase tickets created by admins
     fields.ApprovalStatus = "Approved";
     fields.ApprovalDate = new Date().toISOString();
-    // Set the admin as the approver
     const adminSiteUserId = await getSiteUserId(client, options.creatorEmail);
     if (adminSiteUserId) {
       fields.ApprovedByLookupId = adminSiteUserId;
