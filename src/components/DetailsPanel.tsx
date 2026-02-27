@@ -75,7 +75,6 @@ const STATUS_OPTIONS: Ticket["status"][] = [
   "In Progress",
   "On Hold",
   "Resolved",
-  "Closed",
 ];
 
 const PRIORITY_OPTIONS: Ticket["priority"][] = ["Low", "Normal", "High", "Urgent"];
