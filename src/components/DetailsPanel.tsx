@@ -39,6 +39,7 @@ import {
   sendStatusChangeTeamsNotification,
   sendPriorityEscalationTeamsNotification,
 } from "@/lib/teamsService";
+import { syncTicketUpdated } from "@/lib/vikunjaSyncService";
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -453,6 +454,25 @@ export default function DetailsPanel({
       // Send Teams notification for priority escalation
       if (priority !== oldPriority) {
         sendPriorityEscalationTeamsNotification(client, updated, oldPriority, currentUserName);
+      }
+
+      // Sync changes to Vikunja (fire-and-forget, Tech tickets only)
+      const changedFields: Record<string, { old: string; new: string }> = {};
+      if (status !== oldStatus) {
+        changedFields.status = { old: oldStatus, new: status };
+      }
+      if (priority !== oldPriority) {
+        changedFields.priority = { old: oldPriority, new: priority };
+      }
+      const newAssigneeEmail = selectedAssignee?.email || "";
+      if (newAssigneeEmail !== (oldAssigneeEmail || "")) {
+        changedFields.assignee = {
+          old: ticket.assignedTo?.displayName || oldAssigneeEmail || "",
+          new: selectedAssignee?.displayName || newAssigneeEmail,
+        };
+      }
+      if (Object.keys(changedFields).length > 0) {
+        syncTicketUpdated(updated, changedFields, currentUserName, accounts[0].username);
       }
     } catch (e) {
       console.error("Failed to update ticket:", e);

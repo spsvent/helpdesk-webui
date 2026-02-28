@@ -11,6 +11,7 @@ import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, ad
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
+import { syncTicketCreated } from "@/lib/vikunjaSyncService";
 import {
   getProblemTypes,
   getProblemTypeSubs,
@@ -363,7 +364,10 @@ export default function NewTicketPage() {
       // 2. Send Teams notification (fire-and-forget)
       sendNewTicketTeamsNotification(client, newTicket);
 
-      // 3. Send email notification to assignee if there is one
+      // 3. Sync to Vikunja (fire-and-forget, Tech tickets only)
+      syncTicketCreated(newTicket);
+
+      // 4. Send email notification to assignee if there is one
       if (assigneeEmail) {
         postCreationTasks.push(
           (async () => {
@@ -398,7 +402,7 @@ export default function NewTicketPage() {
         );
       }
 
-      // 4. For Request tickets, send approval notification
+      // 5. For Request tickets, send approval notification
       if (formData.category === "Request") {
         postCreationTasks.push(
           (async () => {
@@ -420,7 +424,7 @@ export default function NewTicketPage() {
         );
       }
 
-      // 5. Upload staged attachments if any
+      // 6. Upload staged attachments if any
       if (stagedFiles.length > 0) {
         setSubmitStatus(`Uploading ${stagedFiles.length} attachment${stagedFiles.length !== 1 ? "s" : ""}...`);
         const uploadResults = await Promise.allSettled(

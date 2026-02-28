@@ -2532,6 +2532,72 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "vikunja-sync",
+    title: "Vikunja Task Sync",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Tickets in the <strong>Tech</strong> department automatically sync with
+          Vikunja, our task management platform. This keeps both systems in sync
+          so the tech team can work from whichever tool they prefer.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Gets Synced</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>New Tech tickets</strong> automatically create a task in
+            Vikunja with the format{" "}
+            <code className="bg-bg-subtle px-1 rounded">[HD-123] Ticket Title</code>
+          </li>
+          <li>
+            <strong>Status changes</strong> are posted as comments on the
+            Vikunja task
+          </li>
+          <li>
+            <strong>Priority changes</strong> update the Vikunja task priority
+          </li>
+          <li>
+            <strong>Public comments</strong> added to a Help Desk ticket appear
+            on the Vikunja task
+          </li>
+          <li>
+            <strong>Comments on Vikunja tasks</strong> appear on the Help Desk
+            ticket (prefixed with &quot;Synced from Vikunja&quot;)
+          </li>
+          <li>
+            <strong>Resolving a ticket</strong> marks the Vikunja task as done,
+            and vice versa
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Does NOT Sync</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>Tickets in departments other than Tech</li>
+          <li>Internal/private comments</li>
+          <li>File attachments</li>
+          <li>Purchase request workflow details</li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Synced comments are clearly marked with
+            &quot;[Synced from Help Desk]&quot; or &quot;[Synced from Vikunja]&quot; so you always
+            know where a message originated.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Sync happens automatically in the background.
+            If you notice a comment or status not syncing, it may take a few
+            seconds to appear on the other side. If issues persist, contact your
+            system administrator.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "report-issue",
     title: "Report an Issue",
     content: "REPORT_ISSUE_PLACEHOLDER",
