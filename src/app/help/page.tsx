@@ -385,8 +385,11 @@ const helpSections: HelpSection[] = [
         </p>
         <ul className="list-disc list-inside space-y-1 ml-4">
           <li>Ticket title</li>
-          <li>Ticket description</li>
+          <li>Ticket ID (e.g. type <em>#123</em> or just <em>123</em>)</li>
           <li>Requester name</li>
+          <li>Assignee name</li>
+          <li>Location</li>
+          <li>Ticket description</li>
         </ul>
         <p className="mt-2 text-sm text-text-secondary">
           Search results update as you type (with a small delay to avoid flickering).
@@ -421,10 +424,10 @@ const helpSections: HelpSection[] = [
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
           <li>
-            <strong>Status:</strong> Select one or more status types (New, In Progress, On Hold, Resolved, Closed)
+            <strong>Status:</strong> Select one or more status types (New, In Progress, On Hold, Resolved, Closed). The label shows a count — e.g. <em>Status (3)</em> when 3 are selected, or <em>Status (all)</em> when none are selected (meaning all statuses are visible).
           </li>
           <li>
-            <strong>Priority:</strong> Filter by priority level (Urgent, High, Normal, Low)
+            <strong>Priority:</strong> Filter by priority level (Urgent, High, Normal, Low). Uses the same count indicator as Status.
           </li>
           <li>
             <strong>Department:</strong> Cascading dropdowns for ProblemType → Sub-category → Specific type
@@ -433,9 +436,31 @@ const helpSections: HelpSection[] = [
             <strong>Category:</strong> Filter by Request or Problem
           </li>
           <li>
+            <strong>Assignee:</strong> Filter by the person a ticket is assigned to
+          </li>
+          <li>
+            <strong>Location:</strong> Filter by ticket location
+          </li>
+          <li>
             <strong>Date Range:</strong> Today, Last 7 days, Last 30 days, or All time
           </li>
         </ul>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Deselecting all chips for Status or Priority means
+            &quot;show all&quot; — no filtering is applied for that category. The label will
+            display <em>(all)</em> to confirm this.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Filter Summary Pills</h4>
+        <p>
+          When the filter panel is collapsed and you have active filters, small blue
+          summary pills appear below the filter button showing which filters are active
+          (e.g. <em>Status: New, In Progress</em> or <em>Priority: Urgent, High</em>).
+          This lets you see at a glance what&apos;s filtering your view without opening the panel.
+        </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Sort Options</h4>
         <p>Use the sort dropdown to change how tickets are ordered:</p>
@@ -446,16 +471,24 @@ const helpSections: HelpSection[] = [
           <p><strong>Oldest first:</strong> Oldest tickets first</p>
         </div>
 
+        <h4 className="font-semibold text-text-primary mt-6">Preset Highlighting</h4>
+        <p>
+          The active preset button (e.g. <em>Active Tickets</em>) stays highlighted to show which
+          view you&apos;re using. If you manually change any filter — such as toggling a status chip,
+          picking an assignee, or changing the sort — the preset highlight clears automatically,
+          since your view no longer matches a preset.
+        </p>
+
         <h4 className="font-semibold text-text-primary mt-6">Clearing Filters</h4>
         <p>
           When you have active filters, two buttons appear at the bottom of the filter panel:
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
           <li>
-            <strong>Reset to default:</strong> Returns to the &quot;Active Tickets&quot; view (hides resolved/closed)
+            <strong>Reset to default:</strong> Returns to the &quot;Active Tickets&quot; view (hides resolved/closed) and collapses the filter panel
           </li>
           <li>
-            <strong>Show all tickets:</strong> Clears ALL filters to show every ticket
+            <strong>Show all tickets:</strong> Clears ALL filters to show every ticket and collapses the filter panel
           </li>
         </ul>
 
@@ -473,8 +506,8 @@ const helpSections: HelpSection[] = [
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-blue-800">
             <strong>Tip:</strong> The filter badge on the Filters button shows how many
-            filters are currently active. This helps you know when filtered results
-            might be hiding tickets.
+            filters are currently active. When the panel is collapsed, summary pills
+            below the button show exactly which filters are narrowing your view.
           </p>
         </div>
       </div>
