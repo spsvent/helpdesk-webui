@@ -27,6 +27,7 @@ import {
 } from "@/lib/emailService";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
+import { syncCommentAdded } from "@/lib/vikunjaSyncService";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
@@ -236,6 +237,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           ).catch((e) => console.error("Failed to send comment email to assignee:", e));
         }
       }
+
+      // Sync comment to Vikunja (fire-and-forget, Tech tickets only)
+      syncCommentAdded(ticket, text, isInternal, commenterName, commenterEmail);
     } catch (e) {
       console.error("Failed to add comment:", e);
     } finally {
