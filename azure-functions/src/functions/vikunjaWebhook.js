@@ -63,7 +63,10 @@ function verifySignature(rawBody, signature) {
 async function getSyncMappingByVikunjaTaskId(graphClient, vikunjaTaskId) {
   const endpoint = `/sites/${config.siteId}/lists/${config.syncMapListId}/items?$filter=fields/VikunjaTaskId eq ${vikunjaTaskId}&$expand=fields`;
   try {
-    const response = await graphClient.api(endpoint).get();
+    const response = await graphClient
+      .api(endpoint)
+      .header("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly")
+      .get();
     return response.value.length > 0 ? response.value[0] : null;
   } catch {
     return null;
@@ -128,7 +131,7 @@ async function handleTaskDone(graphClient, mapping, context) {
     fields: {
       Title: `Ticket ${mapping.fields.Title}`,
       TicketID: parseInt(ticketId),
-      CommentBody: "[Synced from Vikunja] Task marked as complete in Vikunja — ticket resolved automatically.",
+      Body: "[Synced from Vikunja] Task marked as complete in Vikunja — ticket resolved automatically.",
       IsInternal: false,
       CommentType: "Status Change",
     },
@@ -172,7 +175,7 @@ async function handleCommentCreated(graphClient, mapping, commentText, context) 
     fields: {
       Title: `Ticket ${mapping.fields.Title}`,
       TicketID: parseInt(ticketId),
-      CommentBody: `[Synced from Vikunja] ${commentText}`,
+      Body: `[Synced from Vikunja] ${commentText}`,
       IsInternal: false,
       CommentType: "Comment",
     },

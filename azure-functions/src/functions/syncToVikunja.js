@@ -81,7 +81,10 @@ async function vikunjaRequest(method, path, body) {
 async function getSyncMapping(graphClient, ticketId) {
   const endpoint = `/sites/${config.siteId}/lists/${config.syncMapListId}/items?$filter=fields/TicketId eq '${ticketId}'&$expand=fields`;
   try {
-    const response = await graphClient.api(endpoint).get();
+    const response = await graphClient
+      .api(endpoint)
+      .header("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly")
+      .get();
     return response.value.length > 0 ? response.value[0] : null;
   } catch {
     return null;
