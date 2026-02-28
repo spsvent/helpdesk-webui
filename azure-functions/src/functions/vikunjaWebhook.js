@@ -219,8 +219,9 @@ app.http("vikunjaWebhook", {
       const body = JSON.parse(rawBody);
 
       // Vikunja webhook payload structure:
-      // { event: "task.update" | "task.comment.create", data: { ... } }
-      const { event, data } = body;
+      // { event_name: "task.updated" | "task.comment.created", time: "...", data: { task, doer, comment? } }
+      const event = body.event_name;
+      const { data } = body;
 
       if (!event || !data) {
         return {
@@ -235,12 +236,8 @@ app.http("vikunjaWebhook", {
       const graphClient = getGraphClient(accessToken);
 
       // Extract Vikunja task ID from event data
-      let vikunjaTaskId;
-      if (event === "task.comment.create") {
-        vikunjaTaskId = data.task?.id || data.task_id;
-      } else {
-        vikunjaTaskId = data.id || data.task?.id;
-      }
+      // Vikunja nests the task object under data.task for all events
+      const vikunjaTaskId = data.task?.id;
 
       if (!vikunjaTaskId) {
         context.log(`Could not extract task ID from webhook payload for event: ${event}`);
@@ -274,17 +271,17 @@ app.http("vikunjaWebhook", {
 
       let result;
       switch (event) {
-        case "task.update":
+        case "task.updated":
           // Only handle when task is marked as done
-          if (data.done === true) {
+          if (data.task?.done === true) {
             result = await handleTaskDone(graphClient, mapping, context);
           } else {
             result = { action: "skipped", reason: "task_not_done" };
           }
           break;
 
-        case "task.comment.create": {
-          const commentText = data.comment || data.text || "";
+        case "task.comment.created": {
+          const commentText = data.comment?.comment || data.comment?.text || "";
           result = await handleCommentCreated(graphClient, mapping, commentText, context);
           break;
         }
