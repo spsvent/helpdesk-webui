@@ -204,3 +204,67 @@ export function hasActiveFilters(filters: TicketFilters): boolean {
 export function resetFilters(): TicketFilters {
   return { ...DEFAULT_FILTERS };
 }
+
+/**
+ * Compare two arrays for equality (order-independent)
+ */
+export function arraysEqual<T>(a: T[], b: T[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((val, i) => val === sortedB[i]);
+}
+
+/**
+ * Check if current filters match the default view
+ */
+export function filtersMatchDefault(filters: TicketFilters): boolean {
+  return (
+    arraysEqual(filters.status, DEFAULT_FILTERS.status) &&
+    arraysEqual(filters.priority, DEFAULT_FILTERS.priority) &&
+    filters.problemType === DEFAULT_FILTERS.problemType &&
+    filters.problemTypeSub === DEFAULT_FILTERS.problemTypeSub &&
+    filters.problemTypeSub2 === DEFAULT_FILTERS.problemTypeSub2 &&
+    filters.category === DEFAULT_FILTERS.category &&
+    filters.assignee === DEFAULT_FILTERS.assignee &&
+    filters.location === DEFAULT_FILTERS.location &&
+    filters.dateRange === DEFAULT_FILTERS.dateRange &&
+    filters.sort === DEFAULT_FILTERS.sort
+  );
+}
+
+/**
+ * Get human-readable labels for currently active filters (when panel is collapsed)
+ */
+export function getActiveFilterSummary(filters: TicketFilters): string[] {
+  const labels: string[] = [];
+
+  if (filters.status.length > 0) {
+    labels.push(`Status: ${filters.status.join(", ")}`);
+  }
+  if (filters.priority.length > 0) {
+    labels.push(`Priority: ${filters.priority.join(", ")}`);
+  }
+  if (filters.problemType) {
+    let dept = filters.problemType;
+    if (filters.problemTypeSub) dept += ` > ${filters.problemTypeSub}`;
+    if (filters.problemTypeSub2) dept += ` > ${filters.problemTypeSub2}`;
+    labels.push(`Dept: ${dept}`);
+  }
+  if (filters.category) {
+    labels.push(`Category: ${filters.category}`);
+  }
+  if (filters.assignee) {
+    const name = filters.assignee.split("@")[0].replace(/[._]/g, " ");
+    labels.push(`Assignee: ${name}`);
+  }
+  if (filters.location) {
+    labels.push(`Location: ${filters.location}`);
+  }
+  if (filters.dateRange !== "all") {
+    const rangeLabels: Record<string, string> = { today: "Today", week: "Last 7 days", month: "Last 30 days" };
+    labels.push(rangeLabels[filters.dateRange] || filters.dateRange);
+  }
+
+  return labels;
+}

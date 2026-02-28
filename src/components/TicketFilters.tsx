@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   TicketFilters,
   STATUS_OPTIONS,
@@ -13,9 +13,8 @@ import {
   PresetView,
 } from "@/types/filters";
 import { Ticket } from "@/types/ticket";
-import { getActiveFilterCount } from "@/lib/filterUtils";
+import { getActiveFilterCount, filtersMatchDefault, getActiveFilterSummary } from "@/lib/filterUtils";
 import { getProblemTypes, getProblemTypeSubs, getProblemTypeSub2s } from "@/lib/categoryConfig";
-import { getLocations } from "@/lib/locationConfig";
 
 interface TicketFiltersProps {
   filters: TicketFilters;
@@ -40,17 +39,23 @@ export default function TicketFiltersComponent({
 }: TicketFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search);
-  const [activePreset, setActivePreset] = useState<PresetView>("default");
+  const [activePreset, setActivePreset] = useState<PresetView | null>("default");
 
-  // Debounce search input
+  // Keep a ref to latest filters so debounce doesn't close over stale state
+  const filtersRef = useRef(filters);
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  // Debounce search input — only re-fires when user types, not on any filter change
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        onFiltersChange({ ...filters, search: searchInput });
+      if (searchInput !== filtersRef.current.search) {
+        onFiltersChange({ ...filtersRef.current, search: searchInput });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, filters, onFiltersChange]);
+  }, [searchInput, onFiltersChange]);
 
   const activeFilterCount = getActiveFilterCount(filters);
 
@@ -96,6 +101,7 @@ export default function TicketFiltersComponent({
   // Toggle status in multi-select
   const toggleStatus = useCallback(
     (status: Ticket["status"]) => {
+      setActivePreset(null);
       const newStatus = filters.status.includes(status)
         ? filters.status.filter((s) => s !== status)
         : [...filters.status, status];
@@ -107,6 +113,7 @@ export default function TicketFiltersComponent({
   // Toggle priority in multi-select
   const togglePriority = useCallback(
     (priority: Ticket["priority"]) => {
+      setActivePreset(null);
       const newPriority = filters.priority.includes(priority)
         ? filters.priority.filter((p) => p !== priority)
         : [...filters.priority, priority];
@@ -118,6 +125,7 @@ export default function TicketFiltersComponent({
   // Handle cascading department filters
   const handleProblemTypeChange = useCallback(
     (value: string) => {
+      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemType: value || null,
@@ -130,6 +138,7 @@ export default function TicketFiltersComponent({
 
   const handleProblemTypeSubChange = useCallback(
     (value: string) => {
+      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemTypeSub: value || null,
@@ -141,6 +150,7 @@ export default function TicketFiltersComponent({
 
   const handleProblemTypeSub2Change = useCallback(
     (value: string) => {
+      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemTypeSub2: value || null,
@@ -167,6 +177,7 @@ export default function TicketFiltersComponent({
   const clearAllFilters = useCallback(() => {
     setSearchInput("");
     setActivePreset("all");
+    setShowFilters(false);
     onFiltersChange({ ...EMPTY_FILTERS });
   }, [onFiltersChange]);
 
@@ -174,20 +185,12 @@ export default function TicketFiltersComponent({
   const resetToDefault = useCallback(() => {
     setSearchInput("");
     setActivePreset("default");
+    setShowFilters(false);
     onFiltersChange({ ...DEFAULT_FILTERS });
   }, [onFiltersChange]);
 
   // Check if filters differ from default (for showing reset button)
-  const hasCustomFilters =
-    filters.search !== "" ||
-    filters.priority.length > 0 ||
-    filters.problemType !== null ||
-    filters.category !== null ||
-    filters.assignee !== null ||
-    filters.location !== null ||
-    filters.dateRange !== "all" ||
-    // Check if status differs from default
-    JSON.stringify([...filters.status].sort()) !== JSON.stringify([...DEFAULT_FILTERS.status].sort());
+  const hasCustomFilters = filters.search !== "" || !filtersMatchDefault(filters);
 
   // Get sub-category options based on selected parent
   const problemTypeSubs = filters.problemType
@@ -260,7 +263,7 @@ export default function TicketFiltersComponent({
           <select
             value={filters.sort}
             onChange={(e) => {
-              setActivePreset("default"); // Clear preset when manually changing sort
+              setActivePreset(null);
               onFiltersChange({ ...filters, sort: e.target.value as TicketFilters["sort"] });
             }}
             className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary min-w-0"
@@ -308,13 +311,30 @@ export default function TicketFiltersComponent({
         </div>
       </div>
 
+      {/* Active filter summary pills (when panel collapsed) */}
+      {!showFilters && activeFilterCount > 0 && (
+        <div className="px-3 pb-2 flex gap-1 overflow-hidden">
+          {getActiveFilterSummary(filters).map((label) => (
+            <span
+              key={label}
+              className="inline-block px-2 py-0.5 text-[10px] bg-blue-50 text-blue-700 rounded-full whitespace-nowrap"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Collapsible Filter Panel */}
       {showFilters && (
         <div className="px-3 pb-3 space-y-3 border-t border-border pt-3">
           {/* Status Chips */}
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1.5">
-              Status
+              Status{" "}
+              <span className="font-normal text-gray-400">
+                {filters.status.length === 0 ? "(all)" : `(${filters.status.length})`}
+              </span>
             </label>
             <div className="flex flex-wrap gap-1.5">
               {STATUS_OPTIONS.map((status) => (
@@ -336,7 +356,10 @@ export default function TicketFiltersComponent({
           {/* Priority Chips */}
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1.5">
-              Priority
+              Priority{" "}
+              <span className="font-normal text-gray-400">
+                {filters.priority.length === 0 ? "(all)" : `(${filters.priority.length})`}
+              </span>
             </label>
             <div className="flex flex-wrap gap-1.5">
               {PRIORITY_OPTIONS.map((priority) => (
@@ -417,7 +440,7 @@ export default function TicketFiltersComponent({
             </label>
             <div className="flex gap-1.5">
               <button
-                onClick={() => onFiltersChange({ ...filters, category: null })}
+                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: null }); }}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === null
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -427,7 +450,7 @@ export default function TicketFiltersComponent({
                 All
               </button>
               <button
-                onClick={() => onFiltersChange({ ...filters, category: "Request" })}
+                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: "Request" }); }}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Request"
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -437,7 +460,7 @@ export default function TicketFiltersComponent({
                 Request
               </button>
               <button
-                onClick={() => onFiltersChange({ ...filters, category: "Problem" })}
+                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: "Problem" }); }}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Problem"
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -457,9 +480,10 @@ export default function TicketFiltersComponent({
               </label>
               <select
                 value={filters.assignee || ""}
-                onChange={(e) =>
-                  onFiltersChange({ ...filters, assignee: e.target.value || null })
-                }
+                onChange={(e) => {
+                  setActivePreset(null);
+                  onFiltersChange({ ...filters, assignee: e.target.value || null });
+                }}
                 className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
               >
                 <option value="">All Assignees</option>
@@ -480,9 +504,10 @@ export default function TicketFiltersComponent({
               </label>
               <select
                 value={filters.location || ""}
-                onChange={(e) =>
-                  onFiltersChange({ ...filters, location: e.target.value || null })
-                }
+                onChange={(e) => {
+                  setActivePreset(null);
+                  onFiltersChange({ ...filters, location: e.target.value || null });
+                }}
                 className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
               >
                 <option value="">All Locations</option>
@@ -502,12 +527,13 @@ export default function TicketFiltersComponent({
             </label>
             <select
               value={filters.dateRange}
-              onChange={(e) =>
+              onChange={(e) => {
+                setActivePreset(null);
                 onFiltersChange({
                   ...filters,
                   dateRange: e.target.value as TicketFilters["dateRange"],
-                })
-              }
+                });
+              }}
               className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             >
               {DATE_RANGE_OPTIONS.map((opt) => (
