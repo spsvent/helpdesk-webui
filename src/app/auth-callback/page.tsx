@@ -38,8 +38,16 @@ export default function AuthCallback() {
             const loginHint = context?.user?.loginHint || context?.user?.userPrincipalName;
             console.log("Auth callback got login hint:", loginHint);
 
-            // Create a new MSAL instance for this popup
-            const msalInstance = new PublicClientApplication(msalConfig);
+            // Create a new MSAL instance for this popup with redirectUri pointing
+            // back to /auth-callback so the redirect chain completes in the popup
+            const popupMsalConfig = {
+              ...msalConfig,
+              auth: {
+                ...msalConfig.auth,
+                redirectUri: `${window.location.origin}/auth-callback`,
+              },
+            };
+            const msalInstance = new PublicClientApplication(popupMsalConfig);
             await msalInstance.initialize();
 
             // Handle any redirect response first

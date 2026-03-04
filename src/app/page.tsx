@@ -267,12 +267,14 @@ export default function Home() {
           window.location.reload();
         } else {
           console.log("Teams auth popup failed or was cancelled");
-          // Fallback to MSAL popup (works in Teams web)
+          // Fallback: try MSAL popup first, then redirect as last resort
           try {
             console.log("Falling back to MSAL popup");
             await instance.loginPopup(loginRequest);
           } catch (popupError) {
-            console.error("MSAL popup also failed:", popupError);
+            console.warn("MSAL popup failed, falling back to redirect:", popupError);
+            // Last resort: redirect-based login (works in Teams Web when popups are blocked)
+            await instance.loginRedirect(loginRequest);
           }
         }
       } else {
