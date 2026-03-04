@@ -102,6 +102,9 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID` - TeamsChannels SharePoint list ID
 - `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE` - Only notify for tickets after this date (YYYY-MM-DD)
 
+### Application Insights
+- `NEXT_PUBLIC_APPINSIGHTS_CONNECTION_STRING` - Application Insights connection string (via GitHub Secret `APPINSIGHTS_CONNECTION_STRING`)
+
 ### Other Configuration
 - `NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID` - Entra ID group for admin access
 - `NEXT_PUBLIC_ADMIN_EMAILS` - Comma-separated admin emails (fallback)
@@ -155,6 +158,7 @@ Key variables include:
 - `NEXT_PUBLIC_EMAIL_FUNCTION_URL` - Azure Function for emails
 - `NEXT_PUBLIC_TEAMS_FUNCTION_URL` - Azure Function for Teams bot notifications
 - `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` - Azure Function for escalation checks
+- `NEXT_PUBLIC_APPINSIGHTS_CONNECTION_STRING` - Application Insights (from GitHub Secret)
 
 #### Using GitHub Secrets (Optional)
 
@@ -289,6 +293,67 @@ curl -X POST "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebs
   -d '{"teamId":"...","channelId":"...","card":{...}}'
 ```
 
+## Application Insights (Telemetry)
+
+The app uses Azure Application Insights for production telemetry — client-side errors, page views, API call performance, and user flows.
+
+### Architecture
+
+A single Application Insights resource (`helpdesk-insights`) serves both the frontend and the Function App. The `cloud_roleName` property distinguishes them:
+
+| Component | `cloud_roleName` | How it's set |
+|-----------|-------------------|--------------|
+| Frontend (browser) | `helpdesk-web` | Telemetry initializer in `src/lib/appInsights.ts` |
+| Function App | `helpdesk-notify-func` | Set automatically by Azure |
+
+### Azure Resource
+
+| Property | Value |
+|----------|-------|
+| Resource name | `helpdesk-insights` |
+| Resource Group | `AppInsights` (shared across apps, not just HelpDesk) |
+| Region | West US 2 |
+
+### Key Files
+
+- `src/lib/appInsights.ts` — Singleton wrapper: `initAppInsights()`, `setAuthenticatedUser()`, `trackEvent()`, `getAppInsights()`
+- `src/app/layout.tsx` — Initializes App Insights after `debugCapture`, sets user context on MSAL login
+
+### Relationship with `debugCapture.ts`
+
+Both coexist — they serve different purposes:
+- `debugCapture.ts` → Local in-browser ring buffer for generating debug reports attached to support tickets (user-facing)
+- Application Insights → Cloud-side telemetry dashboard for monitoring errors, performance, and usage patterns (developer-facing)
+
+`debugCapture` intercepts `console.error` first, then calls the original, which App Insights also hooks into. No conflicts.
+
+### Configuration
+
+**Frontend:** The connection string is stored as GitHub Secret `APPINSIGHTS_CONNECTION_STRING` and referenced in the workflow file as `NEXT_PUBLIC_APPINSIGHTS_CONNECTION_STRING`. If the connection string is not set (local dev), App Insights silently no-ops.
+
+**Function App:** Set `APPLICATIONINSIGHTS_CONNECTION_STRING` in Azure Portal → Function Apps → `helpdesk-notify-func` → Environment variables. Use the same connection string as the frontend so both report to the same resource.
+
+### Custom Events
+
+Use `trackEvent()` from `src/lib/appInsights.ts` to log custom events:
+
+```typescript
+import { trackEvent } from "@/lib/appInsights";
+trackEvent("ApprovalDecision", { ticketId: "123", decision: "approved" });
+```
+
+### Viewing Telemetry
+
+**Azure Portal:** Application Insights → `helpdesk-insights` → Overview / Live Metrics / Failures / Performance
+
+**Via Azure CLI:**
+```bash
+az monitor app-insights query \
+  --app helpdesk-insights \
+  --resource-group AppInsights \
+  --analytics-query "exceptions | where timestamp > ago(1h) | order by timestamp desc | take 20"
+```
+
 ## Troubleshooting
 
 ### Common Issues and Fixes
@@ -312,7 +377,7 @@ curl -X POST "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebs
 **Fix:**
 1. Check all env vars are set in Function App Configuration
 2. Verify `Mail.Send` application permission has admin consent
-3. Check Application Insights logs: `az monitor app-insights query --app helpdesk-notify-func ...`
+3. Check Application Insights logs: `az monitor app-insights query --app helpdesk-insights --resource-group AppInsights ...`
 
 #### "The internet message header name should start with 'x-'"
 **Cause:** Microsoft Graph API doesn't allow standard email headers like `In-Reply-To`.
@@ -335,13 +400,13 @@ curl -X POST "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebs
 **Via Azure CLI:**
 ```bash
 az monitor app-insights query \
-  --app helpdesk-notify-func \
-  --resource-group SupportDesk \
-  --analytics-query "traces | where timestamp > ago(1h) | order by timestamp desc | take 50"
+  --app helpdesk-insights \
+  --resource-group AppInsights \
+  --analytics-query "traces | where cloud_RoleName == 'helpdesk-notify-func' | where timestamp > ago(1h) | order by timestamp desc | take 50"
 ```
 
 **Via Azure Portal:**
-Function Apps → helpdesk-notify-func → Functions → [function name] → Monitor → Logs
+Application Insights → `helpdesk-insights` → Logs → filter by `cloud_RoleName == "helpdesk-notify-func"`
 
 ## Roadmap / Planned Features
 
