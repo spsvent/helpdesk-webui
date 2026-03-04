@@ -23,6 +23,17 @@ const PRIORITY_MAP = {
   Urgent: 4,
 };
 
+// Priority → hex color for visual Kanban scanning (no '#' prefix)
+const PRIORITY_COLOR_MAP = {
+  4: "e74c3c", // Red — urgent
+  3: "e67e22", // Orange — high
+  2: "f39c12", // Yellow-gold — medium
+  1: "3498db", // Blue — low
+};
+
+// Vikunja label ID for helpdesk-originated tasks
+const HELPDESK_LABEL_ID = 1;
+
 // MSAL singleton
 let msalClient = null;
 function getMsalClient() {
@@ -145,12 +156,24 @@ async function handleTicketCreated(graphClient, body, context) {
     return { action: "skipped", reason: "already_mapped" };
   }
 
-  // Create task in Vikunja
-  const task = await vikunjaRequest("PUT", `/projects/${config.vikunjaProjectId}/tasks`, {
+  // Create task in Vikunja with priority color
+  const vikunjaPriority = PRIORITY_MAP[priority] ?? 0;
+  const taskPayload = {
     title: `[HD-${ticketNumber}] ${title}`,
     description: `${description}\n\n---\n*Requester: ${requesterName}*${assigneeName ? `\n*Assigned to: ${assigneeName}*` : ""}`,
-    priority: PRIORITY_MAP[priority] ?? 0,
-  });
+    priority: vikunjaPriority,
+  };
+  const hexColor = PRIORITY_COLOR_MAP[vikunjaPriority];
+  if (hexColor) taskPayload.hex_color = hexColor;
+
+  const task = await vikunjaRequest("PUT", `/projects/${config.vikunjaProjectId}/tasks`, taskPayload);
+
+  // Attach helpdesk label for filtering
+  try {
+    await vikunjaRequest("PUT", `/tasks/${task.id}/labels`, { label_id: HELPDESK_LABEL_ID });
+  } catch (labelErr) {
+    context.log(`Warning: Could not attach helpdesk label to task ${task.id}: ${labelErr.message}`);
+  }
 
   // Create sync mapping
   const eventHash = computeEventHash(ticketId, "ticket_created", { ticketNumber });
@@ -196,7 +219,10 @@ async function handleTicketUpdated(graphClient, body, context) {
   // Build Vikunja update payload
   const updatePayload = {};
   if (changedFields.priority) {
-    updatePayload.priority = PRIORITY_MAP[priority] ?? 0;
+    const newPriority = PRIORITY_MAP[priority] ?? 0;
+    updatePayload.priority = newPriority;
+    const newColor = PRIORITY_COLOR_MAP[newPriority];
+    if (newColor) updatePayload.hex_color = newColor;
   }
 
   // Add comment describing all changes
