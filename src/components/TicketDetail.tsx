@@ -387,7 +387,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const approverName = accounts[0].name || accounts[0].username;
     const approverEmail = accounts[0].username;
 
-    // Process the approval decision
+    // Process the approval decision — throws if the status didn't save
     const updatedTicket = await processApprovalDecision(
       client,
       ticket.id,
@@ -399,10 +399,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     );
     onUpdate(updatedTicket);
 
-    // Log the approval decision
-    const eventType = decision === "Approved" ? "approval_approved" : "approval_rejected";
+    // Only log, comment, and notify AFTER the status has been verified saved
     logActivity(client, {
-      eventType,
+      eventType: decision === "Approved" ? "approval_approved" : "approval_rejected",
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
       actor: approverEmail,
@@ -415,7 +414,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       }),
     }).catch((e) => console.error("Failed to log approval decision:", e));
 
-    // Add internal note about the decision
     const noteText = notes
       ? `**${decision}** by ${approverName}\n\nNotes: ${notes}`
       : `**${decision}** by ${approverName}`;
@@ -428,7 +426,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     );
     setComments((prev) => [...prev, approvalComment]);
 
-    // Send notification to the person who requested approval (if there was a requester)
     if (ticket.approvalRequestedBy?.email) {
       await sendDecisionEmail(
         client,
@@ -440,14 +437,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       );
     }
 
-    // For purchase requests, notify the purchaser group when approved
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
       sendPurchaseApprovedEmail(client, updatedTicket, approverName)
         .catch((e) => console.error("Failed to send purchase approved email:", e));
     }
 
-    // Send Teams notification after approval for purchase requests
-    // (purchase requests skip the Teams notification at creation time)
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes" || decision === "Approved & Ordered")) {
       sendNewTicketTeamsNotification(client, updatedTicket, { force: true });
     }

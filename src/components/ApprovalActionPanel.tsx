@@ -15,6 +15,7 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const [selectedAction, setSelectedAction] = useState<ApprovalDecision | null>(null);
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isPending = ticket.approvalStatus === "Pending";
 
@@ -37,12 +38,14 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
     }
 
     setIsLoading(true);
+    setError(null);
     try {
       await onDecision(selectedAction, notes.trim() || undefined);
       setSelectedAction(null);
       setNotes("");
-    } catch (error) {
-      console.error("Failed to process approval:", error);
+    } catch (err) {
+      console.error("Failed to process approval:", err);
+      setError("Failed to save approval decision. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +144,10 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
               Cancel
             </button>
           </div>
+
+          {error && (
+            <p className="text-sm text-red-600 mt-1">{error}</p>
+          )}
         </div>
       ) : isPurchaseRequest ? (
         /* Purchase request: 4-button layout */

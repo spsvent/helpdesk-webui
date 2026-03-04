@@ -449,16 +449,13 @@ export async function processApprovalDecision(
     }
   }
 
+  // Step 1: PATCH the critical status fields (without the Person field, which can
+  // cause SharePoint to silently reject the entire update if the lookup ID is invalid)
   const fields: Record<string, unknown> = {
     ApprovalStatus: approvalStatus,
     ApprovalDate: new Date().toISOString(),
     ...purchaseFields,
   };
-
-  // Set the ApprovedBy Person field if we found the user
-  if (siteUserId) {
-    fields.ApprovedByLookupId = siteUserId;
-  }
 
   if (notes) {
     fields.ApprovalNotes = notes;
@@ -466,7 +463,27 @@ export async function processApprovalDecision(
 
   await client.api(endpoint).patch({ fields });
 
-  // Re-fetch the ticket to get expanded Person fields (PATCH response doesn't include them)
+  // Step 2: Verify the status actually changed by re-fetching
+  const verifyResponse = await client.api(`${endpoint}?$expand=fields`).get();
+  const verifiedFields = verifyResponse.fields;
+  if (verifiedFields.ApprovalStatus !== approvalStatus) {
+    throw new Error(
+      `Approval status failed to save. Expected "${approvalStatus}" but SharePoint still has "${verifiedFields.ApprovalStatus}".`
+    );
+  }
+
+  // Step 3: Try to set the ApprovedBy Person field separately (non-blocking)
+  if (siteUserId) {
+    try {
+      await client.api(endpoint).patch({
+        fields: { ApprovedByLookupId: siteUserId },
+      });
+    } catch (e) {
+      console.error("Failed to set ApprovedByLookupId (non-critical):", e);
+    }
+  }
+
+  // Step 4: Re-fetch final state with expanded Person fields
   const updated = await client.api(`${endpoint}?$expand=fields`).get();
   const ticket = mapToTicket(updated);
 
