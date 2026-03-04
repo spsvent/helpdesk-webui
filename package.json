@@ -11,6 +11,7 @@
   "dependencies": {
     "@azure/msal-browser": "^3.10.0",
     "@azure/msal-react": "^2.0.12",
+    "@microsoft/applicationinsights-web": "^3.3.11",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "next": "^14.2.35",
     "react": "^18.2.0",

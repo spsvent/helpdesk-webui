@@ -9,6 +9,7 @@ import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
+import { initAppInsights, setAuthenticatedUser } from "@/lib/appInsights";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -25,6 +26,9 @@ export default function RootLayout({
     // Initialize debug capture for error tracking
     debugCapture.initialize();
 
+    // Initialize Application Insights telemetry (no-ops if connection string not set)
+    initAppInsights();
+
     // Initialize MSAL and handle any redirect response
     const initializeMsal = async () => {
       try {
@@ -40,11 +44,13 @@ export default function RootLayout({
         if (response) {
           // User just logged in via redirect
           msalInstance.setActiveAccount(response.account);
+          setAuthenticatedUser(response.account?.username ?? "", response.account?.name ?? undefined);
         } else {
           // No redirect response, check for existing accounts
           const accounts = msalInstance.getAllAccounts();
           if (accounts.length > 0) {
             msalInstance.setActiveAccount(accounts[0]);
+            setAuthenticatedUser(accounts[0].username, accounts[0].name ?? undefined);
           } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
             // Running in Teams with no existing account - try silent SSO only
             // Don't try popups in Teams as they hang in the desktop app
@@ -62,6 +68,7 @@ export default function RootLayout({
               const ssoResult = await Promise.race([ssoPromise, timeoutPromise]);
               if (ssoResult?.account) {
                 msalInstance.setActiveAccount(ssoResult.account);
+                setAuthenticatedUser(ssoResult.account.username, ssoResult.account.name ?? undefined);
                 console.log("Teams SSO successful:", ssoResult.account.username);
               }
             } catch (ssoError) {
@@ -82,6 +89,7 @@ export default function RootLayout({
       if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
         const payload = event.payload as AuthenticationResult;
         msalInstance.setActiveAccount(payload.account);
+        setAuthenticatedUser(payload.account?.username ?? "", payload.account?.name ?? undefined);
       }
     });
 

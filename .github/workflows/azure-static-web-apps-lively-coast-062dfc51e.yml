@@ -58,6 +58,8 @@ jobs:
           # Vikunja Sync
           NEXT_PUBLIC_VIKUNJA_SYNC_ENABLED: "true"
           NEXT_PUBLIC_VIKUNJA_SYNC_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/synctovikunja"
+          # Application Insights
+          NEXT_PUBLIC_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
