@@ -342,17 +342,34 @@ import { trackEvent } from "@/lib/appInsights";
 trackEvent("ApprovalDecision", { ticketId: "123", decision: "approved" });
 ```
 
-### Viewing Telemetry
+### Querying Telemetry
+
+Queries use Entra ID authentication via the Azure CLI (API keys are deprecated). Requires `az login` and Reader role on the resource.
 
 **Azure Portal:** Application Insights → `helpdesk-insights` → Overview / Live Metrics / Failures / Performance
 
 **Via Azure CLI:**
 ```bash
+# Recent exceptions
 az monitor app-insights query \
   --app helpdesk-insights \
   --resource-group AppInsights \
   --analytics-query "exceptions | where timestamp > ago(1h) | order by timestamp desc | take 20"
+
+# Telemetry summary by component
+az monitor app-insights query \
+  --app helpdesk-insights \
+  --resource-group AppInsights \
+  --analytics-query "union requests, pageViews, exceptions, traces | summarize count() by itemType, cloud_RoleName | order by count_ desc"
+
+# Frontend page views
+az monitor app-insights query \
+  --app helpdesk-insights \
+  --resource-group AppInsights \
+  --analytics-query "pageViews | where cloud_RoleName == 'helpdesk-web' | where timestamp > ago(1h) | order by timestamp desc | take 20"
 ```
+
+> **Note:** The old `x-api-key` REST API authentication is deprecated (March 2026). All queries should use Entra ID auth via `az login` or OAuth2 bearer tokens.
 
 ## Troubleshooting
 
@@ -396,6 +413,8 @@ az monitor app-insights query \
 **Fix:** Use the full URL with unique identifier: `helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net`
 
 ### Viewing Function Logs
+
+Requires `az login` (Entra ID auth — API keys are deprecated).
 
 **Via Azure CLI:**
 ```bash
