@@ -426,16 +426,19 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     );
     setComments((prev) => [...prev, approvalComment]);
 
-    if (ticket.approvalRequestedBy?.email) {
-      await sendDecisionEmail(
-        client,
-        updatedTicket,
-        decision,
-        approverName,
-        ticket.approvalRequestedBy.email,
-        notes
-      );
-    }
+    // Notify approval requester + ticket requester + assignee (deduped, excluding the approver)
+    const decisionRecipients = new Set<string>();
+    const approvalRequesterEmail = updatedTicket.approvalRequestedBy?.email || ticket.approvalRequestedBy?.email;
+    if (approvalRequesterEmail) decisionRecipients.add(approvalRequesterEmail.toLowerCase());
+    if (ticket.requester?.email) decisionRecipients.add(ticket.requester.email.toLowerCase());
+    if (ticket.assignedTo?.email) decisionRecipients.add(ticket.assignedTo.email.toLowerCase());
+    decisionRecipients.delete(approverEmail.toLowerCase()); // Don't notify the person who made the decision
+
+    const emailPromises = Array.from(decisionRecipients).map((email) =>
+      sendDecisionEmail(client, updatedTicket, decision, approverName, email, notes)
+        .catch((e) => console.error(`Failed to send decision email to ${email}:`, e))
+    );
+    await Promise.all(emailPromises);
 
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
       sendPurchaseApprovedEmail(client, updatedTicket, approverName)

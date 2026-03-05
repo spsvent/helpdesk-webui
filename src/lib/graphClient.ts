@@ -387,6 +387,9 @@ export async function requestApproval(
   const fields: Record<string, unknown> = {
     ApprovalStatus: "Pending",
     ApprovalRequestedDate: new Date().toISOString(),
+    // Text fallbacks — always save reliably unlike Person lookup fields
+    ApprovalRequestedByName: requesterName,
+    ApprovalRequestedByEmail: requesterEmail,
   };
 
   // Set the ApprovalRequestedBy Person field if we found the user
@@ -454,6 +457,9 @@ export async function processApprovalDecision(
   const fields: Record<string, unknown> = {
     ApprovalStatus: approvalStatus,
     ApprovalDate: new Date().toISOString(),
+    // Text fallbacks — always save reliably unlike Person lookup fields
+    ApprovedByName: approverName,
+    ApprovedByEmail: approverEmail,
     ...purchaseFields,
   };
 

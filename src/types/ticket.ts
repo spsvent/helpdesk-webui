@@ -157,11 +157,17 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     approvalRequestedBy: fields.ApprovalRequestedBy ? {
       displayName: getPersonDisplayName(fields.ApprovalRequestedBy),
       email: getPersonEmail(fields.ApprovalRequestedBy),
+    } : (fields.ApprovalRequestedByName || fields.ApprovalRequestedByEmail) ? {
+      displayName: (fields.ApprovalRequestedByName as string) || "",
+      email: (fields.ApprovalRequestedByEmail as string) || "",
     } : undefined,
     approvalRequestedDate: fields.ApprovalRequestedDate as string | undefined,
     approvedBy: fields.ApprovedBy ? {
       displayName: getPersonDisplayName(fields.ApprovedBy),
       email: getPersonEmail(fields.ApprovedBy),
+    } : (fields.ApprovedByName || fields.ApprovedByEmail) ? {
+      displayName: (fields.ApprovedByName as string) || "",
+      email: (fields.ApprovedByEmail as string) || "",
     } : undefined,
     approvalDate: fields.ApprovalDate as string | undefined,
     approvalNotes: fields.ApprovalNotes as string | undefined,
