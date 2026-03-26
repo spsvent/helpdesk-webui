@@ -357,7 +357,7 @@ export default function Home() {
           setError("You don't have permission to view tickets. Please contact your administrator to request access to the Help Desk site.");
         } else if (err.statusCode === 404 || err.code === "itemNotFound") {
           setError("The tickets list could not be found. Please contact your administrator.");
-        } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken") {
+        } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken" || err.code === "interaction_required") {
           setError("Your session has expired. Please sign out and sign back in.");
         } else {
           setError("Unable to load tickets. Please try again or contact support if the problem persists.");

@@ -1,5 +1,5 @@
 import { Client } from "@microsoft/microsoft-graph-client";
-import { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
+import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
 import { graphScopes, sharepointScopes } from "./msalConfig";
 import {
   Ticket,
@@ -21,6 +21,10 @@ const ACTIVITY_LOG_LIST_ID = process.env.NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID || "";
 // SharePoint site URL for REST API calls (attachments)
 const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
 
+// Shared interactive token promise to prevent multiple simultaneous popups
+// when parallel API calls all fail acquireTokenSilent at the same time
+let interactiveTokenPromise: Promise<string> | null = null;
+
 // Create authenticated Graph client
 export function getGraphClient(
   msalInstance: IPublicClientApplication,
@@ -35,10 +39,25 @@ export function getGraphClient(
         });
         done(null, response.accessToken);
       } catch (error) {
-        // Don't redirect - just fail gracefully
-        // User can sign out and back in to get new token with updated scopes
-        console.error("Token acquisition failed. Try signing out and back in.", error);
-        done(error as Error, null);
+        // If session expired, fall back to interactive popup to re-authenticate
+        if (error instanceof InteractionRequiredAuthError) {
+          try {
+            if (!interactiveTokenPromise) {
+              interactiveTokenPromise = msalInstance
+                .acquireTokenPopup({ ...graphScopes, account })
+                .then((response) => response.accessToken)
+                .finally(() => { interactiveTokenPromise = null; });
+            }
+            const accessToken = await interactiveTokenPromise;
+            done(null, accessToken);
+          } catch (popupError) {
+            console.error("Interactive token acquisition failed:", popupError);
+            done(popupError as Error, null);
+          }
+        } else {
+          console.error("Token acquisition failed:", error);
+          done(error as Error, null);
+        }
       }
     },
   });

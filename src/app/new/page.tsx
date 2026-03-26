@@ -480,8 +480,8 @@ export default function NewTicketPage() {
 
       if (err.statusCode === 403 || err.code === "accessDenied") {
         setError("You don't have permission to create tickets. Please contact your administrator to request access.");
-      } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken") {
-        setError("Your session has expired. Please refresh the page and sign in again.");
+      } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken" || err.code === "interaction_required") {
+        setError("Your session has expired. Please sign out and sign back in.");
       } else {
         setError("Failed to submit ticket. Please try again or contact support if the problem persists.");
       }
