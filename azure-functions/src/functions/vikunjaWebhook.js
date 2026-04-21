@@ -73,6 +73,18 @@ async function getSyncMappingByVikunjaTaskId(graphClient, vikunjaTaskId) {
   }
 }
 
+// Fetch just the ProblemType of a ticket so we can verify the mapping is still valid.
+// Returns null if the fetch fails — callers treat null as "unknown, bail out safely."
+async function getTicketProblemType(graphClient, ticketId) {
+  const endpoint = `/sites/${config.siteId}/lists/${config.ticketsListId}/items/${ticketId}?$expand=fields($select=ProblemType)`;
+  try {
+    const response = await graphClient.api(endpoint).get();
+    return response.fields?.ProblemType ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function updateSyncMapping(graphClient, itemId, data) {
   const endpoint = `/sites/${config.siteId}/lists/${config.syncMapListId}/items/${itemId}`;
   return graphClient.api(endpoint).patch({
@@ -100,6 +112,21 @@ function computeEventHash(ticketId, eventType, keyData) {
 async function handleTaskDone(graphClient, mapping, context) {
   const ticketId = mapping.fields.TicketId;
   const vikunjaTaskId = mapping.fields.VikunjaTaskId;
+
+  // Guard: only auto-resolve if the ticket is still a Tech ticket.
+  // If it was recategorized (or was never Tech), pause the mapping so future events short-circuit.
+  const problemType = await getTicketProblemType(graphClient, ticketId);
+  if (problemType !== "Tech") {
+    context.warn(
+      `Ticket ${ticketId} has ProblemType="${problemType}" (not Tech) — pausing mapping and skipping resolve`
+    );
+    await updateSyncMapping(graphClient, mapping.id, {
+      eventHash: mapping.fields.LastEventHash,
+      syncStatus: "Paused",
+      lastError: `Ticket is no longer Tech (ProblemType=${problemType ?? "unknown"}); auto-paused to prevent cross-wiring`,
+    }).catch((e) => context.error("Failed to pause mapping:", e));
+    return { action: "skipped", reason: "not_tech_ticket", problemType };
+  }
 
   // Dedup check
   const eventHash = computeEventHash(ticketId, "vikunja_task_done", { vikunjaTaskId });
@@ -144,6 +171,20 @@ async function handleTaskDone(graphClient, mapping, context) {
 
 async function handleCommentCreated(graphClient, mapping, commentText, context) {
   const ticketId = mapping.fields.TicketId;
+
+  // Guard: don't sync comments back to tickets that are no longer Tech.
+  const problemType = await getTicketProblemType(graphClient, ticketId);
+  if (problemType !== "Tech") {
+    context.warn(
+      `Ticket ${ticketId} has ProblemType="${problemType}" (not Tech) — pausing mapping and skipping comment sync`
+    );
+    await updateSyncMapping(graphClient, mapping.id, {
+      eventHash: mapping.fields.LastEventHash,
+      syncStatus: "Paused",
+      lastError: `Ticket is no longer Tech (ProblemType=${problemType ?? "unknown"}); auto-paused to prevent cross-wiring`,
+    }).catch((e) => context.error("Failed to pause mapping:", e));
+    return { action: "skipped", reason: "not_tech_ticket", problemType };
+  }
 
   // Loop prevention — skip comments that originated from Help Desk
   if (commentText.includes("[Synced from Help Desk]")) {

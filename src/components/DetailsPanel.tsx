@@ -39,7 +39,7 @@ import {
   sendStatusChangeTeamsNotification,
   sendPriorityEscalationTeamsNotification,
 } from "@/lib/teamsService";
-import { syncTicketUpdated } from "@/lib/vikunjaSyncService";
+import { syncTicketUpdated, syncTicketRecategorized } from "@/lib/vikunjaSyncService";
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -473,6 +473,13 @@ export default function DetailsPanel({
       }
       if (Object.keys(changedFields).length > 0) {
         syncTicketUpdated(updated, changedFields, currentUserName, accounts[0].username);
+      }
+
+      // If the ticket was recategorized away from Tech, pause its Vikunja mapping so the
+      // webhook won't keep resolving or mirroring it. Handled separately because the
+      // current ticket is no longer Tech, which bypasses the regular sync path.
+      if (ticket.problemType === "Tech" && problemType !== "Tech") {
+        syncTicketRecategorized(ticket.id, ticket.problemType, problemType);
       }
     } catch (e) {
       console.error("Failed to update ticket:", e);

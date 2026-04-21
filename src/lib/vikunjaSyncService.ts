@@ -96,6 +96,32 @@ export function syncTicketUpdated(
 }
 
 /**
+ * Notify the sync backend that a ticket has been recategorized away from Tech.
+ * The backend pauses the SyncMap so the webhook won't resolve or mirror this ticket anymore.
+ * Fire-and-forget — errors are logged but don't block the save.
+ *
+ * Unlike the other sync helpers, this bypasses shouldSync() because the new problemType
+ * is (by definition) no longer Tech.
+ */
+export function syncTicketRecategorized(
+  ticketId: string,
+  oldProblemType: string,
+  newProblemType: string
+): void {
+  if (!VIKUNJA_SYNC_ENABLED) return;
+  if (!VIKUNJA_SYNC_FUNCTION_URL) return;
+  if (oldProblemType !== "Tech") return; // Only care about leaving Tech
+  if (newProblemType === "Tech") return; // No-op if it's still Tech
+
+  fireSync({
+    eventType: "ticket_recategorized",
+    ticketId,
+    oldProblemType,
+    newProblemType,
+  });
+}
+
+/**
  * Sync a comment added to a ticket to Vikunja.
  * Creates a comment on the corresponding Vikunja task.
  * Fire-and-forget — errors are logged but don't block comment posting.

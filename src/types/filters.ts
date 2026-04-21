@@ -25,10 +25,10 @@ export interface TicketFilters {
   purchaseStatus?: string[];
 }
 
-// Default view: Hide resolved/closed, urgent on top, then by date
+// Default view: show active + resolved (Closed stays hidden), urgent on top, then by date
 export const DEFAULT_FILTERS: TicketFilters = {
   search: "",
-  status: ["New", "In Progress", "On Hold"], // Hide Resolved and Closed by default
+  status: ["New", "In Progress", "On Hold", "Resolved"], // Resolved shown by default; "Hide resolved" toggle removes it
   priority: [],
   problemType: null,
   problemTypeSub: null,
@@ -61,7 +61,7 @@ export const PRESET_VIEWS: Record<PresetView, { label: string; description: stri
     label: "Active Tickets",
     description: "Urgent on top, then by date",
     filters: {
-      status: ["New", "In Progress", "On Hold"],
+      status: ["New", "In Progress", "On Hold", "Resolved"],
       sort: "default",
     },
   },
@@ -69,7 +69,7 @@ export const PRESET_VIEWS: Record<PresetView, { label: string; description: stri
     label: "By Priority",
     description: "Sorted by urgency, then date",
     filters: {
-      status: ["New", "In Progress", "On Hold"],
+      status: ["New", "In Progress", "On Hold", "Resolved"],
       sort: "urgency",
     },
   },

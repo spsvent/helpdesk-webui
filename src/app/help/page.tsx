@@ -221,7 +221,7 @@ const helpSections: HelpSection[] = [
           <p><strong>Title</strong> (required): A brief summary of your issue</p>
           <p><strong>Description</strong> (required): Detailed explanation of the problem or request</p>
           <p><strong>Category</strong>: Select &quot;Request&quot; for new features/access, or &quot;Problem&quot; for something broken</p>
-          <p><strong>Department</strong>: Which team should handle this (Tech, Operations, HR, etc.)</p>
+          <p><strong>Department</strong> (required): Which team should handle this (Tech, Operations, HR, etc.). The form starts with no department selected — you must pick one before submitting.</p>
           <p><strong>Priority</strong>: How urgent is this issue (see Priority Levels below)</p>
           <p><strong>Location</strong> (required): Where the issue is occurring</p>
         </div>
@@ -395,6 +395,13 @@ const helpSections: HelpSection[] = [
           Search results update as you type (with a small delay to avoid flickering).
         </p>
 
+        <h4 className="font-semibold text-text-primary mt-6">Hide Resolved Toggle</h4>
+        <p>
+          Directly under the search box is a <strong>Hide resolved tickets</strong> checkbox.
+          Resolved tickets are visible in the default feed so you can easily find recently completed work in your department.
+          Check the box if you want a cleaner view of only active tickets; uncheck it to bring resolved tickets back.
+        </p>
+
         <h4 className="font-semibold text-text-primary mt-6">Quick View Buttons</h4>
         <p>
           Use the preset view buttons for common filtering needs:
@@ -402,7 +409,7 @@ const helpSections: HelpSection[] = [
         <div className="space-y-2 mt-3">
           <div className="flex items-center gap-3">
             <span className="px-2.5 py-1 text-xs rounded-full bg-brand-blue text-white">Active Tickets</span>
-            <span className="text-sm">Default view - hides resolved/closed, urgent on top</span>
+            <span className="text-sm">Default view — New, In Progress, On Hold, and Resolved; urgent on top</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">By Priority</span>
