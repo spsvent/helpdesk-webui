@@ -59,6 +59,27 @@ export default function TicketFiltersComponent({
 
   const activeFilterCount = getActiveFilterCount(filters);
 
+  // "Hide resolved" = status filter is explicit and does not include "Resolved".
+  // Empty status ("all") means everything is visible, so the box is unchecked.
+  const isHidingResolved =
+    filters.status.length > 0 && !filters.status.includes("Resolved");
+
+  const toggleHideResolved = useCallback(() => {
+    setActivePreset(null);
+    if (isHidingResolved) {
+      // Re-show Resolved tickets
+      onFiltersChange({ ...filters, status: [...filters.status, "Resolved"] });
+      return;
+    }
+    // Start hiding Resolved. If currently "all", switch to an explicit list
+    // containing every status except Resolved so the intent is preserved.
+    const baseStatuses: Ticket["status"][] =
+      filters.status.length === 0
+        ? ["New", "In Progress", "On Hold", "Closed"]
+        : filters.status.filter((s) => s !== "Resolved");
+    onFiltersChange({ ...filters, status: baseStatuses });
+  }, [filters, isHidingResolved, onFiltersChange]);
+
   // Extract unique assignees from tickets (check both assignedTo and originalAssignedTo)
   const uniqueAssignees = useMemo(() => {
     const assigneeMap = new Map<string, string>();
@@ -238,6 +259,17 @@ export default function TicketFiltersComponent({
             </button>
           )}
         </div>
+
+        {/* Hide Resolved quick toggle — placed near search so it's always visible */}
+        <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={isHidingResolved}
+            onChange={toggleHideResolved}
+            className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-2 focus:ring-brand-primary cursor-pointer"
+          />
+          Hide resolved tickets
+        </label>
 
         {/* Preset View Buttons */}
         <div className="flex gap-1 overflow-x-auto pb-1">

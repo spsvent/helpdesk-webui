@@ -295,6 +295,31 @@ async function handleTicketResolved(graphClient, body, context) {
   return { action: "resolved", vikunjaTaskId };
 }
 
+// Pause a sync mapping when its ticket is recategorized away from Tech.
+// The Vikunja task itself is left alone — we just stop listening to it and stop pushing to it.
+async function handleTicketRecategorized(graphClient, body, context) {
+  const { ticketId, oldProblemType, newProblemType } = body;
+
+  const mapping = await getSyncMapping(graphClient, ticketId);
+  if (!mapping) {
+    context.log(`No sync mapping for ticket ${ticketId}, nothing to pause`);
+    return { action: "skipped", reason: "no_mapping" };
+  }
+
+  if (mapping.fields.SyncStatus === "Paused") {
+    return { action: "skipped", reason: "already_paused" };
+  }
+
+  await updateSyncMapping(graphClient, mapping.id, {
+    eventHash: mapping.fields.LastEventHash,
+    syncStatus: "Paused",
+    lastError: `Ticket recategorized from ${oldProblemType ?? "Tech"} to ${newProblemType ?? "non-Tech"}; mapping paused to prevent cross-wiring`,
+  });
+
+  context.log(`Paused sync mapping for ticket ${ticketId} (recategorized to ${newProblemType})`);
+  return { action: "paused", ticketId, vikunjaTaskId: mapping.fields.VikunjaTaskId };
+}
+
 async function handleCommentAdded(graphClient, body, context) {
   const { ticketId, text } = body;
 
@@ -384,6 +409,9 @@ app.http("syncToVikunja", {
           break;
         case "ticket_resolved":
           result = await handleTicketResolved(graphClient, body, context);
+          break;
+        case "ticket_recategorized":
+          result = await handleTicketRecategorized(graphClient, body, context);
           break;
         case "comment_added":
           result = await handleCommentAdded(graphClient, body, context);

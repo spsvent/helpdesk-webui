@@ -58,7 +58,7 @@ export default function NewTicketPage() {
             description: parsed.description || "",
             category: parsed.category || "Problem",
             priority: parsed.priority || "Normal",
-            problemType: parsed.problemType || "Tech",
+            problemType: parsed.problemType || "",
             problemTypeSub: parsed.problemTypeSub || "",
             problemTypeSub2: parsed.problemTypeSub2 || "",
             location: parsed.location || "",
@@ -73,7 +73,7 @@ export default function NewTicketPage() {
       description: "",
       category: "Request",
       priority: "Normal",
-      problemType: "Tech",
+      problemType: "",
       problemTypeSub: "",
       problemTypeSub2: "",
       location: "",
@@ -245,6 +245,12 @@ export default function NewTicketPage() {
 
     if (!formData.description.trim()) {
       setError("Please describe your issue");
+      return;
+    }
+
+    // Validate that a department (problemType) is selected — no silent default
+    if (!formData.problemType) {
+      setError("Please select a department");
       return;
     }
 
@@ -855,15 +861,17 @@ export default function NewTicketPage() {
                     htmlFor="problemType"
                     className="block text-xs font-medium text-text-secondary mb-1"
                   >
-                    Department
+                    Department <span className="text-red-500">*</span>
                   </label>
                   <select
                     id="problemType"
                     name="problemType"
                     value={formData.problemType}
                     onChange={handleChange}
+                    required
                     className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent bg-bg-card"
                   >
+                    <option value="">Select a department...</option>
                     {getProblemTypes().map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
