@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Comment, Attachment } from "@/types/ticket";
+import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
 import {
   getGraphClient,
   getComments,
@@ -10,7 +10,7 @@ import {
   getTicket,
   requestApproval,
   processApprovalDecision,
-  updatePurchaseFields,
+  updateTicketLineItems,
   getAttachments,
   uploadAttachment,
   deleteAttachment,
@@ -28,11 +28,13 @@ import {
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncCommentAdded } from "@/lib/vikunjaSyncService";
+import { allItemsOrdered, allItemsReceived } from "@/lib/lineItemHelpers";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
 import NudgeApprovalButton from "./NudgeApprovalButton";
+import ApprovalActionPanel from "./ApprovalActionPanel";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -64,7 +66,7 @@ type MobileDetailView = "comments" | "details";
 
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const { instance, accounts } = useMsal();
-  const { canEdit, canComment, isOwn, permissions } = useRBAC();
+  const { canEdit, canComment, isOwn, canApprove, permissions } = useRBAC();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -407,7 +409,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   // Handle approval decision
   const handleApprovalDecision = async (
     decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
-    notes?: string
+    notes?: string,
+    options?: { keptItems?: PurchaseLineItem[]; orderItems?: PurchaseLineItem[] },
   ) => {
     if (!accounts[0]) return;
 
@@ -426,6 +429,39 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       ticket.isPurchaseRequest || false
     );
     onUpdate(updatedTicket);
+
+    // If GM removed items via the checklist on "Approve with Changes", rewrite
+    // line items now and log the change. Skip if no kept items array passed
+    // (e.g. plain Approve, Deny, etc.).
+    if (options?.keptItems && options.keptItems.length > 0 && ticket.purchaseLineItems) {
+      const removedItems = ticket.purchaseLineItems.filter(
+        (originalItem) => !options.keptItems!.includes(originalItem)
+      );
+      const further = await updateTicketLineItems(client, ticket.id, options.keptItems);
+      onUpdate(further);
+      logActivity(client, {
+        eventType: "purchase_items_changed",
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+        actor: approverEmail,
+        actorName: approverName,
+        description: `Items modified during approval by ${approverName}`,
+        details: JSON.stringify({
+          removed: removedItems,
+          kept: options.keptItems,
+        }),
+      }).catch((e) => console.error("Failed to log items change:", e));
+    }
+
+    // If GM filled per-item order details on "Approve & Order", write them
+    // and flip status to Ordered if every item is fully filled.
+    if (options?.orderItems && options.orderItems.length > 0) {
+      const newStatus = allItemsOrdered(options.orderItems) ? "Ordered" : "Approved";
+      const further = await updateTicketLineItems(client, ticket.id, options.orderItems, {
+        purchaseStatus: newStatus,
+      });
+      onUpdate(further);
+    }
 
     // Only log, comment, and notify AFTER the status has been verified saved
     logActivity(client, {
@@ -479,98 +515,94 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   };
 
   // Handle marking a purchase request as purchased
-  const handleMarkPurchased = async (data: {
-    vendor: string;
-    confirmationNum: string;
-    actualCost: number;
-    expectedDelivery: string;
-    notes?: string;
-  }) => {
+  const handleMarkPurchased = async (orderItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
 
     const client = getGraphClient(instance, accounts[0]);
     const purchaserEmail = accounts[0].username;
     const purchaserName = accounts[0].name || accounts[0].username;
 
-    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
-      PurchaseStatus: "Purchased",
-      PurchaseVendor: data.vendor,
-      PurchaseConfirmationNum: data.confirmationNum,
-      PurchaseActualCost: data.actualCost,
-      PurchaseExpectedDelivery: data.expectedDelivery,
-      PurchaseNotes: data.notes,
-      PurchasedDate: new Date().toISOString(),
-      PurchasedByEmail: purchaserEmail,
+    const allOrdered = allItemsOrdered(orderItems);
+    const newStatus = allOrdered ? "Ordered" : "Approved";
+
+    const updatedTicket = await updateTicketLineItems(client, ticket.id, orderItems, {
+      purchaseStatus: newStatus,
+      notes,
     });
     onUpdate(updatedTicket);
 
-    // Log activity
+    // Log activity with per-item data
+    const vendorSummary = Array.from(new Set(orderItems.map((i) => i.vendor).filter(Boolean))).join(", ");
     logActivity(client, {
       eventType: "purchase_ordered",
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
       actor: purchaserEmail,
       actorName: purchaserName,
-      description: `Marked as purchased from ${data.vendor} (${data.confirmationNum})`,
-      details: JSON.stringify({
-        vendor: data.vendor,
-        confirmationNum: data.confirmationNum,
-        actualCost: data.actualCost,
-        expectedDelivery: data.expectedDelivery,
-      }),
+      description: `Marked as purchased: ${orderItems.length} item${orderItems.length === 1 ? "" : "s"} from ${vendorSummary || "unspecified vendor"}`,
+      details: JSON.stringify({ orderItems }),
     }).catch((e) => console.error("Failed to log purchase activity:", e));
 
-    // Add internal comment
-    const commentText = `**Purchased** by ${purchaserName}\n\nVendor: ${data.vendor}\nConfirmation #: ${data.confirmationNum}\nActual Cost: $${data.actualCost.toFixed(2)}\nExpected Delivery: ${data.expectedDelivery}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    // Internal comment summarizing the order
+    const itemLines = orderItems
+      .map((it, idx) => `  ${idx + 1}. ${it.name || it.url || "item"} ×${it.qty} — ${it.vendor ?? "?"} (${it.orderNum ?? "?"})`)
+      .join("\n");
+    const commentText = `**Purchased** by ${purchaserName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
     const purchaseComment = await addComment(client, parseInt(ticket.id), commentText, true);
     setComments((prev) => [...prev, purchaseComment]);
 
-    // Send email notification to inventory team
+    // Send email to inventory team
     sendPurchaseOrderedEmail(client, updatedTicket, purchaserName)
       .catch((e) => console.error("Failed to send purchase ordered email:", e));
   };
 
-  // Handle marking a purchase as received
-  const handleMarkReceived = async (data: {
-    receivedDate: string;
-    notes?: string;
-  }) => {
+  // Handle marking a purchase as received (per-item)
+  const handleMarkReceived = async (receivedItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
 
     const client = getGraphClient(instance, accounts[0]);
     const receiverEmail = accounts[0].username;
     const receiverName = accounts[0].name || accounts[0].username;
 
-    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
-      PurchaseStatus: "Received",
-      ReceivedDate: data.receivedDate,
-      ReceivedNotes: data.notes,
-      ReceivedByEmail: receiverEmail,
+    const allReceived = allItemsReceived(receivedItems);
+    const newStatus = allReceived ? "Received" : "Ordered";
+
+    const updatedTicket = await updateTicketLineItems(client, ticket.id, receivedItems, {
+      purchaseStatus: newStatus,
+      notes,
     });
     onUpdate(updatedTicket);
 
-    // Log activity
+    // Log activity with per-item received data
     logActivity(client, {
       eventType: "purchase_received",
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
       actor: receiverEmail,
       actorName: receiverName,
-      description: `Marked as received on ${data.receivedDate}`,
-      details: JSON.stringify({
-        receivedDate: data.receivedDate,
-        notes: data.notes || null,
-      }),
+      description: allReceived
+        ? `All ${receivedItems.length} item${receivedItems.length === 1 ? "" : "s"} received`
+        : `Partial receipt: ${receivedItems.filter((i) => (i.receivedQty ?? 0) > 0).length} of ${receivedItems.length} items`,
+      details: JSON.stringify({ receivedItems }),
     }).catch((e) => console.error("Failed to log receive activity:", e));
 
-    // Add internal comment
-    const commentText = `**Received** by ${receiverName} on ${data.receivedDate}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    // Internal comment summarizing receipt
+    const itemLines = receivedItems
+      .map(
+        (it, idx) =>
+          `  ${idx + 1}. ${it.name || it.url || "item"}: received ${it.receivedQty ?? 0}/${it.qty} on ${it.receivedDate ?? "-"}`,
+      )
+      .join("\n");
+    const commentText = `**${allReceived ? "All Received" : "Partial Receipt"}** by ${receiverName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
     const receiveComment = await addComment(client, parseInt(ticket.id), commentText, true);
     setComments((prev) => [...prev, receiveComment]);
 
-    // Send email notification to the original requester
-    sendPurchaseReceivedEmail(client, updatedTicket, receiverName)
-      .catch((e) => console.error("Failed to send purchase received email:", e));
+    // Email original requester only when fully received (avoid noise on partials)
+    if (allReceived) {
+      sendPurchaseReceivedEmail(client, updatedTicket, receiverName).catch((e) =>
+        console.error("Failed to send purchase received email:", e),
+      );
+    }
   };
 
   return (
@@ -673,6 +705,17 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           <div className="flex-1 flex flex-col min-w-0">
             {/* Scrollable conversation thread */}
             <div className="flex-1 overflow-y-auto p-6 scroll-container">
+              {/* Approval action banner — shown above conversation when approval is pending */}
+              {ticket.approvalStatus === "Pending" && canApprove() && (
+                <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <ApprovalActionPanel
+                    ticket={ticket}
+                    isPurchaseRequest={ticket.isPurchaseRequest || false}
+                    onDecision={handleApprovalDecision}
+                  />
+                </div>
+              )}
+
               <ConversationThread
                 ticket={ticket}
                 comments={comments}
@@ -718,7 +761,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUpdate={onUpdate}
               canEdit={canEditThisTicket}
               onRequestApproval={handleRequestApproval}
-              onApprovalDecision={handleApprovalDecision}
               onMarkPurchased={handleMarkPurchased}
               onMarkReceived={handleMarkReceived}
               attachments={attachments}

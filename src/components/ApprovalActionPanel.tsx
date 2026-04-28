@@ -1,14 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Ticket } from "@/types/ticket";
+import { Ticket, PurchaseLineItem } from "@/types/ticket";
+import LineItemsTable from "./LineItemsTable";
+import { computeEstimatedTotal, distinctVendorCount } from "@/lib/lineItemHelpers";
 
 type ApprovalDecision = "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered";
 
 interface ApprovalActionPanelProps {
   ticket: Ticket;
   isPurchaseRequest?: boolean;
-  onDecision: (decision: ApprovalDecision, notes?: string) => Promise<void>;
+  onDecision: (
+    decision: ApprovalDecision,
+    notes?: string,
+    options?: { keptItems?: PurchaseLineItem[]; orderItems?: PurchaseLineItem[] },
+  ) => Promise<void>;
 }
 
 export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false, onDecision }: ApprovalActionPanelProps) {
@@ -16,16 +22,39 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [keptItemIndexes, setKeptItemIndexes] = useState<Set<number>>(
+    new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []),
+  );
+  const [orderItems, setOrderItems] = useState<PurchaseLineItem[]>(
+    ticket.purchaseLineItems ?? [],
+  );
+  const [sameAsAbove, setSameAsAbove] = useState<Set<number>>(new Set());
 
   const isPending = ticket.approvalStatus === "Pending";
 
   const handleActionSelect = (action: ApprovalDecision) => {
     setSelectedAction(action);
     setNotes("");
+    setError(null);
+    setKeptItemIndexes(new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []));
+    setOrderItems(ticket.purchaseLineItems ?? []);
+    setSameAsAbove(new Set());
   };
 
   const handleConfirm = async () => {
     if (!selectedAction) return;
+
+    // Guard: "Approved with Changes" on a purchase request must keep at least one item
+    if (
+      selectedAction === "Approved with Changes" &&
+      isPurchaseRequest &&
+      ticket.purchaseLineItems &&
+      ticket.purchaseLineItems.length > 0 &&
+      keptItemIndexes.size === 0
+    ) {
+      setError("At least one item must be kept. Use Deny to reject the request entirely.");
+      return;
+    }
 
     // Notes are required for Deny, Changes Requested, and Approved with Changes
     const requiresNotes =
@@ -40,7 +69,24 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
     setIsLoading(true);
     setError(null);
     try {
-      await onDecision(selectedAction, notes.trim() || undefined);
+      const finalOrderItems = orderItems.map((item, i) => {
+        if (i === 0 || !sameAsAbove.has(i)) return item;
+        return {
+          ...item,
+          vendor: orderItems[i - 1].vendor,
+          orderNum: orderItems[i - 1].orderNum,
+        };
+      });
+
+      const keptItems =
+        selectedAction === "Approved with Changes" && ticket.purchaseLineItems
+          ? ticket.purchaseLineItems.filter((_, i) => keptItemIndexes.has(i))
+          : undefined;
+
+      await onDecision(selectedAction, notes.trim() || undefined, {
+        keptItems,
+        orderItems: selectedAction === "Approved & Ordered" ? finalOrderItems : undefined,
+      });
       setSelectedAction(null);
       setNotes("");
     } catch (err) {
@@ -54,6 +100,10 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const handleCancel = () => {
     setSelectedAction(null);
     setNotes("");
+    setError(null);
+    setKeptItemIndexes(new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []));
+    setOrderItems(ticket.purchaseLineItems ?? []);
+    setSameAsAbove(new Set());
   };
 
   const notesRequired =
@@ -107,6 +157,15 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
         )}
       </div>
 
+      {isPurchaseRequest && ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
+        <div className="border border-border rounded-lg bg-bg-subtle p-3">
+          <div className="text-xs font-semibold text-text-secondary mb-2">
+            Reviewing {ticket.purchaseLineItems.length} item{ticket.purchaseLineItems.length === 1 ? "" : "s"}
+          </div>
+          <LineItemsTable items={ticket.purchaseLineItems} compact />
+        </div>
+      )}
+
       {selectedAction ? (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -114,6 +173,136 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
               {selectedAction}
             </span>
           </div>
+
+          {selectedAction === "Approved with Changes" && isPurchaseRequest && ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
+            <div className="bg-white border border-orange-200 rounded p-2 space-y-1">
+              <p className="text-xs text-orange-800">Untick items to remove from the approval. Notes auto-fill below.</p>
+              {ticket.purchaseLineItems.map((item, idx) => {
+                const kept = keptItemIndexes.has(idx);
+                return (
+                  <label
+                    key={idx}
+                    className={`flex justify-between items-center text-sm ${kept ? "" : "line-through text-text-secondary"}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={kept}
+                        onChange={() => {
+                          const next = new Set(keptItemIndexes);
+                          if (kept) next.delete(idx); else next.add(idx);
+                          setKeptItemIndexes(next);
+                          setError(null);
+                          // auto-fill notes based on what's removed/kept
+                          const items = ticket.purchaseLineItems!;
+                          const removed = items.filter((_, i) => !next.has(i));
+                          const kept2 = items.filter((_, i) => next.has(i));
+                          const removedSummary = removed.length
+                            ? `Removed from order: ${removed.map((r) => `${r.name || r.url || "item"} (×${r.qty})`).join(", ")}.`
+                            : "";
+                          const total = kept2.reduce((s, r) => s + r.qty * r.cost, 0);
+                          setNotes(`${removedSummary} Approved remaining ${kept2.length} item${kept2.length === 1 ? "" : "s"}, total $${total.toFixed(2)}.`.trim());
+                        }}
+                      />
+                      {item.name || item.url || `Item ${idx + 1}`} × {item.qty}
+                    </span>
+                    <span>${(item.qty * item.cost).toFixed(2)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedAction === "Approved & Ordered" && isPurchaseRequest && orderItems.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-blue-800">Fill order details per item. Tick &quot;Same as above&quot; to copy vendor + order # from the previous row.</p>
+              {orderItems.map((item, idx) => {
+                const sameOn = sameAsAbove.has(idx);
+                const aboveItem = idx > 0 ? orderItems[idx - 1] : null;
+                const vendor = sameOn && aboveItem ? aboveItem.vendor ?? "" : item.vendor ?? "";
+                const orderNum = sameOn && aboveItem ? aboveItem.orderNum ?? "" : item.orderNum ?? "";
+                return (
+                  <div key={idx} className="bg-white border border-blue-200 rounded p-2 space-y-1">
+                    <div className="flex justify-between items-center text-sm">
+                      <strong>{idx + 1}. {item.name || item.url || `Item ${idx + 1}`} × {item.qty} — est ${(item.qty * item.cost).toFixed(2)}</strong>
+                      {idx > 0 && (
+                        <label className="text-xs text-blue-700 flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={sameOn}
+                            onChange={() => {
+                              const next = new Set(sameAsAbove);
+                              if (sameOn) next.delete(idx); else next.add(idx);
+                              setSameAsAbove(next);
+                              if (!sameOn && aboveItem) {
+                                const updated = [...orderItems];
+                                updated[idx] = { ...updated[idx], vendor: aboveItem.vendor, orderNum: aboveItem.orderNum };
+                                setOrderItems(updated);
+                              }
+                            }}
+                          />
+                          Same vendor + order # as above
+                        </label>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                      <input
+                        type="text"
+                        placeholder="Vendor"
+                        value={vendor}
+                        onChange={(e) => {
+                          const updated = [...orderItems];
+                          updated[idx] = { ...updated[idx], vendor: e.target.value };
+                          setOrderItems(updated);
+                        }}
+                        disabled={sameOn}
+                        className="px-2 py-1 border border-border rounded text-sm disabled:opacity-55"
+                        aria-label={`Vendor for item ${idx + 1}`}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Order #"
+                        value={orderNum}
+                        onChange={(e) => {
+                          const updated = [...orderItems];
+                          updated[idx] = { ...updated[idx], orderNum: e.target.value };
+                          setOrderItems(updated);
+                        }}
+                        disabled={sameOn}
+                        className="px-2 py-1 border border-border rounded text-sm disabled:opacity-55"
+                        aria-label={`Order number for item ${idx + 1}`}
+                      />
+                      <input
+                        type="number"
+                        placeholder={`Actual $/ea (est $${item.cost.toFixed(2)})`}
+                        value={item.actualCost ?? ""}
+                        onChange={(e) => {
+                          const updated = [...orderItems];
+                          updated[idx] = { ...updated[idx], actualCost: e.target.value === "" ? undefined : parseFloat(e.target.value) };
+                          setOrderItems(updated);
+                        }}
+                        step={0.01}
+                        min={0}
+                        className="px-2 py-1 border border-border rounded text-sm"
+                        aria-label={`Actual cost for item ${idx + 1}`}
+                      />
+                      <input
+                        type="date"
+                        value={item.expectedDelivery ?? ""}
+                        onChange={(e) => {
+                          const updated = [...orderItems];
+                          updated[idx] = { ...updated[idx], expectedDelivery: e.target.value };
+                          setOrderItems(updated);
+                        }}
+                        className="px-2 py-1 border border-border rounded text-sm"
+                        aria-label={`Expected delivery for item ${idx + 1}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm text-text-secondary mb-1">
@@ -134,7 +323,11 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
               disabled={isLoading || (notesRequired && !notes.trim())}
               className={`flex-1 px-4 py-2 text-white text-sm rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${getConfirmColor(selectedAction)}`}
             >
-              {isLoading ? "Processing..." : `Confirm ${selectedAction}`}
+              {isLoading
+                ? "Processing..."
+                : selectedAction === "Approved & Ordered"
+                  ? `Confirm Approve & Order (${orderItems.length} item${orderItems.length === 1 ? "" : "s"}, ${distinctVendorCount(orderItems)} vendor${distinctVendorCount(orderItems) === 1 ? "" : "s"})`
+                  : `Confirm ${selectedAction}`}
             </button>
             <button
               onClick={handleCancel}
@@ -150,80 +343,66 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
           )}
         </div>
       ) : isPurchaseRequest ? (
-        /* Purchase request: 4-button layout */
-        <div className="grid grid-cols-2 gap-1.5">
+        /* Purchase request: primary CTA + secondary chips */
+        <div className="space-y-2">
           <button
             onClick={() => handleActionSelect("Approved")}
-            className="px-2 py-1.5 bg-green-600 text-white text-xs rounded font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            Approve
+            {ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0
+              ? `Approve All ($${computeEstimatedTotal(ticket.purchaseLineItems).toFixed(0)})`
+              : "Approve"}
           </button>
-          <button
-            onClick={() => handleActionSelect("Approved with Changes")}
-            className="px-2 py-1.5 bg-orange-600 text-white text-xs rounded font-medium hover:bg-orange-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            w/ Changes
-          </button>
-          <button
-            onClick={() => handleActionSelect("Approved & Ordered")}
-            className="px-2 py-1.5 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-            </svg>
-            Approve & Order
-          </button>
-          <button
-            onClick={() => handleActionSelect("Denied")}
-            className="px-2 py-1.5 bg-red-600 text-white text-xs rounded font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Deny
-          </button>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              onClick={() => handleActionSelect("Approved with Changes")}
+              className="px-2 py-1.5 bg-white border border-orange-500 text-orange-600 text-xs rounded font-medium hover:bg-orange-50 transition-colors"
+            >
+              w/ Changes
+            </button>
+            <button
+              onClick={() => handleActionSelect("Approved & Ordered")}
+              className="px-2 py-1.5 bg-white border border-blue-500 text-blue-600 text-xs rounded font-medium hover:bg-blue-50 transition-colors"
+            >
+              + Order
+            </button>
+            <button
+              onClick={() => handleActionSelect("Denied")}
+              className="px-2 py-1.5 bg-white border border-red-500 text-red-600 text-xs rounded font-medium hover:bg-red-50 transition-colors"
+            >
+              Deny
+            </button>
+          </div>
         </div>
       ) : (
-        /* Standard request: 3-button layout */
-        <div className="flex gap-1.5">
+        /* Standard request: primary CTA + secondary chips */
+        <div className="space-y-2">
           <button
             onClick={() => handleActionSelect("Approved")}
-            className="flex-1 px-2 py-1.5 bg-green-600 text-white text-xs rounded font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             Approve
           </button>
-          <button
-            onClick={() => handleActionSelect("Denied")}
-            className="flex-1 px-2 py-1.5 bg-red-600 text-white text-xs rounded font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Deny
-          </button>
-          <button
-            onClick={() => handleActionSelect("Changes Requested")}
-            className="flex-1 px-2 py-1.5 bg-orange-600 text-white text-xs rounded font-medium hover:bg-orange-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
-            Changes
-          </button>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => handleActionSelect("Changes Requested")}
+              className="px-2 py-1.5 bg-white border border-orange-500 text-orange-600 text-xs rounded font-medium hover:bg-orange-50 transition-colors"
+            >
+              Changes
+            </button>
+            <button
+              onClick={() => handleActionSelect("Denied")}
+              className="px-2 py-1.5 bg-white border border-red-500 text-red-600 text-xs rounded font-medium hover:bg-red-50 transition-colors"
+            >
+              Deny
+            </button>
+          </div>
         </div>
       )}
     </div>

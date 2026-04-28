@@ -44,3 +44,9 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code local state
+.claude/
+
+# Superpowers brainstorm working files
+.superpowers/

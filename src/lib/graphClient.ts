@@ -3,12 +3,14 @@ import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } f
 import { graphScopes, sharepointScopes } from "./msalConfig";
 import {
   Ticket,
+  PurchaseLineItem,
   Comment,
   Attachment,
   SharePointListResponse,
   mapToTicket,
   mapToComment,
 } from "@/types/ticket";
+import { serializeLineItems } from "@/lib/lineItemHelpers";
 
 // SharePoint site and list IDs - configure in .env.local
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
@@ -264,9 +266,7 @@ export interface CreateTicketData {
   assigneeEmail?: string; // Auto-assignment target
   // Purchase request fields
   isPurchaseRequest?: boolean;
-  purchaseItemUrl?: string;
-  purchaseQuantity?: number;
-  purchaseEstCostPerItem?: number;
+  purchaseLineItems?: PurchaseLineItem[];
   purchaseJustification?: string;
   purchaseProject?: string;
 }
@@ -311,9 +311,9 @@ export async function createTicket(
   if (ticketData.isPurchaseRequest) {
     fields.IsPurchaseRequest = true;
     fields.PurchaseStatus = "Pending Approval";
-    if (ticketData.purchaseItemUrl) fields.PurchaseItemUrl = ticketData.purchaseItemUrl;
-    if (ticketData.purchaseQuantity) fields.PurchaseQuantity = ticketData.purchaseQuantity;
-    if (ticketData.purchaseEstCostPerItem) fields.PurchaseEstCostPerItem = ticketData.purchaseEstCostPerItem;
+    if (ticketData.purchaseLineItems && ticketData.purchaseLineItems.length > 0) {
+      fields.PurchaseLineItemsJSON = serializeLineItems(ticketData.purchaseLineItems);
+    }
     if (ticketData.purchaseJustification) fields.PurchaseJustification = ticketData.purchaseJustification;
     if (ticketData.purchaseProject) fields.PurchaseProject = ticketData.purchaseProject;
   }
@@ -524,40 +524,32 @@ export async function processApprovalDecision(
   return ticket;
 }
 
-// Update purchase-specific fields (for purchaser/inventory updates)
-export async function updatePurchaseFields(
+// Update the line items JSON column with verification.
+// Optionally also writes purchaseStatus and/or notes in the same PATCH.
+export async function updateTicketLineItems(
   client: Client,
   ticketId: string,
-  updates: Partial<{
-    PurchaseStatus: string;
-    PurchaseVendor: string;
-    PurchaseConfirmationNum: string;
-    PurchaseActualCost: number;
-    PurchaseExpectedDelivery: string;
-    PurchaseNotes: string;
-    PurchasedDate: string;
-    PurchasedByEmail: string;
-    ReceivedDate: string;
-    ReceivedNotes: string;
-    ReceivedByEmail: string;
-  }>
+  lineItems: PurchaseLineItem[],
+  options?: { purchaseStatus?: string; notes?: string },
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+  const json = serializeLineItems(lineItems);
 
-  const filteredUpdates: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(updates)) {
-    if (value !== undefined) {
-      filteredUpdates[key] = value;
-    }
+  const fields: Record<string, unknown> = { PurchaseLineItemsJSON: json };
+  if (options?.purchaseStatus) fields.PurchaseStatus = options.purchaseStatus;
+  if (options?.notes) fields.PurchaseNotes = options.notes;
+
+  await client.api(endpoint).patch({ fields });
+
+  // Verify: re-fetch and confirm the JSON saved
+  const verifyResponse = await client.api(`${endpoint}?$expand=fields`).get();
+  const verifiedJson = (verifyResponse.fields as Record<string, unknown>).PurchaseLineItemsJSON as string | undefined;
+  if (verifiedJson !== json) {
+    throw new Error("Line items failed to save to SharePoint. Please retry.");
   }
 
-  const item = await client.api(endpoint).patch({
-    fields: filteredUpdates,
-  });
-
   invalidateTicketsCache();
-
-  return mapToTicket(item);
+  return mapToTicket(verifyResponse);
 }
 
 // Get count of pending approvals (for header badge)
@@ -1745,6 +1737,7 @@ export type ActivityEventType =
   | "escalation_triggered"
   | "ticket_merged"
   | "purchase_ordered"
+  | "purchase_items_changed"
   | "purchase_received";
 
 export interface ActivityLogEntry {

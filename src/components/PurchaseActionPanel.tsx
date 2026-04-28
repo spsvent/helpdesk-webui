@@ -1,46 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { Ticket, PurchaseLineItem } from "@/types/ticket";
 
 interface PurchaseActionPanelProps {
-  onMarkPurchased: (data: {
-    vendor: string;
-    confirmationNum: string;
-    actualCost: number;
-    expectedDelivery: string;
-    notes?: string;
-  }) => Promise<void>;
+  ticket: Ticket;
+  onMarkPurchased: (orderItems: PurchaseLineItem[], notes?: string) => Promise<void>;
 }
 
-export default function PurchaseActionPanel({ onMarkPurchased }: PurchaseActionPanelProps) {
+export default function PurchaseActionPanel({ ticket, onMarkPurchased }: PurchaseActionPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [vendor, setVendor] = useState("");
-  const [confirmationNum, setConfirmationNum] = useState("");
-  const [actualCost, setActualCost] = useState("");
-  const [expectedDelivery, setExpectedDelivery] = useState("");
+  const [orderItems, setOrderItems] = useState<PurchaseLineItem[]>(ticket.purchaseLineItems ?? []);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isValid = vendor.trim() && confirmationNum.trim() && actualCost && expectedDelivery;
+  const isValid =
+    orderItems.length > 0 &&
+    orderItems.every((item) => Boolean(item.vendor?.trim() && item.orderNum?.trim()));
 
   const handleSubmit = async () => {
     if (!isValid) return;
-
     setIsSubmitting(true);
     try {
-      await onMarkPurchased({
-        vendor: vendor.trim(),
-        confirmationNum: confirmationNum.trim(),
-        actualCost: parseFloat(actualCost),
-        expectedDelivery,
-        notes: notes.trim() || undefined,
-      });
-      // Reset form on success
+      await onMarkPurchased(orderItems, notes.trim() || undefined);
       setIsExpanded(false);
-      setVendor("");
-      setConfirmationNum("");
-      setActualCost("");
-      setExpectedDelivery("");
+      setOrderItems(ticket.purchaseLineItems ?? []);
       setNotes("");
     } catch (error) {
       console.error("Failed to mark as purchased:", error);
@@ -65,52 +49,71 @@ export default function PurchaseActionPanel({ onMarkPurchased }: PurchaseActionP
 
   return (
     <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-3">
-      <h4 className="text-sm font-medium text-indigo-900">Purchase Details</h4>
+      <h4 className="text-sm font-medium text-indigo-900">Order Details (per item)</h4>
 
-      <div>
-        <label className="block text-xs text-indigo-700 mb-1">Vendor *</label>
-        <input
-          type="text"
-          value={vendor}
-          onChange={(e) => setVendor(e.target.value)}
-          placeholder="Vendor name"
-          className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
+      {orderItems.length === 0 && (
+        <p className="text-sm text-indigo-700">No line items on this ticket.</p>
+      )}
 
-      <div>
-        <label className="block text-xs text-indigo-700 mb-1">Order Confirmation # *</label>
-        <input
-          type="text"
-          value={confirmationNum}
-          onChange={(e) => setConfirmationNum(e.target.value)}
-          placeholder="Confirmation number"
-          className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs text-indigo-700 mb-1">Actual Cost *</label>
-        <input
-          type="number"
-          value={actualCost}
-          onChange={(e) => setActualCost(e.target.value)}
-          placeholder="0.00"
-          step="0.01"
-          min="0"
-          className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs text-indigo-700 mb-1">Expected Delivery *</label>
-        <input
-          type="date"
-          value={expectedDelivery}
-          onChange={(e) => setExpectedDelivery(e.target.value)}
-          className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
+      {orderItems.map((item, idx) => (
+        <div key={idx} className="bg-white border border-indigo-200 rounded p-2 space-y-1">
+          <div className="text-sm">
+            <strong>{idx + 1}. {item.name || item.url || `Item ${idx + 1}`} × {item.qty}</strong>
+            <span className="text-indigo-600"> — est ${(item.qty * item.cost).toFixed(2)}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            <input
+              type="text"
+              placeholder="Vendor *"
+              value={item.vendor ?? ""}
+              onChange={(e) => {
+                const updated = [...orderItems];
+                updated[idx] = { ...updated[idx], vendor: e.target.value };
+                setOrderItems(updated);
+              }}
+              className="px-2 py-1 border border-indigo-300 rounded text-sm"
+              aria-label={`Vendor for item ${idx + 1}`}
+            />
+            <input
+              type="text"
+              placeholder="Order # *"
+              value={item.orderNum ?? ""}
+              onChange={(e) => {
+                const updated = [...orderItems];
+                updated[idx] = { ...updated[idx], orderNum: e.target.value };
+                setOrderItems(updated);
+              }}
+              className="px-2 py-1 border border-indigo-300 rounded text-sm"
+              aria-label={`Order number for item ${idx + 1}`}
+            />
+            <input
+              type="number"
+              placeholder={`Actual $/ea (est $${item.cost.toFixed(2)})`}
+              value={item.actualCost ?? ""}
+              onChange={(e) => {
+                const updated = [...orderItems];
+                updated[idx] = { ...updated[idx], actualCost: e.target.value === "" ? undefined : parseFloat(e.target.value) };
+                setOrderItems(updated);
+              }}
+              step={0.01}
+              min={0}
+              className="px-2 py-1 border border-indigo-300 rounded text-sm"
+              aria-label={`Actual cost for item ${idx + 1}`}
+            />
+            <input
+              type="date"
+              value={item.expectedDelivery ?? ""}
+              onChange={(e) => {
+                const updated = [...orderItems];
+                updated[idx] = { ...updated[idx], expectedDelivery: e.target.value };
+                setOrderItems(updated);
+              }}
+              className="px-2 py-1 border border-indigo-300 rounded text-sm"
+              aria-label={`Expected delivery for item ${idx + 1}`}
+            />
+          </div>
+        </div>
+      ))}
 
       <div>
         <label className="block text-xs text-indigo-700 mb-1">Notes (optional)</label>

@@ -26,6 +26,9 @@ import AssigneePreview from "@/components/AssigneePreview";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import StagedAttachmentList from "@/components/StagedAttachmentList";
+import LineItemsField from "@/components/LineItemsField";
+import type { PurchaseLineItem } from "@/types/ticket";
+import { validateLineItem } from "@/lib/lineItemHelpers";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -86,10 +89,8 @@ export default function NewTicketPage() {
 
   // Purchase request state
   const [isPurchaseRequest, setIsPurchaseRequest] = useState(false);
-  const [purchaseFields, setPurchaseFields] = useState({
-    itemUrl: "",
-    quantity: "1",
-    estCostPerItem: "",
+  const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
+  const [purchaseShared, setPurchaseShared] = useState({
     justification: "",
     project: "",
   });
@@ -243,7 +244,7 @@ export default function NewTicketPage() {
       return;
     }
 
-    if (!formData.description.trim()) {
+    if (!isPurchaseRequest && !formData.description.trim()) {
       setError("Please describe your issue");
       return;
     }
@@ -262,16 +263,19 @@ export default function NewTicketPage() {
 
     // Validate purchase request fields
     if (isPurchaseRequest) {
-      if (!purchaseFields.quantity || parseInt(purchaseFields.quantity) < 1) {
-        setError("Please enter a valid quantity (at least 1)");
+      if (lineItems.length === 0) {
+        setError("Add at least one item to the purchase request.");
         return;
       }
-      if (!purchaseFields.estCostPerItem || parseFloat(purchaseFields.estCostPerItem) <= 0) {
-        setError("Please enter an estimated cost per item");
-        return;
+      for (let i = 0; i < lineItems.length; i++) {
+        const err = validateLineItem(lineItems[i]);
+        if (err) {
+          setError(`Item ${i + 1}: ${err}`);
+          return;
+        }
       }
-      if (!purchaseFields.justification.trim()) {
-        setError("Please provide a justification for the purchase");
+      if (!purchaseShared.justification.trim()) {
+        setError("Justification is required for purchase requests.");
         return;
       }
     }
@@ -329,11 +333,9 @@ export default function NewTicketPage() {
 
       if (isPurchaseRequest) {
         ticketData.isPurchaseRequest = true;
-        ticketData.purchaseItemUrl = purchaseFields.itemUrl || undefined;
-        ticketData.purchaseQuantity = parseInt(purchaseFields.quantity);
-        ticketData.purchaseEstCostPerItem = parseFloat(purchaseFields.estCostPerItem);
-        ticketData.purchaseJustification = purchaseFields.justification;
-        ticketData.purchaseProject = purchaseFields.project || undefined;
+        ticketData.purchaseLineItems = lineItems;
+        ticketData.purchaseJustification = purchaseShared.justification;
+        ticketData.purchaseProject = purchaseShared.project || undefined;
       }
 
       const newTicket = await createTicket(
@@ -504,6 +506,8 @@ export default function NewTicketPage() {
     // Reset purchase request when switching to Problem category
     if (name === "category" && value === "Problem") {
       setIsPurchaseRequest(false);
+      setLineItems([{ qty: 1, cost: 0 }]);
+      setPurchaseShared({ justification: "", project: "" });
     }
   };
 
@@ -578,46 +582,6 @@ export default function NewTicketPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Title */}
-              <div>
-                <label
-                  htmlFor="title"
-                  className="block text-sm font-medium text-text-primary mb-1"
-                >
-                  Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  placeholder="Brief summary of your issue"
-                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                  required
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label
-                  htmlFor="description"
-                  className="block text-sm font-medium text-text-primary mb-1"
-                >
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, or relevant context."
-                  rows={6}
-                  className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                  required
-                />
-              </div>
-
               {/* Category */}
               <div>
                 <label className="block text-sm font-medium text-text-primary mb-2">
@@ -731,121 +695,99 @@ export default function NewTicketPage() {
                 </div>
               </div>
 
-              {/* Purchase Request Toggle - only shown for Requests */}
+              {/* Purchase Request Toggle - only shown for Requests, placed before Title */}
               {formData.category === "Request" && (
-                <div className="space-y-4">
-                  <label className="flex items-center gap-3 p-3 border border-amber-300 bg-amber-50 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isPurchaseRequest}
-                      onChange={(e) => setIsPurchaseRequest(e.target.checked)}
-                      className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
-                    />
-                    <div>
-                      <span className="font-medium text-amber-900">This is a Purchase Request</span>
-                      <p className="text-xs text-amber-700 mt-0.5">
-                        Check this if you need to purchase an item or service
-                      </p>
-                    </div>
+                <label className="flex items-center gap-3 p-3 border border-amber-300 bg-amber-50 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isPurchaseRequest}
+                    onChange={(e) => setIsPurchaseRequest(e.target.checked)}
+                    className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
+                  />
+                  <div>
+                    <span className="font-medium text-amber-900">This is a Purchase Request</span>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Check this if you need to purchase an item or service
+                    </p>
+                  </div>
+                </label>
+              )}
+
+              {/* Title */}
+              <div>
+                <label
+                  htmlFor="title"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  placeholder="Brief summary of your issue"
+                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                  required
+                />
+              </div>
+
+              {/* Description - hidden when isPurchaseRequest (line items replace it) */}
+              {!isPurchaseRequest && (
+                <div>
+                  <label
+                    htmlFor="description"
+                    className="block text-sm font-medium text-text-primary mb-1"
+                  >
+                    Description <span className="text-red-500">*</span>
                   </label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, or relevant context."
+                    rows={6}
+                    className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                    required
+                  />
+                </div>
+              )}
 
-                  {/* Purchase Request Fields */}
-                  {isPurchaseRequest && (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
-                      <h3 className="text-sm font-medium text-amber-900">Purchase Details</h3>
+              {/* Purchase Request Line Items - shown in place of Description */}
+              {isPurchaseRequest && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
+                  <h3 className="text-sm font-medium text-amber-900">Line Items</h3>
+                  <LineItemsField items={lineItems} onChange={setLineItems} />
 
-                      {/* Item URL */}
-                      <div>
-                        <label htmlFor="purchaseItemUrl" className="block text-xs font-medium text-amber-800 mb-1">
-                          Item Link/URL <span className="text-amber-600">(optional)</span>
-                        </label>
-                        <input
-                          type="url"
-                          id="purchaseItemUrl"
-                          value={purchaseFields.itemUrl}
-                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, itemUrl: e.target.value }))}
-                          placeholder="https://example.com/product"
-                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="purchaseJustification" className="block text-xs font-medium text-amber-800 mb-1">
+                      Justification (shared) <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="purchaseJustification"
+                      value={purchaseShared.justification}
+                      onChange={(e) => setPurchaseShared((prev) => ({ ...prev, justification: e.target.value }))}
+                      placeholder="Why is this purchase needed?"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                    />
+                  </div>
 
-                      {/* Quantity + Est Cost */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label htmlFor="purchaseQuantity" className="block text-xs font-medium text-amber-800 mb-1">
-                            Quantity <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="number"
-                            id="purchaseQuantity"
-                            value={purchaseFields.quantity}
-                            onChange={(e) => setPurchaseFields((prev) => ({ ...prev, quantity: e.target.value }))}
-                            min="1"
-                            step="1"
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="purchaseEstCost" className="block text-xs font-medium text-amber-800 mb-1">
-                            Est. Cost Per Item <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2 text-sm text-amber-600">$</span>
-                            <input
-                              type="number"
-                              id="purchaseEstCost"
-                              value={purchaseFields.estCostPerItem}
-                              onChange={(e) => setPurchaseFields((prev) => ({ ...prev, estCostPerItem: e.target.value }))}
-                              placeholder="0.00"
-                              step="0.01"
-                              min="0"
-                              className="w-full pl-7 pr-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Estimated Total */}
-                      {purchaseFields.quantity && purchaseFields.estCostPerItem && (
-                        <div className="flex items-center gap-2 p-2 bg-amber-100 rounded-lg">
-                          <span className="text-xs font-medium text-amber-800">Estimated Total:</span>
-                          <span className="text-sm font-bold text-amber-900">
-                            ${(parseInt(purchaseFields.quantity) * parseFloat(purchaseFields.estCostPerItem)).toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Justification */}
-                      <div>
-                        <label htmlFor="purchaseJustification" className="block text-xs font-medium text-amber-800 mb-1">
-                          Justification - What is it for? <span className="text-red-500">*</span>
-                        </label>
-                        <textarea
-                          id="purchaseJustification"
-                          value={purchaseFields.justification}
-                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, justification: e.target.value }))}
-                          placeholder="Explain why this purchase is needed..."
-                          rows={3}
-                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                        />
-                      </div>
-
-                      {/* Project */}
-                      <div>
-                        <label htmlFor="purchaseProject" className="block text-xs font-medium text-amber-800 mb-1">
-                          Project <span className="text-amber-600">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          id="purchaseProject"
-                          value={purchaseFields.project}
-                          onChange={(e) => setPurchaseFields((prev) => ({ ...prev, project: e.target.value }))}
-                          placeholder="Project name this is for"
-                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                        />
-                      </div>
-                    </div>
-                  )}
+                  <div>
+                    <label htmlFor="purchaseProject" className="block text-xs font-medium text-amber-800 mb-1">
+                      Project <span className="text-amber-600">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="purchaseProject"
+                      value={purchaseShared.project}
+                      onChange={(e) => setPurchaseShared((prev) => ({ ...prev, project: e.target.value }))}
+                      placeholder="Project name this is for"
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                    />
+                  </div>
                 </div>
               )}
 

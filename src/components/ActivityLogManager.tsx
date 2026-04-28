@@ -25,6 +25,7 @@ const EVENT_TYPE_LABELS: Record<ActivityEventType, { label: string; color: strin
   escalation_triggered: { label: "Escalation Triggered", color: "bg-amber-100 text-amber-800" },
   ticket_merged: { label: "Ticket Merged", color: "bg-teal-100 text-teal-800" },
   purchase_ordered: { label: "Purchase Ordered", color: "bg-sky-100 text-sky-800" },
+  purchase_items_changed: { label: "Items Changed", color: "bg-orange-100 text-orange-800" },
   purchase_received: { label: "Purchase Received", color: "bg-lime-100 text-lime-800" },
 };
 
@@ -43,6 +44,7 @@ const EVENT_TYPE_OPTIONS: ActivityEventType[] = [
   "escalation_triggered",
   "ticket_merged",
   "purchase_ordered",
+  "purchase_items_changed",
   "purchase_received",
 ];
 

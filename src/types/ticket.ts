@@ -6,6 +6,24 @@ export type ApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Chang
 // Purchase request workflow status
 export type PurchaseStatus = "Pending Approval" | "Approved" | "Approved with Changes" | "Ordered" | "Purchased" | "Received" | "Denied";
 
+export interface PurchaseLineItem {
+  // Entered by requester
+  url?: string;
+  name?: string;
+  qty: number;
+  cost: number;             // estimated $/item
+
+  // Entered by GM on "Approve & Order", or by Purchaser later
+  vendor?: string;
+  orderNum?: string;
+  actualCost?: number;      // actual $/item if it differs
+  expectedDelivery?: string; // ISO date string
+
+  // Entered by Inventory on receipt
+  receivedDate?: string;    // ISO date string
+  receivedQty?: number;
+}
+
 export interface Ticket {
   id: string;
   ticketNumber?: number;  // Auto-generated ticket number
@@ -35,6 +53,7 @@ export interface Ticket {
   approvalNotes?: string;
   // Purchase request fields
   isPurchaseRequest?: boolean;
+  purchaseLineItems?: PurchaseLineItem[];   // canonical (new) — dual-read with legacy columns below
   purchaseItemUrl?: string;
   purchaseQuantity?: number;
   purchaseEstCostPerItem?: number;
@@ -119,6 +138,37 @@ function getPersonEmail(field: unknown): string {
   return (obj.Email as string) || "";
 }
 
+function parsePurchaseLineItems(fields: Record<string, unknown>): PurchaseLineItem[] | undefined {
+  if (!fields.IsPurchaseRequest) return undefined;
+  const json = fields.PurchaseLineItemsJSON as string | undefined;
+  if (json && json.trim()) {
+    try {
+      const parsed = JSON.parse(json);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as PurchaseLineItem[];
+    } catch (e) {
+      console.warn("[parsePurchaseLineItems] Failed to parse PurchaseLineItemsJSON, falling back to legacy columns:", e);
+    }
+  }
+  // Legacy fallback: synthesize a one-row array from the singular columns
+  const legacyUrl = fields.PurchaseItemUrl as string | undefined;
+  const legacyQty = fields.PurchaseQuantity as number | undefined;
+  const legacyCost = fields.PurchaseEstCostPerItem as number | undefined;
+  if (legacyUrl || legacyQty != null || legacyCost != null) {
+    const legacyItem: PurchaseLineItem = {
+      url: legacyUrl,
+      qty: legacyQty ?? 1,
+      cost: legacyCost ?? 0,
+    };
+    if (fields.PurchaseVendor) legacyItem.vendor = fields.PurchaseVendor as string;
+    if (fields.PurchaseConfirmationNum) legacyItem.orderNum = fields.PurchaseConfirmationNum as string;
+    if (fields.PurchaseActualCost != null) legacyItem.actualCost = fields.PurchaseActualCost as number;
+    if (fields.PurchaseExpectedDelivery) legacyItem.expectedDelivery = fields.PurchaseExpectedDelivery as string;
+    if (fields.ReceivedDate) legacyItem.receivedDate = fields.ReceivedDate as string;
+    return [legacyItem];
+  }
+  return undefined;
+}
+
 // Transform SharePoint response to Ticket
 export function mapToTicket(item: SharePointListItem): Ticket {
   const fields = item.fields as Record<string, unknown>;
@@ -173,6 +223,7 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     approvalNotes: fields.ApprovalNotes as string | undefined,
     // Purchase request fields
     isPurchaseRequest: fields.IsPurchaseRequest as boolean | undefined,
+    purchaseLineItems: parsePurchaseLineItems(fields),
     purchaseItemUrl: fields.PurchaseItemUrl as string | undefined,
     purchaseQuantity: fields.PurchaseQuantity as number | undefined,
     purchaseEstCostPerItem: fields.PurchaseEstCostPerItem as number | undefined,
