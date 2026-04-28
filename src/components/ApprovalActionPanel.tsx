@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ticket } from "@/types/ticket";
+import { Ticket, PurchaseLineItem } from "@/types/ticket";
 import LineItemsTable from "./LineItemsTable";
 import { computeEstimatedTotal } from "@/lib/lineItemHelpers";
 
@@ -10,7 +10,11 @@ type ApprovalDecision = "Approved" | "Denied" | "Changes Requested" | "Approved 
 interface ApprovalActionPanelProps {
   ticket: Ticket;
   isPurchaseRequest?: boolean;
-  onDecision: (decision: ApprovalDecision, notes?: string) => Promise<void>;
+  onDecision: (
+    decision: ApprovalDecision,
+    notes?: string,
+    options?: { keptItems?: PurchaseLineItem[] },
+  ) => Promise<void>;
 }
 
 export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false, onDecision }: ApprovalActionPanelProps) {
@@ -18,16 +22,33 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [keptItemIndexes, setKeptItemIndexes] = useState<Set<number>>(
+    new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []),
+  );
 
   const isPending = ticket.approvalStatus === "Pending";
 
   const handleActionSelect = (action: ApprovalDecision) => {
     setSelectedAction(action);
     setNotes("");
+    setError(null);
+    setKeptItemIndexes(new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []));
   };
 
   const handleConfirm = async () => {
     if (!selectedAction) return;
+
+    // Guard: "Approved with Changes" on a purchase request must keep at least one item
+    if (
+      selectedAction === "Approved with Changes" &&
+      isPurchaseRequest &&
+      ticket.purchaseLineItems &&
+      ticket.purchaseLineItems.length > 0 &&
+      keptItemIndexes.size === 0
+    ) {
+      setError("At least one item must be kept. Use Deny to reject the request entirely.");
+      return;
+    }
 
     // Notes are required for Deny, Changes Requested, and Approved with Changes
     const requiresNotes =
@@ -42,7 +63,11 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
     setIsLoading(true);
     setError(null);
     try {
-      await onDecision(selectedAction, notes.trim() || undefined);
+      const keptItems =
+        selectedAction === "Approved with Changes" && ticket.purchaseLineItems
+          ? ticket.purchaseLineItems.filter((_, i) => keptItemIndexes.has(i))
+          : undefined;
+      await onDecision(selectedAction, notes.trim() || undefined, { keptItems });
       setSelectedAction(null);
       setNotes("");
     } catch (err) {
@@ -56,6 +81,8 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const handleCancel = () => {
     setSelectedAction(null);
     setNotes("");
+    setError(null);
+    setKeptItemIndexes(new Set(ticket.purchaseLineItems?.map((_, i) => i) ?? []));
   };
 
   const notesRequired =
@@ -125,6 +152,45 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
               {selectedAction}
             </span>
           </div>
+
+          {selectedAction === "Approved with Changes" && isPurchaseRequest && ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
+            <div className="bg-white border border-orange-200 rounded p-2 space-y-1">
+              <p className="text-xs text-orange-800">Untick items to remove from the approval. Notes auto-fill below.</p>
+              {ticket.purchaseLineItems.map((item, idx) => {
+                const kept = keptItemIndexes.has(idx);
+                return (
+                  <label
+                    key={idx}
+                    className={`flex justify-between items-center text-sm ${kept ? "" : "line-through text-text-secondary"}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={kept}
+                        onChange={() => {
+                          const next = new Set(keptItemIndexes);
+                          if (kept) next.delete(idx); else next.add(idx);
+                          setKeptItemIndexes(next);
+                          setError(null);
+                          // auto-fill notes based on what's removed/kept
+                          const items = ticket.purchaseLineItems!;
+                          const removed = items.filter((_, i) => !next.has(i));
+                          const kept2 = items.filter((_, i) => next.has(i));
+                          const removedSummary = removed.length
+                            ? `Removed from order: ${removed.map((r) => `${r.name || r.url || "item"} (×${r.qty})`).join(", ")}.`
+                            : "";
+                          const total = kept2.reduce((s, r) => s + r.qty * r.cost, 0);
+                          setNotes(`${removedSummary} Approved remaining ${kept2.length} item${kept2.length === 1 ? "" : "s"}, total $${total.toFixed(2)}.`.trim());
+                        }}
+                      />
+                      {item.name || item.url || `Item ${idx + 1}`} × {item.qty}
+                    </span>
+                    <span>${(item.qty * item.cost).toFixed(2)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm text-text-secondary mb-1">

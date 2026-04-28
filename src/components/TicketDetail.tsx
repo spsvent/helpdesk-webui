@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Comment, Attachment } from "@/types/ticket";
+import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
 import {
   getGraphClient,
   getComments,
@@ -11,6 +11,7 @@ import {
   requestApproval,
   processApprovalDecision,
   updatePurchaseFields,
+  updateTicketLineItems,
   getAttachments,
   uploadAttachment,
   deleteAttachment,
@@ -408,7 +409,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   // Handle approval decision
   const handleApprovalDecision = async (
     decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
-    notes?: string
+    notes?: string,
+    options?: { keptItems?: PurchaseLineItem[] },
   ) => {
     if (!accounts[0]) return;
 
@@ -427,6 +429,29 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       ticket.isPurchaseRequest || false
     );
     onUpdate(updatedTicket);
+
+    // If GM removed items via the checklist on "Approve with Changes", rewrite
+    // line items now and log the change. Skip if no kept items array passed
+    // (e.g. plain Approve, Deny, etc.).
+    if (options?.keptItems && options.keptItems.length > 0 && ticket.purchaseLineItems) {
+      const removedItems = ticket.purchaseLineItems.filter(
+        (originalItem) => !options.keptItems!.includes(originalItem)
+      );
+      const further = await updateTicketLineItems(client, ticket.id, options.keptItems);
+      onUpdate(further);
+      logActivity(client, {
+        eventType: "purchase_items_changed",
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
+        actor: approverEmail,
+        actorName: approverName,
+        description: `Items modified during approval by ${approverName}`,
+        details: JSON.stringify({
+          removed: removedItems,
+          kept: options.keptItems,
+        }),
+      }).catch((e) => console.error("Failed to log items change:", e));
+    }
 
     // Only log, comment, and notify AFTER the status has been verified saved
     logActivity(client, {

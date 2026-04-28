@@ -1782,6 +1782,7 @@ export type ActivityEventType =
   | "escalation_triggered"
   | "ticket_merged"
   | "purchase_ordered"
+  | "purchase_items_changed"
   | "purchase_received";
 
 export interface ActivityLogEntry {
