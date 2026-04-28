@@ -33,6 +33,7 @@ import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
 import NudgeApprovalButton from "./NudgeApprovalButton";
+import ApprovalActionPanel from "./ApprovalActionPanel";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -64,7 +65,7 @@ type MobileDetailView = "comments" | "details";
 
 export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const { instance, accounts } = useMsal();
-  const { canEdit, canComment, isOwn, permissions } = useRBAC();
+  const { canEdit, canComment, isOwn, canApprove, permissions } = useRBAC();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -673,6 +674,17 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           <div className="flex-1 flex flex-col min-w-0">
             {/* Scrollable conversation thread */}
             <div className="flex-1 overflow-y-auto p-6 scroll-container">
+              {/* Approval action banner — shown above conversation when approval is pending */}
+              {ticket.approvalStatus === "Pending" && canApprove() && (
+                <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <ApprovalActionPanel
+                    ticket={ticket}
+                    isPurchaseRequest={ticket.isPurchaseRequest || false}
+                    onDecision={handleApprovalDecision}
+                  />
+                </div>
+              )}
+
               <ConversationThread
                 ticket={ticket}
                 comments={comments}
@@ -718,7 +730,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUpdate={onUpdate}
               canEdit={canEditThisTicket}
               onRequestApproval={handleRequestApproval}
-              onApprovalDecision={handleApprovalDecision}
               onMarkPurchased={handleMarkPurchased}
               onMarkReceived={handleMarkReceived}
               attachments={attachments}

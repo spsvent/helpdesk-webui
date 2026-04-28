@@ -24,7 +24,6 @@ import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/aut
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
-import ApprovalActionPanel from "./ApprovalActionPanel";
 import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
@@ -47,7 +46,6 @@ interface DetailsPanelProps {
   onUpdate: (ticket: Ticket) => void;
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
-  onApprovalDecision?: (decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered", notes?: string) => Promise<void>;
   // Purchase workflow
   onMarkPurchased?: (data: {
     vendor: string;
@@ -87,7 +85,6 @@ export default function DetailsPanel({
   onUpdate,
   canEdit = true,
   onRequestApproval,
-  onApprovalDecision,
   onMarkPurchased,
   onMarkReceived,
   attachments,
@@ -521,15 +518,6 @@ export default function DetailsPanel({
       {/* Approval Section */}
       {(canRequestApproval(ticket) || canApprove() || ticket.approvalStatus !== "None") && (
         <>
-          {/* Approval Actions for Admins */}
-          {canApprove() && onApprovalDecision && (
-            <ApprovalActionPanel
-              ticket={ticket}
-              isPurchaseRequest={ticket.isPurchaseRequest}
-              onDecision={onApprovalDecision}
-            />
-          )}
-
           {/* Request Approval Button for Support Staff */}
           {canRequestApproval(ticket) && onRequestApproval && (
             <RequestApprovalButton
