@@ -152,6 +152,34 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     fetchComments();
   }, [ticket.id, accounts, instance]);
 
+  // Re-fetch the ticket itself when a new ticket is selected. Guards
+  // against showing days-old React state when a user opens a ticket
+  // they previously had loaded. The cancelled flag prevents a slow
+  // fetch from clobbering state if the user clicks a different ticket
+  // before this one resolves.
+  useEffect(() => {
+    if (!accounts[0]) return;
+    let cancelled = false;
+    const ticketIdAtFetch = ticket.id;
+
+    (async () => {
+      try {
+        const client = getGraphClient(instance, accounts[0]);
+        const fresh = await getTicket(client, ticketIdAtFetch);
+        if (!cancelled) onUpdate(fresh);
+      } catch (e) {
+        if (!cancelled) console.error("Failed to refresh ticket on open:", e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally depend only on ticket.id — onUpdate identity changes
+    // would re-trigger the fetch unnecessarily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id, accounts, instance]);
+
   // Fetch attachments when ticket changes
   useEffect(() => {
     const fetchAttachments = async () => {

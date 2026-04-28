@@ -7,7 +7,7 @@ import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
-import { getGraphClient, getTickets, getArchivedTickets, getTicket } from "@/lib/graphClient";
+import { getGraphClient, getTickets, getArchivedTickets, getTicket, invalidateTicketsCache } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, DEFAULT_FILTERS, PRESET_VIEWS, EMPTY_FILTERS } from "@/types/filters";
 import { filterTickets, sortTickets } from "@/lib/filterUtils";
@@ -336,39 +336,70 @@ export default function Home() {
   }, [tickets]);
 
   // Fetch tickets when authenticated
-  useEffect(() => {
-    const fetchTickets = async () => {
-      if (!isAuthenticated || !accounts[0]) return;
+  const fetchTickets = useCallback(async (options?: { silent?: boolean }) => {
+    if (!isAuthenticated || !accounts[0]) return;
 
+    if (!options?.silent) {
       setLoading(true);
       setError(null);
+    }
 
-      try {
-        const client = getGraphClient(instance, accounts[0]);
-        const ticketList = await getTickets(client);
-        setTickets(ticketList);
-      } catch (e: unknown) {
-        console.error("Failed to fetch tickets:", e);
+    try {
+      const client = getGraphClient(instance, accounts[0]);
+      const ticketList = await getTickets(client);
+      setTickets(ticketList);
+      // Sync the selected ticket from the fresh list so its badges
+      // (status, approval, purchase) update on background refresh.
+      setSelectedTicket((prev) => {
+        if (!prev) return prev;
+        const match = ticketList.find((t) => t.id === prev.id);
+        return match ?? prev;
+      });
+      if (!options?.silent) setError(null);
+    } catch (e: unknown) {
+      console.error("Failed to fetch tickets:", e);
 
-        // Try to provide a more helpful error message based on the error type
-        const err = e as { statusCode?: number; code?: string; message?: string };
+      // Suppress error UI on background refresh — user still has stale-but-usable data
+      if (options?.silent) return;
 
-        if (err.statusCode === 403 || err.code === "accessDenied") {
-          setError("You don't have permission to view tickets. Please contact your administrator to request access to the Help Desk site.");
-        } else if (err.statusCode === 404 || err.code === "itemNotFound") {
-          setError("The tickets list could not be found. Please contact your administrator.");
-        } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken" || err.code === "interaction_required") {
-          setError("Your session has expired. Please sign out and sign back in.");
-        } else {
-          setError("Unable to load tickets. Please try again or contact support if the problem persists.");
-        }
-      } finally {
-        setLoading(false);
+      // Try to provide a more helpful error message based on the error type
+      const err = e as { statusCode?: number; code?: string; message?: string };
+
+      if (err.statusCode === 403 || err.code === "accessDenied") {
+        setError("You don't have permission to view tickets. Please contact your administrator to request access to the Help Desk site.");
+      } else if (err.statusCode === 404 || err.code === "itemNotFound") {
+        setError("The tickets list could not be found. Please contact your administrator.");
+      } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken" || err.code === "interaction_required") {
+        setError("Your session has expired. Please sign out and sign back in.");
+      } else {
+        setError("Unable to load tickets. Please try again or contact support if the problem persists.");
+      }
+    } finally {
+      if (!options?.silent) setLoading(false);
+    }
+  }, [isAuthenticated, accounts, instance]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
+
+  // Refresh tickets when the tab becomes visible again (catches users
+  // returning to a tab that's been backgrounded for a while). Using
+  // visibilitychange (not focus) avoids firing when the user merely
+  // alt-tabs to another window with this tab still visible.
+  useEffect(() => {
+    if (!isAuthenticated || !accounts[0]) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        invalidateTicketsCache();
+        fetchTickets({ silent: true });
       }
     };
 
-    fetchTickets();
-  }, [isAuthenticated, accounts, instance]);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isAuthenticated, accounts, fetchTickets]);
 
   // Show loading while MSAL initializes
   if (inProgress !== InteractionStatus.None) {

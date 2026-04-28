@@ -427,6 +427,8 @@ export async function requestApproval(
     ticket.approvalRequestedBy = { displayName: requesterName, email: requesterEmail };
   }
 
+  invalidateTicketsCache();
+
   return ticket;
 }
 
@@ -516,6 +518,8 @@ export async function processApprovalDecision(
   if (!ticket.approvedBy?.displayName) {
     ticket.approvedBy = { displayName: approverName, email: approverEmail };
   }
+
+  invalidateTicketsCache();
 
   return ticket;
 }
