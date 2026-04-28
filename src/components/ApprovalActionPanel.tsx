@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Ticket } from "@/types/ticket";
+import LineItemsTable from "./LineItemsTable";
+import { computeEstimatedTotal } from "@/lib/lineItemHelpers";
 
 type ApprovalDecision = "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered";
 
@@ -107,6 +109,15 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
         )}
       </div>
 
+      {isPurchaseRequest && ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
+        <div className="border border-border rounded-lg bg-bg-subtle p-3">
+          <div className="text-xs font-semibold text-text-secondary mb-2">
+            Reviewing {ticket.purchaseLineItems.length} item{ticket.purchaseLineItems.length === 1 ? "" : "s"}
+          </div>
+          <LineItemsTable items={ticket.purchaseLineItems} compact />
+        </div>
+      )}
+
       {selectedAction ? (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -150,80 +161,66 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
           )}
         </div>
       ) : isPurchaseRequest ? (
-        /* Purchase request: 4-button layout */
-        <div className="grid grid-cols-2 gap-1.5">
+        /* Purchase request: primary CTA + secondary chips */
+        <div className="space-y-2">
           <button
             onClick={() => handleActionSelect("Approved")}
-            className="px-2 py-1.5 bg-green-600 text-white text-xs rounded font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            Approve
+            {ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0
+              ? `Approve All ($${computeEstimatedTotal(ticket.purchaseLineItems).toFixed(0)})`
+              : "Approve"}
           </button>
-          <button
-            onClick={() => handleActionSelect("Approved with Changes")}
-            className="px-2 py-1.5 bg-orange-600 text-white text-xs rounded font-medium hover:bg-orange-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            w/ Changes
-          </button>
-          <button
-            onClick={() => handleActionSelect("Approved & Ordered")}
-            className="px-2 py-1.5 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-            </svg>
-            Approve & Order
-          </button>
-          <button
-            onClick={() => handleActionSelect("Denied")}
-            className="px-2 py-1.5 bg-red-600 text-white text-xs rounded font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Deny
-          </button>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              onClick={() => handleActionSelect("Approved with Changes")}
+              className="px-2 py-1.5 bg-white border border-orange-500 text-orange-600 text-xs rounded font-medium hover:bg-orange-50 transition-colors"
+            >
+              w/ Changes
+            </button>
+            <button
+              onClick={() => handleActionSelect("Approved & Ordered")}
+              className="px-2 py-1.5 bg-white border border-blue-500 text-blue-600 text-xs rounded font-medium hover:bg-blue-50 transition-colors"
+            >
+              + Order
+            </button>
+            <button
+              onClick={() => handleActionSelect("Denied")}
+              className="px-2 py-1.5 bg-white border border-red-500 text-red-600 text-xs rounded font-medium hover:bg-red-50 transition-colors"
+            >
+              Deny
+            </button>
+          </div>
         </div>
       ) : (
-        /* Standard request: 3-button layout */
-        <div className="flex gap-1.5">
+        /* Standard request: primary CTA + secondary chips */
+        <div className="space-y-2">
           <button
             onClick={() => handleActionSelect("Approved")}
-            className="flex-1 px-2 py-1.5 bg-green-600 text-white text-xs rounded font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             Approve
           </button>
-          <button
-            onClick={() => handleActionSelect("Denied")}
-            className="flex-1 px-2 py-1.5 bg-red-600 text-white text-xs rounded font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Deny
-          </button>
-          <button
-            onClick={() => handleActionSelect("Changes Requested")}
-            className="flex-1 px-2 py-1.5 bg-orange-600 text-white text-xs rounded font-medium hover:bg-orange-700 transition-colors flex items-center justify-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
-            Changes
-          </button>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => handleActionSelect("Changes Requested")}
+              className="px-2 py-1.5 bg-white border border-orange-500 text-orange-600 text-xs rounded font-medium hover:bg-orange-50 transition-colors"
+            >
+              Changes
+            </button>
+            <button
+              onClick={() => handleActionSelect("Denied")}
+              className="px-2 py-1.5 bg-white border border-red-500 text-red-600 text-xs rounded font-medium hover:bg-red-50 transition-colors"
+            >
+              Deny
+            </button>
+          </div>
         </div>
       )}
     </div>
