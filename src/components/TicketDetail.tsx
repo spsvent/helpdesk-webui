@@ -10,7 +10,6 @@ import {
   getTicket,
   requestApproval,
   processApprovalDecision,
-  updatePurchaseFields,
   updateTicketLineItems,
   getAttachments,
   uploadAttachment,
@@ -29,7 +28,7 @@ import {
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncCommentAdded } from "@/lib/vikunjaSyncService";
-import { allItemsOrdered } from "@/lib/lineItemHelpers";
+import { allItemsOrdered, allItemsReceived } from "@/lib/lineItemHelpers";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
@@ -557,47 +556,53 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       .catch((e) => console.error("Failed to send purchase ordered email:", e));
   };
 
-  // Handle marking a purchase as received
-  const handleMarkReceived = async (data: {
-    receivedDate: string;
-    notes?: string;
-  }) => {
+  // Handle marking a purchase as received (per-item)
+  const handleMarkReceived = async (receivedItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
 
     const client = getGraphClient(instance, accounts[0]);
     const receiverEmail = accounts[0].username;
     const receiverName = accounts[0].name || accounts[0].username;
 
-    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
-      PurchaseStatus: "Received",
-      ReceivedDate: data.receivedDate,
-      ReceivedNotes: data.notes,
-      ReceivedByEmail: receiverEmail,
+    const allReceived = allItemsReceived(receivedItems);
+    const newStatus = allReceived ? "Received" : "Ordered";
+
+    const updatedTicket = await updateTicketLineItems(client, ticket.id, receivedItems, {
+      purchaseStatus: newStatus,
+      notes,
     });
     onUpdate(updatedTicket);
 
-    // Log activity
+    // Log activity with per-item received data
     logActivity(client, {
       eventType: "purchase_received",
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
       actor: receiverEmail,
       actorName: receiverName,
-      description: `Marked as received on ${data.receivedDate}`,
-      details: JSON.stringify({
-        receivedDate: data.receivedDate,
-        notes: data.notes || null,
-      }),
+      description: allReceived
+        ? `All ${receivedItems.length} item${receivedItems.length === 1 ? "" : "s"} received`
+        : `Partial receipt: ${receivedItems.filter((i) => (i.receivedQty ?? 0) > 0).length} of ${receivedItems.length} items`,
+      details: JSON.stringify({ receivedItems }),
     }).catch((e) => console.error("Failed to log receive activity:", e));
 
-    // Add internal comment
-    const commentText = `**Received** by ${receiverName} on ${data.receivedDate}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    // Internal comment summarizing receipt
+    const itemLines = receivedItems
+      .map(
+        (it, idx) =>
+          `  ${idx + 1}. ${it.name || it.url || "item"}: received ${it.receivedQty ?? 0}/${it.qty} on ${it.receivedDate ?? "-"}`,
+      )
+      .join("\n");
+    const commentText = `**${allReceived ? "All Received" : "Partial Receipt"}** by ${receiverName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
     const receiveComment = await addComment(client, parseInt(ticket.id), commentText, true);
     setComments((prev) => [...prev, receiveComment]);
 
-    // Send email notification to the original requester
-    sendPurchaseReceivedEmail(client, updatedTicket, receiverName)
-      .catch((e) => console.error("Failed to send purchase received email:", e));
+    // Email original requester only when fully received (avoid noise on partials)
+    if (allReceived) {
+      sendPurchaseReceivedEmail(client, updatedTicket, receiverName).catch((e) =>
+        console.error("Failed to send purchase received email:", e),
+      );
+    }
   };
 
   return (

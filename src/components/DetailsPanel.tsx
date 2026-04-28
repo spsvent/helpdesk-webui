@@ -48,10 +48,7 @@ interface DetailsPanelProps {
   onRequestApproval?: () => Promise<void>;
   // Purchase workflow
   onMarkPurchased?: (orderItems: PurchaseLineItem[], notes?: string) => Promise<void>;
-  onMarkReceived?: (data: {
-    receivedDate: string;
-    notes?: string;
-  }) => Promise<void>;
+  onMarkReceived?: (receivedItems: PurchaseLineItem[], notes?: string) => Promise<void>;
   // Attachments
   attachments: Attachment[];
   attachmentsLoading?: boolean;
@@ -802,7 +799,7 @@ export default function DetailsPanel({
 
             {/* Inventory action panel */}
             {canReceiveTicket(ticket) && onMarkReceived && (
-              <ReceiveActionPanel onMarkReceived={onMarkReceived} />
+              <ReceiveActionPanel ticket={ticket} onMarkReceived={onMarkReceived} />
             )}
           </div>
         </>
