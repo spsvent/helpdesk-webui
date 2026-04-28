@@ -569,6 +569,34 @@ export async function updatePurchaseFields(
   return mapToTicket(item);
 }
 
+// Update the line items JSON column with verification.
+// Optionally also writes purchaseStatus and/or notes in the same PATCH.
+export async function updateTicketLineItems(
+  client: Client,
+  ticketId: string,
+  lineItems: PurchaseLineItem[],
+  options?: { purchaseStatus?: string; notes?: string },
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+  const json = serializeLineItems(lineItems);
+
+  const fields: Record<string, unknown> = { PurchaseLineItemsJSON: json };
+  if (options?.purchaseStatus) fields.PurchaseStatus = options.purchaseStatus;
+  if (options?.notes) fields.PurchaseNotes = options.notes;
+
+  await client.api(endpoint).patch({ fields });
+
+  // Verify: re-fetch and confirm the JSON saved
+  const verifyResponse = await client.api(`${endpoint}?$expand=fields`).get();
+  const verifiedJson = (verifyResponse.fields as Record<string, unknown>).PurchaseLineItemsJSON as string | undefined;
+  if (verifiedJson !== json) {
+    throw new Error("Line items failed to save to SharePoint. Please retry.");
+  }
+
+  invalidateTicketsCache();
+  return mapToTicket(verifyResponse);
+}
+
 // Get count of pending approvals (for header badge)
 export async function getPendingApprovalsCount(client: Client): Promise<number> {
   // Fetch all tickets and count pending approvals client-side
