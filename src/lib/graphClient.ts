@@ -3,12 +3,14 @@ import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } f
 import { graphScopes, sharepointScopes } from "./msalConfig";
 import {
   Ticket,
+  PurchaseLineItem,
   Comment,
   Attachment,
   SharePointListResponse,
   mapToTicket,
   mapToComment,
 } from "@/types/ticket";
+import { serializeLineItems } from "@/lib/lineItemHelpers";
 
 // SharePoint site and list IDs - configure in .env.local
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
@@ -264,6 +266,8 @@ export interface CreateTicketData {
   assigneeEmail?: string; // Auto-assignment target
   // Purchase request fields
   isPurchaseRequest?: boolean;
+  purchaseLineItems?: PurchaseLineItem[];
+  // Legacy single-item fields — superseded by purchaseLineItems. Removed in Task 16.
   purchaseItemUrl?: string;
   purchaseQuantity?: number;
   purchaseEstCostPerItem?: number;
@@ -311,6 +315,11 @@ export async function createTicket(
   if (ticketData.isPurchaseRequest) {
     fields.IsPurchaseRequest = true;
     fields.PurchaseStatus = "Pending Approval";
+    if (ticketData.purchaseLineItems && ticketData.purchaseLineItems.length > 0) {
+      fields.PurchaseLineItemsJSON = serializeLineItems(ticketData.purchaseLineItems);
+    }
+    // Legacy fallthrough — supports the existing form until Task 6 rewires it.
+    // After Task 6 lands, only purchaseLineItems will be set.
     if (ticketData.purchaseItemUrl) fields.PurchaseItemUrl = ticketData.purchaseItemUrl;
     if (ticketData.purchaseQuantity) fields.PurchaseQuantity = ticketData.purchaseQuantity;
     if (ticketData.purchaseEstCostPerItem) fields.PurchaseEstCostPerItem = ticketData.purchaseEstCostPerItem;
