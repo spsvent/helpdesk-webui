@@ -516,53 +516,43 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   };
 
   // Handle marking a purchase request as purchased
-  const handleMarkPurchased = async (data: {
-    vendor: string;
-    confirmationNum: string;
-    actualCost: number;
-    expectedDelivery: string;
-    notes?: string;
-  }) => {
+  const handleMarkPurchased = async (orderItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
 
     const client = getGraphClient(instance, accounts[0]);
     const purchaserEmail = accounts[0].username;
     const purchaserName = accounts[0].name || accounts[0].username;
 
-    const updatedTicket = await updatePurchaseFields(client, ticket.id, {
-      PurchaseStatus: "Purchased",
-      PurchaseVendor: data.vendor,
-      PurchaseConfirmationNum: data.confirmationNum,
-      PurchaseActualCost: data.actualCost,
-      PurchaseExpectedDelivery: data.expectedDelivery,
-      PurchaseNotes: data.notes,
-      PurchasedDate: new Date().toISOString(),
-      PurchasedByEmail: purchaserEmail,
+    const allOrdered = allItemsOrdered(orderItems);
+    const newStatus = allOrdered ? "Ordered" : "Approved";
+
+    const updatedTicket = await updateTicketLineItems(client, ticket.id, orderItems, {
+      purchaseStatus: newStatus,
+      notes,
     });
     onUpdate(updatedTicket);
 
-    // Log activity
+    // Log activity with per-item data
+    const vendorSummary = Array.from(new Set(orderItems.map((i) => i.vendor).filter(Boolean))).join(", ");
     logActivity(client, {
       eventType: "purchase_ordered",
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
       actor: purchaserEmail,
       actorName: purchaserName,
-      description: `Marked as purchased from ${data.vendor} (${data.confirmationNum})`,
-      details: JSON.stringify({
-        vendor: data.vendor,
-        confirmationNum: data.confirmationNum,
-        actualCost: data.actualCost,
-        expectedDelivery: data.expectedDelivery,
-      }),
+      description: `Marked as purchased: ${orderItems.length} item${orderItems.length === 1 ? "" : "s"} from ${vendorSummary || "unspecified vendor"}`,
+      details: JSON.stringify({ orderItems }),
     }).catch((e) => console.error("Failed to log purchase activity:", e));
 
-    // Add internal comment
-    const commentText = `**Purchased** by ${purchaserName}\n\nVendor: ${data.vendor}\nConfirmation #: ${data.confirmationNum}\nActual Cost: $${data.actualCost.toFixed(2)}\nExpected Delivery: ${data.expectedDelivery}${data.notes ? `\nNotes: ${data.notes}` : ""}`;
+    // Internal comment summarizing the order
+    const itemLines = orderItems
+      .map((it, idx) => `  ${idx + 1}. ${it.name || it.url || "item"} ×${it.qty} — ${it.vendor ?? "?"} (${it.orderNum ?? "?"})`)
+      .join("\n");
+    const commentText = `**Purchased** by ${purchaserName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
     const purchaseComment = await addComment(client, parseInt(ticket.id), commentText, true);
     setComments((prev) => [...prev, purchaseComment]);
 
-    // Send email notification to inventory team
+    // Send email to inventory team
     sendPurchaseOrderedEmail(client, updatedTicket, purchaserName)
       .catch((e) => console.error("Failed to send purchase ordered email:", e));
   };

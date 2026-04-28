@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Attachment } from "@/types/ticket";
+import { Ticket, Attachment, PurchaseLineItem } from "@/types/ticket";
 import {
   getGraphClient,
   updateTicketFields,
@@ -47,13 +47,7 @@ interface DetailsPanelProps {
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
   // Purchase workflow
-  onMarkPurchased?: (data: {
-    vendor: string;
-    confirmationNum: string;
-    actualCost: number;
-    expectedDelivery: string;
-    notes?: string;
-  }) => Promise<void>;
+  onMarkPurchased?: (orderItems: PurchaseLineItem[], notes?: string) => Promise<void>;
   onMarkReceived?: (data: {
     receivedDate: string;
     notes?: string;
@@ -803,7 +797,7 @@ export default function DetailsPanel({
 
             {/* Purchaser action panel */}
             {canPurchaseTicket(ticket) && onMarkPurchased && (
-              <PurchaseActionPanel onMarkPurchased={onMarkPurchased} />
+              <PurchaseActionPanel ticket={ticket} onMarkPurchased={onMarkPurchased} />
             )}
 
             {/* Inventory action panel */}
