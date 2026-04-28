@@ -12,7 +12,10 @@ export const msalConfig: Configuration = {
     // Use localStorage so tokens are shared between main window and auth popup
     // This is needed for Teams desktop app where auth happens in a popup
     cacheLocation: "localStorage",
-    storeAuthStateInCookie: false,
+    // Required for iOS Safari: ITP can clear localStorage between the
+    // redirect to login.microsoftonline.com and the return, breaking the
+    // auth-state nonce check and forcing re-login on every action.
+    storeAuthStateInCookie: true,
   },
   system: {
     loggerOptions: {
