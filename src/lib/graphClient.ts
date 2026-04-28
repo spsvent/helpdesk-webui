@@ -267,10 +267,6 @@ export interface CreateTicketData {
   // Purchase request fields
   isPurchaseRequest?: boolean;
   purchaseLineItems?: PurchaseLineItem[];
-  // Legacy single-item fields — superseded by purchaseLineItems. Removed in Task 16.
-  purchaseItemUrl?: string;
-  purchaseQuantity?: number;
-  purchaseEstCostPerItem?: number;
   purchaseJustification?: string;
   purchaseProject?: string;
 }
@@ -318,11 +314,6 @@ export async function createTicket(
     if (ticketData.purchaseLineItems && ticketData.purchaseLineItems.length > 0) {
       fields.PurchaseLineItemsJSON = serializeLineItems(ticketData.purchaseLineItems);
     }
-    // Legacy fallthrough — supports the existing form until Task 6 rewires it.
-    // After Task 6 lands, only purchaseLineItems will be set.
-    if (ticketData.purchaseItemUrl) fields.PurchaseItemUrl = ticketData.purchaseItemUrl;
-    if (ticketData.purchaseQuantity) fields.PurchaseQuantity = ticketData.purchaseQuantity;
-    if (ticketData.purchaseEstCostPerItem) fields.PurchaseEstCostPerItem = ticketData.purchaseEstCostPerItem;
     if (ticketData.purchaseJustification) fields.PurchaseJustification = ticketData.purchaseJustification;
     if (ticketData.purchaseProject) fields.PurchaseProject = ticketData.purchaseProject;
   }
@@ -531,42 +522,6 @@ export async function processApprovalDecision(
   invalidateTicketsCache();
 
   return ticket;
-}
-
-// Update purchase-specific fields (for purchaser/inventory updates)
-export async function updatePurchaseFields(
-  client: Client,
-  ticketId: string,
-  updates: Partial<{
-    PurchaseStatus: string;
-    PurchaseVendor: string;
-    PurchaseConfirmationNum: string;
-    PurchaseActualCost: number;
-    PurchaseExpectedDelivery: string;
-    PurchaseNotes: string;
-    PurchasedDate: string;
-    PurchasedByEmail: string;
-    ReceivedDate: string;
-    ReceivedNotes: string;
-    ReceivedByEmail: string;
-  }>
-): Promise<Ticket> {
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
-
-  const filteredUpdates: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(updates)) {
-    if (value !== undefined) {
-      filteredUpdates[key] = value;
-    }
-  }
-
-  const item = await client.api(endpoint).patch({
-    fields: filteredUpdates,
-  });
-
-  invalidateTicketsCache();
-
-  return mapToTicket(item);
 }
 
 // Update the line items JSON column with verification.

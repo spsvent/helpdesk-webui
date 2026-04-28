@@ -334,7 +334,7 @@ export default function NewTicketPage() {
       if (isPurchaseRequest) {
         ticketData.isPurchaseRequest = true;
         ticketData.purchaseLineItems = lineItems;
-        ticketData.purchaseJustification = purchaseShared.justification || undefined;
+        ticketData.purchaseJustification = purchaseShared.justification;
         ticketData.purchaseProject = purchaseShared.project || undefined;
       }
 
