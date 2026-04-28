@@ -2200,10 +2200,10 @@ const helpSections: HelpSection[] = [
     content: (
       <div className="space-y-4">
         <p>
-          Purchase requests allow employees to request the purchase of items or
-          services. These requests follow a multi-step approval and fulfillment
-          workflow that includes manager approval, purchasing, and inventory
-          receiving.
+          Purchase requests allow employees to request the purchase of one or
+          more items in a single ticket. These requests follow a multi-step
+          approval and fulfillment workflow that includes manager approval,
+          purchasing, and inventory receiving.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
@@ -2217,44 +2217,81 @@ const helpSections: HelpSection[] = [
             Select <strong>&quot;Request&quot;</strong> as the category
           </li>
           <li>
-            Check the <strong>&quot;This is a Purchase Request&quot;</strong> checkbox
-            that appears
+            Check the <strong>&quot;This is a Purchase Request&quot;</strong>{" "}
+            checkbox that appears immediately — it shows up right after the
+            category selector, before the Title field. Check it{" "}
+            <strong>first</strong> before filling out the rest of the form; the
+            form will reshape to show the purchase-specific fields.
           </li>
-          <li>Fill out the standard ticket fields (title, description, department, etc.)</li>
-          <li>Complete the purchase-specific fields (see below)</li>
+          <li>Fill in the Title and remaining ticket fields (department, etc.)</li>
+          <li>Add your item(s) and fill in the shared purchase fields (see below)</li>
           <li>
             Click <strong>&quot;Submit Ticket&quot;</strong> to submit your purchase request
           </li>
         </ol>
 
-        <h4 className="font-semibold text-text-primary mt-6">
-          Purchase Request Fields
-        </h4>
-        <div className="ml-4 mt-3 space-y-3">
-          <p>
-            <strong>Quantity</strong> (required): How many items you need
-          </p>
-          <p>
-            <strong>Estimated Cost Per Item</strong> (required): The approximate cost
-            of each item
-          </p>
-          <p>
-            <strong>Justification</strong> (required): Why this purchase is needed
-          </p>
-          <p>
-            <strong>Item Link/URL</strong> (optional): A link to the item online
-          </p>
-          <p>
-            <strong>Project</strong> (optional): The project this purchase is
-            associated with
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> On a Purchase Request the Description field is
+            replaced by per-item detail rows and a shared Justification field.
+            You do not need to write a separate description — the item details
+            and justification serve that purpose.
           </p>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+        <h4 className="font-semibold text-text-primary mt-6">
+          Adding Multiple Items
+        </h4>
+        <p>
+          You can include multiple products in a single purchase request. Each
+          item has its own row of fields:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Item Name</strong>: A short description of the item (e.g.,{" "}
+            &quot;Motorola CP200d&quot;)
+          </li>
+          <li>
+            <strong>Link / URL</strong>: A product page or supplier link —
+            paste the URL here if you have one
+          </li>
+          <li>
+            <strong>Quantity</strong>: How many of this item you need
+          </li>
+          <li>
+            <strong>Estimated Cost Per Item</strong>: The approximate price of
+            one unit
+          </li>
+        </ul>
+        <p className="mt-3">
+          Click <strong>&quot;+ Add Another Item&quot;</strong> to add more rows.
+          The estimated total updates automatically as you type.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
           <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> The estimated total cost is calculated automatically
-            by multiplying the quantity by the estimated cost per item. This helps
-            managers quickly evaluate the request.
+            <strong>Tip:</strong> Each item needs at least an Item Name{" "}
+            <em>or</em> a URL — both together is fine, but one is required.
+            Providing both makes it easier for the purchasing team to identify
+            and order the correct product.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Shared Purchase Fields
+        </h4>
+        <p>
+          These fields apply to the entire purchase request, not to individual
+          items:
+        </p>
+        <div className="ml-4 mt-3 space-y-3">
+          <p>
+            <strong>Justification</strong> (required): Explain why this
+            purchase is needed. This covers all items in the request.
+          </p>
+          <p>
+            <strong>Project</strong> (optional): Tag the request to a project
+            name. This applies to all items in the request.
           </p>
         </div>
 
@@ -2269,35 +2306,56 @@ const helpSections: HelpSection[] = [
           <div className="p-3 border border-gray-200 rounded-lg">
             <p className="font-medium">1. Employee Submits Request</p>
             <p className="text-sm text-gray-600 mt-1">
-              The employee creates a purchase request ticket with item details,
-              quantity, cost estimate, and justification. The General Manager is
-              notified.
+              The employee creates a purchase request ticket with one or more
+              items, quantities, cost estimates, and a justification. The
+              General Manager is notified.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
             <p className="font-medium">2. General Manager Reviews</p>
             <p className="text-sm text-gray-600 mt-1">
-              The General Manager can take one of the following actions:
+              The approval banner appears at the <strong>top of the ticket
+              page</strong>, above the conversation thread. It shows a summary
+              of all requested items and their estimated totals so the GM can
+              review everything at a glance. The GM can take one of the
+              following actions:
             </p>
-            <ul className="list-disc list-inside space-y-1 ml-4 mt-2 text-sm text-gray-600">
-              <li><strong>Approve:</strong> Sends the request to the purchasing team</li>
-              <li><strong>Deny:</strong> Rejects the request with a reason</li>
-              <li><strong>Approve with Changes:</strong> Approves with modifications noted</li>
-              <li><strong>Approve &amp; Order:</strong> Approves and marks the item as already ordered</li>
+            <ul className="list-disc list-inside space-y-2 ml-4 mt-2 text-sm text-gray-600">
+              <li>
+                <strong>Approve:</strong> Approves all items and sends the
+                request to the purchasing team
+              </li>
+              <li>
+                <strong>Deny:</strong> Rejects the request with a reason
+              </li>
+              <li>
+                <strong>Approve with Changes:</strong> Shows a checklist of all
+                items — the GM can untick individual items to remove them from
+                the order. The approval notes auto-fill to explain what was
+                removed. Only the ticked items proceed to purchasing.
+              </li>
+              <li>
+                <strong>Approve &amp; Order (+Order):</strong> Approves and
+                records order details immediately — the GM fills in a vendor
+                name and order number per item. A{" "}
+                <strong>&quot;Same as above&quot;</strong> checkbox on each row
+                copies the previous row&apos;s vendor and order number, which
+                saves time when multiple items come from the same supplier.
+              </li>
             </ul>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
             <p className="font-medium">3. Purchaser Places Order</p>
             <p className="text-sm text-gray-600 mt-1">
               The purchasing team places the order and records the vendor name,
-              order confirmation number, actual cost, and expected delivery date.
-              The inventory team is notified.
+              order confirmation number, actual cost, and expected delivery
+              date. The inventory team is notified.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
             <p className="font-medium">4. Inventory Confirms Receipt</p>
             <p className="text-sm text-gray-600 mt-1">
-              The inventory team confirms that the item has been received,
+              The inventory team confirms that the item(s) have been received,
               recording the received date and any notes about condition or
               discrepancies. The original requester is notified.
             </p>
@@ -2306,8 +2364,8 @@ const helpSections: HelpSection[] = [
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Email notifications are sent at each step of the
-            workflow, keeping all relevant parties informed of the purchase
+            <strong>Note:</strong> Email notifications are sent at each step of
+            the workflow, keeping all relevant parties informed of the purchase
             request&apos;s progress.
           </p>
         </div>
