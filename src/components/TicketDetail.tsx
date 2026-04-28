@@ -29,6 +29,7 @@ import {
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncCommentAdded } from "@/lib/vikunjaSyncService";
+import { allItemsOrdered } from "@/lib/lineItemHelpers";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import CommentInput from "./CommentInput";
@@ -410,7 +411,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const handleApprovalDecision = async (
     decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
     notes?: string,
-    options?: { keptItems?: PurchaseLineItem[] },
+    options?: { keptItems?: PurchaseLineItem[]; orderItems?: PurchaseLineItem[] },
   ) => {
     if (!accounts[0]) return;
 
@@ -451,6 +452,16 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           kept: options.keptItems,
         }),
       }).catch((e) => console.error("Failed to log items change:", e));
+    }
+
+    // If GM filled per-item order details on "Approve & Order", write them
+    // and flip status to Ordered if every item is fully filled.
+    if (options?.orderItems && options.orderItems.length > 0) {
+      const newStatus = allItemsOrdered(options.orderItems) ? "Ordered" : "Approved";
+      const further = await updateTicketLineItems(client, ticket.id, options.orderItems, {
+        purchaseStatus: newStatus,
+      });
+      onUpdate(further);
     }
 
     // Only log, comment, and notify AFTER the status has been verified saved
