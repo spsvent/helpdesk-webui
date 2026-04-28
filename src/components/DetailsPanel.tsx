@@ -32,6 +32,7 @@ import MergeTicketPanel from "./MergeTicketPanel";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 import PurchaseActionPanel from "./PurchaseActionPanel";
 import ReceiveActionPanel from "./ReceiveActionPanel";
+import LineItemsTable from "./LineItemsTable";
 import { formatDateTime } from "@/lib/dateUtils";
 import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
 import { PurchaseStatus } from "@/types/ticket";
@@ -783,116 +784,34 @@ export default function DetailsPanel({
         <>
           <hr className="border-border" />
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs text-text-secondary uppercase tracking-wide font-semibold">
-                Purchase Details
-              </label>
-              <PurchaseStatusBadge status={ticket.purchaseStatus as PurchaseStatus} size="sm" />
-            </div>
-
-            {/* Always visible purchase info */}
-            {ticket.purchaseItemUrl && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Item Link</label>
-                <a
-                  href={ticket.purchaseItemUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-brand-blue hover:underline break-all"
-                >
-                  {ticket.purchaseItemUrl}
-                </a>
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-text-primary">Purchase Details</h3>
+                <PurchaseStatusBadge status={ticket.purchaseStatus as PurchaseStatus} size="sm" />
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-3">
-              {ticket.purchaseQuantity && (
-                <div>
-                  <label className="block text-xs text-text-secondary mb-1">Quantity</label>
-                  <span className="text-sm">{ticket.purchaseQuantity}</span>
+              {ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
+                <LineItemsTable
+                  items={ticket.purchaseLineItems}
+                  showOrderColumns={ticket.purchaseLineItems.some((i) => i.vendor || i.orderNum)}
+                  showReceivedColumns={ticket.purchaseLineItems.some((i) => i.receivedDate)}
+                />
+              )}
+
+              {ticket.purchaseJustification && (
+                <div className="mt-3">
+                  <p className="text-xs text-text-secondary uppercase">Justification</p>
+                  <p className="text-sm whitespace-pre-wrap">{ticket.purchaseJustification}</p>
                 </div>
               )}
-              {ticket.purchaseEstCostPerItem != null && (
-                <div>
-                  <label className="block text-xs text-text-secondary mb-1">Est. Cost/Item</label>
-                  <span className="text-sm">${ticket.purchaseEstCostPerItem.toFixed(2)}</span>
+
+              {ticket.purchaseProject && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-text-secondary uppercase">Project</span>
+                  <span className="text-sm">{ticket.purchaseProject}</span>
                 </div>
               )}
             </div>
-
-            {ticket.purchaseQuantity && ticket.purchaseEstCostPerItem != null && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Est. Total</label>
-                <span className="text-sm font-medium">
-                  ${(ticket.purchaseQuantity * ticket.purchaseEstCostPerItem).toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {ticket.purchaseJustification && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Justification</label>
-                <p className="text-sm whitespace-pre-wrap">{ticket.purchaseJustification}</p>
-              </div>
-            )}
-
-            {ticket.purchaseProject && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Project</label>
-                <span className="text-sm">{ticket.purchaseProject}</span>
-              </div>
-            )}
-
-            {/* After purchase info */}
-            {ticket.purchaseVendor && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Vendor</label>
-                <span className="text-sm">{ticket.purchaseVendor}</span>
-              </div>
-            )}
-
-            {ticket.purchaseConfirmationNum && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Confirmation #</label>
-                <span className="text-sm font-mono">{ticket.purchaseConfirmationNum}</span>
-              </div>
-            )}
-
-            {ticket.purchaseActualCost != null && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Actual Cost</label>
-                <span className="text-sm font-medium">${ticket.purchaseActualCost.toFixed(2)}</span>
-              </div>
-            )}
-
-            {ticket.purchaseExpectedDelivery && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Expected Delivery</label>
-                <span className="text-sm">{formatDateTime(ticket.purchaseExpectedDelivery)}</span>
-              </div>
-            )}
-
-            {ticket.purchaseNotes && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Purchase Notes</label>
-                <p className="text-sm whitespace-pre-wrap">{ticket.purchaseNotes}</p>
-              </div>
-            )}
-
-            {/* After receipt info */}
-            {ticket.receivedDate && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Received Date</label>
-                <span className="text-sm">{formatDateTime(ticket.receivedDate)}</span>
-              </div>
-            )}
-
-            {ticket.receivedNotes && (
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Receiving Notes</label>
-                <p className="text-sm whitespace-pre-wrap">{ticket.receivedNotes}</p>
-              </div>
-            )}
 
             {/* Purchaser action panel */}
             {canPurchaseTicket(ticket) && onMarkPurchased && (
