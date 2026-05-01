@@ -363,6 +363,8 @@ export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
           },
         ],
       },
+      // Assignee row if assigned
+      ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
       // Location if present
       ...(ticket.location ? [
         {
@@ -523,6 +525,17 @@ export function generateStatusChangeCard(
           },
         ],
       },
+      // Common context: Priority + Category, Department + Requester, Assignee
+      {
+        type: "Container",
+        separator: true,
+        spacing: "medium",
+        items: [
+          buildPriorityCategoryRow(ticket),
+          buildDepartmentRequesterRow(ticket),
+          ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
+        ],
+      },
       // Changed by info
       {
         type: "TextBlock",
@@ -645,50 +658,14 @@ export function generatePriorityEscalationCard(
           },
         ],
       },
-      // Details
-      {
-        type: "ColumnSet",
-        columns: [
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "DEPARTMENT",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: formatDepartment(ticket),
-                spacing: "none",
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "REQUESTER",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: ticket.originalRequester || ticket.requester.displayName,
-                spacing: "none",
-                wrap: true,
-              },
-            ],
-          },
-        ],
-      },
+      // Category (priority is already in the transition above)
+      buildLabeledColumnSet([
+        { label: "CATEGORY", value: `${getCategoryEmoji(ticket.category)} ${ticket.category}` },
+      ]),
+      // Department + Requester
+      buildDepartmentRequesterRow(ticket),
+      // Assignee row if assigned
+      ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
       // Escalated by
       {
         type: "TextBlock",
@@ -903,6 +880,58 @@ export function sendPriorityEscalationTeamsNotification(
 // ============================================
 // Helper Functions
 // ============================================
+
+/**
+ * Small helper that renders a row of labeled fields as an Adaptive Card ColumnSet.
+ * Each pair becomes a column with a small uppercase label above its value.
+ */
+function buildLabeledColumnSet(
+  pairs: { label: string; value: string }[]
+): AdaptiveCardElement {
+  return {
+    type: "ColumnSet",
+    columns: pairs.map(({ label, value }) => ({
+      type: "Column",
+      width: "stretch",
+      items: [
+        {
+          type: "TextBlock",
+          text: label,
+          size: "small",
+          isSubtle: true,
+          weight: "bolder",
+        },
+        {
+          type: "TextBlock",
+          text: value,
+          spacing: "none",
+          wrap: true,
+        },
+      ],
+    })),
+  };
+}
+
+function buildPriorityCategoryRow(ticket: Ticket): AdaptiveCardElement {
+  return buildLabeledColumnSet([
+    { label: "PRIORITY", value: `${getPriorityEmoji(ticket.priority)} ${ticket.priority}` },
+    { label: "CATEGORY", value: `${getCategoryEmoji(ticket.category)} ${ticket.category}` },
+  ]);
+}
+
+function buildDepartmentRequesterRow(ticket: Ticket): AdaptiveCardElement {
+  return buildLabeledColumnSet([
+    { label: "DEPARTMENT", value: formatDepartment(ticket) },
+    { label: "REQUESTER", value: ticket.originalRequester || ticket.requester.displayName },
+  ]);
+}
+
+function buildAssigneeRow(ticket: Ticket): AdaptiveCardElement | null {
+  if (!ticket.assignedTo?.displayName) return null;
+  return buildLabeledColumnSet([
+    { label: "ASSIGNED TO", value: ticket.assignedTo.displayName },
+  ]);
+}
 
 /**
  * Format department hierarchy for display
