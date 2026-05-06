@@ -74,6 +74,36 @@ const helpSections: HelpSection[] = [
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
+          Order Queue and Receiving Queue (Purchasers and Inventory)
+        </h4>
+        <p>
+          Purchasers and the Inventory team have dedicated queue pages that flatten line items
+          across every approved purchase request, so you can batch-process items by vendor without
+          opening tickets one at a time.
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Purchasers</strong> — when there are items waiting to be ordered, an{" "}
+            <strong>indigo &quot;To Order&quot;</strong> badge appears in the header. Click it to
+            open <code>/orders</code>: a list of every approved-but-unordered item, grouped by
+            vendor (auto-detected from the URL when not explicitly set). Multi-select rows from one
+            or more tickets and click <strong>Mark Ordered</strong> to apply a single vendor +
+            order number to all selected items in one shot, with per-item actual cost and expected
+            delivery.
+          </li>
+          <li>
+            <strong>Inventory</strong> — a green <strong>&quot;To Receive&quot;</strong> badge
+            appears when items have been ordered but not yet received. Click it to open{" "}
+            <code>/receiving</code>: similar layout, with bulk-mark-received supporting partial
+            receipts (per-item received quantity and date).
+          </li>
+          <li>
+            Both pages have <strong>Awaiting</strong> and <strong>Recently</strong> tabs — the
+            &quot;Recently&quot; tab shows items processed in the last 30 days for quick reference.
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">
           Refreshing the Ticket List
         </h4>
         <p>
