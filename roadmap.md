@@ -1,8 +1,14 @@
 # Project Roadmap
 
+## High Priority
+- [x] **Refresh button at top of page** — _2026-05-06_ — done in feature/refresh-button
+  A refresh button on top of the page to hard refresh and bring in new ticket updates.
+
 ## Normal Priority
 - [ ] **Multi-item purchase requests** — _2026-04-28_
   When a request is marked as a purchase request, add a button to add additional products to the same request, and hide/remove some of the normal request fields. Plan needed.
+- [ ] **Integrate preexisting SharePoint purchase request system** — _2026-05-06_
+  Integrate the preexisting purchase request SharePoint systems with our new Help Desk integrated purchase request system. Ask user for more details when ready to start.
 
 ## Low Priority
 - [ ] **Per-item approval state** — _2026-04-28_
