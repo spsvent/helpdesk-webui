@@ -74,6 +74,17 @@ const helpSections: HelpSection[] = [
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
+          Refreshing the Ticket List
+        </h4>
+        <p>
+          The app auto-refreshes when you return to a backgrounded tab, but if you want to force an
+          immediate update, click the circular arrow <strong>refresh button</strong> in the header
+          (left of the Approvals badge). It re-fetches the ticket list and the currently open ticket
+          from SharePoint, bypassing any in-memory cache. The icon spins while the refresh is in
+          progress.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
           Switching Color Modes
         </h4>
         <p>

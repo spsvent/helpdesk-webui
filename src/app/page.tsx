@@ -401,6 +401,31 @@ export default function Home() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [isAuthenticated, accounts, fetchTickets]);
 
+  // Hard refresh — busts the in-memory ticket cache, re-fetches the list, and
+  // re-fetches the selected ticket if one is open. Backed by the same callback
+  // used by visibilitychange but loud (sets the loading spinner) so the user
+  // sees feedback. Local state for the spinning icon animation.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleHardRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      invalidateTicketsCache();
+      await fetchTickets();
+      if (selectedTicket && accounts[0]) {
+        try {
+          const client = getGraphClient(instance, accounts[0]);
+          const fresh = await getTicket(client, selectedTicket.id);
+          setSelectedTicket(fresh);
+        } catch (e) {
+          console.error("Failed to refresh selected ticket:", e);
+        }
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, fetchTickets, selectedTicket, accounts, instance]);
+
   // Show loading while MSAL initializes
   if (inProgress !== InteractionStatus.None) {
     return (
@@ -451,6 +476,28 @@ export default function Home() {
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={handleHardRefresh}
+            disabled={refreshing}
+            title="Refresh tickets"
+            aria-label="Refresh tickets"
+            className="text-text-secondary hover:text-text-primary p-1.5 rounded transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-wait"
+          >
+            <svg
+              className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
           <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
           <DarkModeToggle />
           <Link
