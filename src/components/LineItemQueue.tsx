@@ -20,6 +20,23 @@ function rowKey(r: QueueRow): string {
   return `${r.ticketId}-${r.itemIndex}`;
 }
 
+// Friendly fallback for the Item column when the requester didn't fill in a
+// name. Strip the URL down to a short identifier (last path segment + host).
+function deriveItemLabel(row: QueueRow): string {
+  if (row.item.name?.trim()) return row.item.name;
+  if (row.item.url) {
+    try {
+      const u = new URL(/^https?:\/\//i.test(row.item.url) ? row.item.url : `https://${row.item.url}`);
+      const last = u.pathname.split("/").filter(Boolean).pop();
+      if (last) return last.replace(/[-_]/g, " ").slice(0, 60);
+      return u.hostname.replace(/^www\./, "");
+    } catch {
+      // fall through
+    }
+  }
+  return `Item ${row.itemIndex + 1}`;
+}
+
 export default function LineItemQueue({
   mode,
   awaitingRows,
@@ -88,144 +105,156 @@ export default function LineItemQueue({
       ? "bg-indigo-600 hover:bg-indigo-700"
       : "bg-emerald-600 hover:bg-emerald-700";
 
-  const renderTable = (rs: QueueRow[]) => (
-    <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-xs text-text-secondary">
-        <tr>
-          {!isRecent && (
-            <th className="px-3 py-2 w-8">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                aria-label="Select all"
-              />
-            </th>
-          )}
-          <th className="text-left px-3 py-2">Ticket</th>
-          <th className="text-left px-3 py-2">Item</th>
-          <th className="text-center px-3 py-2">Qty</th>
-          <th className="text-left px-3 py-2">Vendor</th>
-          <th className="text-left px-3 py-2">Link</th>
-          <th className="text-right px-3 py-2">$/ea</th>
-          <th className="text-right px-3 py-2">Subtotal</th>
-          {mode === "order" && !isRecent && (
-            <th className="text-left px-3 py-2">Need-by</th>
-          )}
-          {mode === "order" && isRecent && (
-            <>
-              <th className="text-left px-3 py-2">Order #</th>
-              <th className="text-left px-3 py-2">Delivery</th>
-            </>
-          )}
-          {mode === "receive" && !isRecent && (
-            <>
-              <th className="text-left px-3 py-2">Order #</th>
-              <th className="text-left px-3 py-2">Delivery</th>
-            </>
-          )}
-          {mode === "receive" && isRecent && (
-            <>
-              <th className="text-center px-3 py-2">Received</th>
-              <th className="text-left px-3 py-2">On</th>
-            </>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {rs.map((r) => {
-          const k = rowKey(r);
-          const isSelected = selected.has(k);
-          return (
-            <tr
-              key={k}
-              className={`border-t border-border ${isSelected ? "bg-indigo-50" : ""}`}
-            >
-              {!isRecent && (
-                <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleRow(k)}
-                    aria-label={`Select item ${r.item.name || r.item.url || ""}`}
-                  />
-                </td>
-              )}
-              <td className="px-3 py-2 text-xs">
-                <Link
-                  href={`/?ticket=${r.ticketId}`}
-                  className="text-brand-primary hover:underline"
-                >
-                  #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
-                </Link>
-              </td>
-              <td className="px-3 py-2">
-                {r.item.name && <strong>{r.item.name}</strong>}
-                {r.item.name && r.item.url && (
-                  <span className="text-text-secondary"> · </span>
-                )}
-                {r.item.url && (
-                  <a
-                    href={r.item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand-primary hover:underline text-xs"
-                  >
-                    open
-                  </a>
-                )}
-              </td>
-              <td className="text-center px-3 py-2">{r.item.qty}</td>
-              <td className="px-3 py-2">{r.displayVendor}</td>
-              <td className="px-3 py-2 text-xs text-text-secondary truncate max-w-[180px]">
-                {r.item.url ? (
-                  <a href={r.item.url} target="_blank" rel="noopener noreferrer">
-                    {r.item.url.replace(/^https?:\/\//, "").slice(0, 30)}
-                  </a>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className="text-right px-3 py-2">${r.item.cost.toFixed(2)}</td>
-              <td className="text-right px-3 py-2">
-                ${(r.item.qty * r.item.cost).toFixed(2)}
-              </td>
-              {mode === "order" && !isRecent && (
-                <td className="px-3 py-2 text-xs">{r.ticketDueDate ?? "—"}</td>
-              )}
-              {mode === "order" && isRecent && (
-                <>
-                  <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
-                  <td className="px-3 py-2 text-xs">
-                    {r.item.expectedDelivery ?? "—"}
-                  </td>
-                </>
-              )}
-              {mode === "receive" && !isRecent && (
-                <>
-                  <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
-                  <td className="px-3 py-2 text-xs">
-                    {r.item.expectedDelivery ?? "—"}
-                  </td>
-                </>
-              )}
-              {mode === "receive" && isRecent && (
-                <>
-                  <td className="text-center px-3 py-2">
-                    {r.item.receivedQty ?? 0} / {r.item.qty}
-                  </td>
-                  <td className="px-3 py-2 text-xs">{r.item.receivedDate ?? "—"}</td>
-                </>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+  // Column count drives colSpan on group-divider rows when grouping by vendor.
+  // Columns: select(only when !isRecent) + ticket + item + qty + vendor + $/ea + subtotal + extras
+  const orderExtras = mode === "order" && !isRecent ? 1 : mode === "order" && isRecent ? 2 : 0;
+  const receiveExtras = mode === "receive" && !isRecent ? 2 : mode === "receive" && isRecent ? 2 : 0;
+  const colCount = (isRecent ? 0 : 1) + 6 + orderExtras + receiveExtras;
+
+  const renderHeaderRow = () => (
+    <tr className="bg-bg-subtle text-text-secondary">
+      {!isRecent && (
+        <th className="px-3 py-2 w-8 text-left">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleAll}
+            aria-label="Select all"
+          />
+        </th>
+      )}
+      <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        Ticket
+      </th>
+      <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        Item
+      </th>
+      <th className="text-center px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        Qty
+      </th>
+      <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        Vendor
+      </th>
+      <th className="text-right px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        $/ea
+      </th>
+      <th className="text-right px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+        Subtotal
+      </th>
+      {mode === "order" && !isRecent && (
+        <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+          Need-by
+        </th>
+      )}
+      {mode === "order" && isRecent && (
+        <>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Order #
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Delivery
+          </th>
+        </>
+      )}
+      {mode === "receive" && !isRecent && (
+        <>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Order #
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Delivery
+          </th>
+        </>
+      )}
+      {mode === "receive" && isRecent && (
+        <>
+          <th className="text-center px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Received
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            On
+          </th>
+        </>
+      )}
+    </tr>
   );
 
+  const renderDataRow = (r: QueueRow) => {
+    const k = rowKey(r);
+    const isSelected = selected.has(k);
+    return (
+      <tr
+        key={k}
+        className={`border-t border-border ${isSelected ? "bg-indigo-50" : ""}`}
+      >
+        {!isRecent && (
+          <td className="px-3 py-2">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => toggleRow(k)}
+              aria-label={`Select item ${deriveItemLabel(r)}`}
+            />
+          </td>
+        )}
+        <td className="px-3 py-2 text-xs">
+          <Link
+            href={`/?ticket=${r.ticketId}`}
+            className="text-brand-primary hover:underline"
+          >
+            #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
+          </Link>
+        </td>
+        <td className="px-3 py-2">
+          {r.item.url ? (
+            <a
+              href={r.item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text-primary hover:underline"
+              title={r.item.url}
+            >
+              {deriveItemLabel(r)}
+            </a>
+          ) : (
+            <span className="text-text-primary">{deriveItemLabel(r)}</span>
+          )}
+        </td>
+        <td className="text-center px-3 py-2 tabular-nums">{r.item.qty}</td>
+        <td className="px-3 py-2">{r.displayVendor}</td>
+        <td className="text-right px-3 py-2 tabular-nums">${r.item.cost.toFixed(2)}</td>
+        <td className="text-right px-3 py-2 tabular-nums font-medium">
+          ${(r.item.qty * r.item.cost).toFixed(2)}
+        </td>
+        {mode === "order" && !isRecent && (
+          <td className="px-3 py-2 text-xs text-text-secondary">{r.ticketDueDate ?? "—"}</td>
+        )}
+        {mode === "order" && isRecent && (
+          <>
+            <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
+          </>
+        )}
+        {mode === "receive" && !isRecent && (
+          <>
+            <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
+          </>
+        )}
+        {mode === "receive" && isRecent && (
+          <>
+            <td className="text-center px-3 py-2 tabular-nums">
+              {r.item.receivedQty ?? 0} / {r.item.qty}
+            </td>
+            <td className="px-3 py-2 text-xs">{r.item.receivedDate ?? "—"}</td>
+          </>
+        )}
+      </tr>
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-body">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex border border-border rounded-lg overflow-hidden">
           <button
@@ -257,12 +286,12 @@ export default function LineItemQueue({
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs text-text-secondary">
+          <label className="text-xs text-text-secondary flex items-center gap-1">
             Sort:
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="ml-1 border border-border rounded text-xs px-1.5 py-1"
+              className="border border-border rounded text-xs px-1.5 py-1 bg-bg-card"
             >
               <option value="vendor">Vendor</option>
               <option value="ticket">Ticket #</option>
@@ -295,34 +324,47 @@ export default function LineItemQueue({
 
       {!loading && rows.length > 0 && (
         <div className="border border-border rounded-lg overflow-hidden bg-bg-card">
-          {sortKey === "vendor" && groups ? (
-            <div>
-              {groups.map((g) => {
-                const groupKeys = g.rows.map(rowKey);
-                const groupSelected = groupKeys.every((k) => selected.has(k));
-                return (
-                  <div key={g.vendor}>
-                    <div className="bg-bg-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary flex items-center gap-2 border-t border-border first:border-t-0">
-                      {!isRecent && (
-                        <input
-                          type="checkbox"
-                          checked={groupSelected}
-                          onChange={() => selectVendorGroup(g.rows)}
-                          aria-label={`Select all from ${g.vendor}`}
-                        />
-                      )}
-                      {g.vendor} ({g.rows.length})
-                    </div>
-                    {renderTable(g.rows)}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            renderTable(sortedRows)
-          )}
+          <table className="w-full text-sm">
+            <thead>{renderHeaderRow()}</thead>
+            <tbody>
+              {sortKey === "vendor" && groups
+                ? groups.map((g) => {
+                    const groupKeys = g.rows.map(rowKey);
+                    const groupSelected = !isRecent && groupKeys.every((k) => selected.has(k));
+                    return (
+                      <RowFragment key={g.vendor}>
+                        <tr className="bg-bg-subtle/60 border-t border-border">
+                          <td colSpan={colCount} className="px-3 py-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary">
+                              {!isRecent && (
+                                <input
+                                  type="checkbox"
+                                  checked={groupSelected}
+                                  onChange={() => selectVendorGroup(g.rows)}
+                                  aria-label={`Select all from ${g.vendor}`}
+                                />
+                              )}
+                              {g.vendor}
+                              <span className="font-normal text-text-secondary/80">
+                                · {g.rows.length} item{g.rows.length === 1 ? "" : "s"}
+                              </span>
+                            </span>
+                          </td>
+                        </tr>
+                        {g.rows.map(renderDataRow)}
+                      </RowFragment>
+                    );
+                  })
+                : sortedRows.map(renderDataRow)}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
+}
+
+// Tiny helper so we can group rows under a key without an extra DOM node.
+function RowFragment({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
