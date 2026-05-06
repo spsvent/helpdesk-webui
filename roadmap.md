@@ -5,7 +5,7 @@
   A refresh button on top of the page to hard refresh and bring in new ticket updates.
 
 ## Normal Priority
-- [ ] **Multi-item purchase requests** — _2026-04-28_
+- [x] **Multi-item purchase requests** — _2026-04-28_ — done in PRs #3 and #6
   When a request is marked as a purchase request, add a button to add additional products to the same request, and hide/remove some of the normal request fields. Plan needed.
 - [ ] **Integrate preexisting SharePoint purchase request system** — _2026-05-06_
   Integrate the preexisting purchase request SharePoint systems with our new Help Desk integrated purchase request system. Ask user for more details when ready to start.
