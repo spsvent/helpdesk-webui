@@ -24,7 +24,9 @@ import {
   sendPurchaseApprovedEmail,
   sendPurchaseOrderedEmail,
   sendPurchaseReceivedEmail,
+  getGeneralManagerMembers,
 } from "@/lib/emailService";
+import { sendEmail } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncCommentAdded } from "@/lib/vikunjaSyncService";
@@ -507,6 +509,32 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
       sendPurchaseApprovedEmail(client, updatedTicket, approverName)
         .catch((e) => console.error("Failed to send purchase approved email:", e));
+    }
+
+    // For "Approve & Ordered", the GM is purchasing themselves — alert the
+    // inventory team (who will receive the items) and other GMs (FYI). The
+    // requester is already covered by sendDecisionEmail above.
+    if (ticket.isPurchaseRequest && decision === "Approved & Ordered") {
+      sendPurchaseOrderedEmail(client, updatedTicket, approverName)
+        .catch((e) => console.error("Failed to send purchase ordered email to inventory:", e));
+      // Alert other GMs (excluding the approver) that the order was placed
+      try {
+        const gms = await getGeneralManagerMembers(client);
+        const subject = `[Order Placed] Ticket #${updatedTicket.ticketNumber || updatedTicket.id}: ${updatedTicket.title}`;
+        const body = `<p>${approverName} approved this purchase request and placed the order directly.</p>
+          <p>View ticket: <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}?ticket=${updatedTicket.id}">#${updatedTicket.ticketNumber || updatedTicket.id}</a></p>`;
+        await Promise.all(
+          gms
+            .filter((m) => m.email.toLowerCase() !== approverEmail.toLowerCase())
+            .map((m) =>
+              sendEmail(client, m.email, subject, body, `ticket-${updatedTicket.id}`).catch(
+                (e) => console.error(`Failed to alert GM ${m.email}:`, e),
+              ),
+            ),
+        );
+      } catch (e) {
+        console.error("Failed to alert GMs of order placement:", e);
+      }
     }
 
     if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes" || decision === "Approved & Ordered")) {

@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useMsal } from "@azure/msal-react";
 import { Ticket, PurchaseLineItem } from "@/types/ticket";
 import LineItemsTable from "./LineItemsTable";
 import { computeEstimatedTotal, distinctVendorCount } from "@/lib/lineItemHelpers";
+import { getGraphClient } from "@/lib/graphClient";
+import {
+  getPurchaserMembers,
+  getGeneralManagerMembers,
+  getInventoryMembers,
+  GroupMember,
+} from "@/lib/emailService";
+
+interface NotificationRecipient {
+  email: string;
+  displayName: string;
+  role: string;
+}
 
 type ApprovalDecision = "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered";
 
@@ -18,6 +32,7 @@ interface ApprovalActionPanelProps {
 }
 
 export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false, onDecision }: ApprovalActionPanelProps) {
+  const { instance, accounts } = useMsal();
   const [selectedAction, setSelectedAction] = useState<ApprovalDecision | null>(null);
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -29,6 +44,100 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
     ticket.purchaseLineItems ?? [],
   );
   const [sameAsAbove, setSameAsAbove] = useState<Set<number>>(new Set());
+
+  // Group members are fetched lazily when the GM picks an action that triggers
+  // notifications. Approve / Approve with Changes notifies Purchasers; Approve &
+  // Ordered notifies the Requester + General Managers + Inventory (the GM is
+  // doing the purchasing themselves so Purchasers aren't in the loop).
+  const [purchaserMembers, setPurchaserMembers] = useState<GroupMember[] | null>(null);
+  const [gmMembers, setGmMembers] = useState<GroupMember[] | null>(null);
+  const [inventoryMembers, setInventoryMembers] = useState<GroupMember[] | null>(null);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+
+  const willNotifyPurchasers =
+    isPurchaseRequest &&
+    (selectedAction === "Approved" || selectedAction === "Approved with Changes");
+  const willNotifyOrderTeam = isPurchaseRequest && selectedAction === "Approved & Ordered";
+  const showRecipientList = willNotifyPurchasers || willNotifyOrderTeam;
+
+  // Lazy fetch: only call Graph for groups we actually need to display.
+  useEffect(() => {
+    if (!showRecipientList) return;
+    if (!accounts[0]) return;
+
+    const needPurchasers = willNotifyPurchasers && purchaserMembers === null;
+    const needGMs = willNotifyOrderTeam && gmMembers === null;
+    const needInventory = willNotifyOrderTeam && inventoryMembers === null;
+    if (!needPurchasers && !needGMs && !needInventory) return;
+
+    let cancelled = false;
+    setRecipientsLoading(true);
+    (async () => {
+      try {
+        const client = getGraphClient(instance, accounts[0]);
+        const tasks: Promise<void>[] = [];
+        if (needPurchasers) {
+          tasks.push(
+            getPurchaserMembers(client).then((m) => {
+              if (!cancelled) setPurchaserMembers(m);
+            }),
+          );
+        }
+        if (needGMs) {
+          tasks.push(
+            getGeneralManagerMembers(client).then((m) => {
+              if (!cancelled) setGmMembers(m);
+            }),
+          );
+        }
+        if (needInventory) {
+          tasks.push(
+            getInventoryMembers(client).then((m) => {
+              if (!cancelled) setInventoryMembers(m);
+            }),
+          );
+        }
+        await Promise.all(tasks);
+      } catch (e) {
+        console.error("Failed to fetch recipient members:", e);
+      } finally {
+        if (!cancelled) setRecipientsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showRecipientList, willNotifyPurchasers, willNotifyOrderTeam, purchaserMembers, gmMembers, inventoryMembers, instance, accounts]);
+
+  // Build the role-labeled recipient list for the current action. Deduped by
+  // email — if the same person is both a GM and the requester, they appear once
+  // with the most-specific role first (Requester > GM > Inventory).
+  const approverEmail = (accounts[0]?.username || "").toLowerCase();
+  const recipients: NotificationRecipient[] = (() => {
+    if (!showRecipientList) return [];
+    const seen = new Set<string>();
+    const out: NotificationRecipient[] = [];
+    const add = (email: string | undefined, displayName: string | undefined, role: string) => {
+      if (!email) return;
+      const key = email.toLowerCase();
+      if (key === approverEmail) return; // skip the person doing the approving
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ email, displayName: displayName || email, role });
+    };
+
+    if (willNotifyPurchasers) {
+      (purchaserMembers ?? []).forEach((m) => add(m.email, m.displayName, "Purchaser"));
+    } else if (willNotifyOrderTeam) {
+      // Requester first
+      add(ticket.requester?.email, ticket.requester?.displayName, "Requester");
+      // Then GMs (excluding the approver — the loop's `add` skips them)
+      (gmMembers ?? []).forEach((m) => add(m.email, m.displayName, "General Manager"));
+      // Then Inventory
+      (inventoryMembers ?? []).forEach((m) => add(m.email, m.displayName, "Inventory"));
+    }
+    return out;
+  })();
 
   const isPending = ticket.approvalStatus === "Pending";
 
@@ -173,6 +282,35 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
               {selectedAction}
             </span>
           </div>
+
+          {showRecipientList && (
+            <div className="bg-white border border-blue-200 rounded p-2">
+              <p className="text-xs font-semibold text-blue-900 mb-1">
+                {willNotifyOrderTeam
+                  ? "These users will be alerted that the order was placed:"
+                  : "These users will be notified to initiate the purchase:"}
+              </p>
+              {recipientsLoading ? (
+                <p className="text-xs text-text-secondary">Loading recipient list…</p>
+              ) : recipients.length === 0 ? (
+                <p className="text-xs text-orange-700">
+                  No recipients found — no one will be notified. Check the relevant Entra ID groups.
+                </p>
+              ) : (
+                <ul className="text-sm space-y-0.5">
+                  {recipients.map((r) => (
+                    <li key={r.email} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium text-text-primary">{r.displayName}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+                        {r.role}
+                      </span>
+                      <span className="text-xs text-text-secondary">{r.email}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {selectedAction === "Approved with Changes" && isPurchaseRequest && ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
             <div className="bg-white border border-orange-200 rounded p-2 space-y-1">
