@@ -51,7 +51,12 @@ app.http("SendTeamsNotification", {
       const body = await request.json();
       const { teamId, channelId, card } = body;
 
+      context.log(
+        `[SendTeamsNotification] Received request: teamId=${teamId || "(none)"}, channelId=${channelId || "(none)"}, hasCard=${Boolean(card)}`
+      );
+
       if (!teamId || !channelId || !card) {
+        context.log("[SendTeamsNotification] Rejected: missing required fields");
         return {
           status: 400,
           headers: corsHeaders,

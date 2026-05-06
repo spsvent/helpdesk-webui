@@ -62,7 +62,14 @@ app.http("SendEmail", {
       const body = await request.json();
       const { to, subject, htmlContent } = body;
 
+      const recipientList = Array.isArray(to) ? to.join(", ") : to;
+      const recipientCount = Array.isArray(to) ? to.length : (to ? 1 : 0);
+      context.log(
+        `[SendEmail] Received request: recipients=${recipientCount}, to=${recipientList || "(none)"}, subject=${(subject || "").substring(0, 80)}`
+      );
+
       if (!to || !subject || !htmlContent) {
+        context.log("[SendEmail] Rejected: missing required fields");
         return {
           status: 400,
           headers: corsHeaders,

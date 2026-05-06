@@ -363,7 +363,14 @@ export async function createTicket(
     }
   }
 
-  const item = await client.api(endpoint).post({ fields });
+  const created = await client.api(endpoint).post({ fields });
+
+  // POST to SharePoint /items doesn't reliably include auto-generated columns
+  // (notably TicketNumber, the auto-incrementing column) in its response. Re-fetch
+  // the item with $expand=fields so the returned Ticket has TicketNumber populated —
+  // downstream callers (activity log, Teams notifications, email) depend on it.
+  const itemEndpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${created.id}?$expand=fields`;
+  const item = await client.api(itemEndpoint).get();
 
   // Invalidate cache after creating new ticket
   invalidateTicketsCache();
@@ -1840,7 +1847,13 @@ export async function getActivityLog(
     filters.push(`fields/TicketId eq '${options.ticketId}'`);
   }
   if (options?.ticketNumber) {
-    filters.push(`fields/TicketNumber eq '${options.ticketNumber}'`);
+    // SharePoint TicketNumber is numeric-only. Strip anything non-digit (e.g. a leading "#")
+    // before building the filter — otherwise the "#" terminates the URL as a fragment
+    // delimiter and SharePoint sees an unterminated string literal.
+    const digitsOnly = options.ticketNumber.replace(/\D/g, "");
+    if (digitsOnly) {
+      filters.push(`fields/TicketNumber eq '${digitsOnly}'`);
+    }
   }
   if (options?.eventType) {
     filters.push(`fields/EventType eq '${options.eventType}'`);
