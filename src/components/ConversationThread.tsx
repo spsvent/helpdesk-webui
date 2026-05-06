@@ -36,6 +36,7 @@ function CommentCard({
   content,
   timestamp,
   isDescription = false,
+  descriptionLabel = "Description",
   isInternal = false,
   commentType,
 }: {
@@ -43,6 +44,7 @@ function CommentCard({
   content: string;
   timestamp: string;
   isDescription?: boolean;
+  descriptionLabel?: string;
   isInternal?: boolean;
   commentType?: string;
 }) {
@@ -66,7 +68,7 @@ function CommentCard({
             </span>
             {isDescription && (
               <span className="badge bg-brand-primary/15 text-brand-primary">
-                Description
+                {descriptionLabel}
               </span>
             )}
             {isInternal && (
@@ -118,14 +120,26 @@ export default function ConversationThread({
     ? comments.slice(1)
     : comments;
 
+  // For purchase requests with an empty description, the user filled out a
+  // Justification instead — show that in the description slot. Otherwise fall
+  // back to the description (which may itself be empty → "No description provided").
+  const hasDescriptionText = effectiveDescription && effectiveDescription.trim().length > 0;
+  const usePurchaseJustification =
+    !hasDescriptionText && ticket.isPurchaseRequest && ticket.purchaseJustification?.trim();
+  const slotContent = usePurchaseJustification
+    ? ticket.purchaseJustification!
+    : effectiveDescription || "<em>No description provided</em>";
+  const slotLabel = usePurchaseJustification ? "Justification" : "Description";
+
   return (
     <div className="space-y-4">
-      {/* Description as first "comment" */}
+      {/* Description (or Justification for purchase requests) as first "comment" */}
       <CommentCard
         author={descriptionAuthor}
-        content={effectiveDescription || "<em>No description provided</em>"}
+        content={slotContent}
         timestamp={ticket.created}
         isDescription={true}
+        descriptionLabel={slotLabel}
       />
 
       {/* Loading state */}
