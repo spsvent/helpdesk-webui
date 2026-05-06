@@ -15,6 +15,8 @@ import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
+import AwaitingOrderBadge from "@/components/AwaitingOrderBadge";
+import AwaitingReceiptBadge from "@/components/AwaitingReceiptBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
 import DarkModeToggle from "@/components/DarkModeToggle";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -499,6 +501,8 @@ export default function Home() {
             </svg>
           </button>
           <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
+          <AwaitingOrderBadge />
+          <AwaitingReceiptBadge />
           <DarkModeToggle />
           <Link
             href="/help"

@@ -573,6 +573,86 @@ export async function getPendingApprovalsCount(client: Client): Promise<number> 
   return pendingCount;
 }
 
+// Count of approved purchase items awaiting an order (for header badge).
+// Reuses the cached ticket fetch so this is cheap when called alongside
+// other ticket consumers.
+export async function getUnorderedItemCount(client: Client): Promise<number> {
+  const tickets = await getAllTicketsCached(client);
+  let count = 0;
+  for (const ticket of tickets) {
+    if (!ticket.isPurchaseRequest || ticket.approvalStatus !== "Approved") continue;
+    if (ticket.purchaseStatus === "Received" || ticket.purchaseStatus === "Denied") continue;
+    for (const item of ticket.purchaseLineItems ?? []) {
+      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      if (!ordered) count++;
+    }
+  }
+  return count;
+}
+
+// Count of ordered purchase items awaiting receipt (for header badge).
+export async function getUnreceivedItemCount(client: Client): Promise<number> {
+  const tickets = await getAllTicketsCached(client);
+  let count = 0;
+  for (const ticket of tickets) {
+    if (!ticket.isPurchaseRequest) continue;
+    if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
+    for (const item of ticket.purchaseLineItems ?? []) {
+      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      if (!ordered) continue;
+      const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
+      if (!fullyReceived) count++;
+    }
+  }
+  return count;
+}
+
+// Bulk-update line items across multiple tickets. Each entry's lineItems
+// replaces the entire array on its ticket (the JSON column is per-ticket
+// so partial updates aren't possible — caller must construct the full
+// new array, mutating only the slots they care about). Status flip is
+// optional per ticket — caller decides whether allItemsOrdered/Received
+// is satisfied for that ticket.
+//
+// Returns one BulkLineItemResult per input — `success` is true if the
+// PATCH+verify pair completed, otherwise `error` carries the message.
+// Promise.allSettled ensures one ticket's failure doesn't block others.
+export interface BulkLineItemUpdate {
+  ticketId: string;
+  lineItems: PurchaseLineItem[];
+  purchaseStatus?: string;
+  notes?: string;
+}
+
+export interface BulkLineItemResult {
+  ticketId: string;
+  success: boolean;
+  error?: string;
+  ticket?: Ticket;
+}
+
+export async function bulkUpdateLineItems(
+  client: Client,
+  updates: BulkLineItemUpdate[],
+): Promise<BulkLineItemResult[]> {
+  const settled = await Promise.allSettled(
+    updates.map((u) =>
+      updateTicketLineItems(client, u.ticketId, u.lineItems, {
+        purchaseStatus: u.purchaseStatus,
+        notes: u.notes,
+      }),
+    ),
+  );
+  return settled.map((res, i) => {
+    const ticketId = updates[i].ticketId;
+    if (res.status === "fulfilled") {
+      return { ticketId, success: true, ticket: res.value };
+    }
+    const err = res.reason as { message?: string } | undefined;
+    return { ticketId, success: false, error: err?.message || "Unknown error" };
+  });
+}
+
 // Send email notification via Graph API
 // Email Function URL - if set, uses Azure Function for sending emails (app-only auth)
 // If not set, falls back to /me/sendMail (delegated auth, requires user mailbox)
