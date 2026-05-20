@@ -19,3 +19,5 @@
   Status currently flips only when *all* items have the relevant data. Add intermediate states so the dashboard can surface tickets where some items are in flight.
 - [ ] **Auto-scrape product info for inventory team** — _2026-05-06_
   When items are purchased/ordered, automatically look at the page it was purchased from to gather info for the inventory team — and even pull manuals and warranty info. Each vendor will be different but we could start small. Some may have an API we can use for that kind of stuff.
+- [ ] **Snipe-IT integration for received assets** — _2026-05-08_
+  Items marked as received are loaded into Snipe-IT. Explore further connections possible with Snipe-IT to better track assets purchased.
