@@ -727,7 +727,7 @@ export default function NewTicketPage() {
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
-                  placeholder="Brief summary of your issue"
+                  placeholder={isPurchaseRequest ? "Title of overall purchase request" : "Brief summary of your issue"}
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
                   required
                 />

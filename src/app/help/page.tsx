@@ -598,6 +598,11 @@ const helpSections: HelpSection[] = [
           <li>
             <strong>Priority:</strong> Color-coded priority level (LOW, NORMAL, HIGH, URGENT)
           </li>
+          <li>
+            <strong>Copy Link Button:</strong> On the right side of the header. Click to copy a direct
+            link to this ticket to your clipboard — handy for pasting into an email, Teams chat, or
+            calendar invite so the recipient can click straight through to the ticket.
+          </li>
         </ul>
 
         <h4 className="font-semibold text-text-primary mt-6">

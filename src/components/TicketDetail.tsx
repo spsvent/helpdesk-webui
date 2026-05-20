@@ -80,6 +80,21 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyTicketLink = async () => {
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+    const url = `${base}?ticket=${ticket.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", url);
+    }
+  };
 
   // Right sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(320); // 320px = w-80 default
@@ -697,6 +712,32 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 </div>
               )}
           </div>
+          <button
+            type="button"
+            onClick={handleCopyTicketLink}
+            title="Copy a direct link to this ticket"
+            className={`shrink-0 ml-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              linkCopied
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-bg-card text-text-secondary border-border hover:bg-bg-hover hover:text-text-primary"
+            }`}
+          >
+            {linkCopied ? (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Copied
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Copy Link
+              </>
+            )}
+          </button>
         </div>
       </div>
 
