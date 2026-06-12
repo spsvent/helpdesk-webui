@@ -44,6 +44,10 @@ export function initAppInsights(): ApplicationInsights | null {
     }
   });
 
+  // enableAutoRouteTracking only fires on route changes - the initial
+  // page view must be tracked explicitly or no pageViews are ever recorded
+  appInsights.trackPageView();
+
   return appInsights;
 }
 
