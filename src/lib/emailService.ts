@@ -1,6 +1,7 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { Ticket } from "@/types/ticket";
 import { sendEmail } from "./graphClient";
+import { collectParticipants } from "./participants";
 
 // App URL for email action buttons
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc51e.1.azurestaticapps.net";
@@ -729,16 +730,31 @@ function generatePurchaseOrderedEmail(
 </html>`;
 }
 
-// Send purchase ordered notification to inventory group
+// Resolve a ticket's participant emails (auto-discovered + manually added),
+// excluding any already-notified addresses. Used to copy participants on
+// purchase-workflow step notifications (ordered / received).
+function ticketParticipantEmails(ticket: Ticket, exclude: string[] = []): string[] {
+  const ex = new Set(exclude.filter(Boolean).map((e) => e.toLowerCase()));
+  return collectParticipants({
+    requesterEmail: ticket.requester.email,
+    assigneeEmail: ticket.originalAssignedTo || ticket.assignedTo?.email,
+    approverEmail: ticket.approvedBy?.email,
+    approvalRequesterEmail: ticket.approvalRequestedBy?.email,
+    manualEmails: ticket.participantEmails,
+  }).filter((e) => !ex.has(e));
+}
+
+// Send purchase ordered notification to inventory group + ticket participants
 export async function sendPurchaseOrderedEmail(
   client: Client,
   ticket: Ticket,
   purchaserName: string
 ): Promise<void> {
   const inventoryEmails = await getInventoryEmails(client);
+  const recipients = inventoryEmails.concat(ticketParticipantEmails(ticket, inventoryEmails));
 
-  if (inventoryEmails.length === 0) {
-    console.warn("No inventory emails found - cannot send purchase ordered notification");
+  if (recipients.length === 0) {
+    console.warn("No recipients found - cannot send purchase ordered notification");
     return;
   }
 
@@ -746,7 +762,7 @@ export async function sendPurchaseOrderedEmail(
   const htmlContent = generatePurchaseOrderedEmail(ticket, purchaserName);
   const conversationId = getTicketConversationId(ticket.id);
 
-  const sendPromises = inventoryEmails.map((email) =>
+  const sendPromises = recipients.map((email) =>
     sendEmail(client, email, subject, htmlContent, conversationId).catch((error) => {
       console.error(`Failed to send purchase ordered notification to ${email}:`, error);
     })
@@ -805,10 +821,11 @@ export async function sendPurchaseReceivedEmail(
   ticket: Ticket,
   receiverName: string
 ): Promise<void> {
-  const requesterEmail = ticket.requester.email;
+  // Notify the requester + all participants (manual adds, assignee, approver).
+  const recipients = ticketParticipantEmails(ticket);
 
-  if (!requesterEmail) {
-    console.warn("No requester email found - cannot send purchase received notification");
+  if (recipients.length === 0) {
+    console.warn("No recipients found - cannot send purchase received notification");
     return;
   }
 
@@ -816,5 +833,11 @@ export async function sendPurchaseReceivedEmail(
   const htmlContent = generatePurchaseReceivedEmail(ticket, receiverName);
   const conversationId = getTicketConversationId(ticket.id);
 
-  await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
+  await Promise.all(
+    recipients.map((email) =>
+      sendEmail(client, email, subject, htmlContent, conversationId).catch((error) => {
+        console.error(`Failed to send purchase received notification to ${email}:`, error);
+      })
+    )
+  );
 }
