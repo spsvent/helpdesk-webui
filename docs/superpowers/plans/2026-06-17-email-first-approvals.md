@@ -677,7 +677,13 @@ async function getCommenterEmails(client, ticketId) {
     const res = await client
       .api(`/sites/${config.siteId}/lists/${config.commentsListId}/items?$expand=fields&$filter=fields/TicketID eq ${ticketId}`)
       .get();
-    return (res.value || []).map((i) => i.createdBy?.user?.email).filter(Boolean);
+    // Only PUBLIC commenters are participants (per spec). Exclude internal-note
+    // authors so internal-only staff aren't auto-added to the decision-email set
+    // (matches Plan C's frontend `comments.filter((c) => !c.isInternal)`).
+    return (res.value || [])
+      .filter((i) => i.fields?.IsInternal !== true)
+      .map((i) => i.createdBy?.user?.email)
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -797,14 +803,22 @@ app.http("approvalAction", {
       // both write (the TOCTOU race). PATCH the item endpoint (not /fields) because
       // If-Match applies at the item level; this mirrors processApprovalDecision's
       // `client.api(itemEndpoint).patch({ fields })` shape.
-      try {
-        await client
-          .api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${tid}`)
-          .header("If-Match", fields.__etag)
-          .patch({ fields: patch });
-      } catch (e) {
-        if (e.statusCode === 412) {
-          // Lost the race — re-read and report whoever won.
+      //
+      // On 412 (lost the race): if a TERMINAL decision won, report already_decided.
+      // If a NON-terminal change won (e.g. someone clicked "Request Changes" — those
+      // links stay live), re-read the fresh ETag and retry ONCE, since this Approve/
+      // Deny is still valid. Persistent contention returns a clean retryable conflict,
+      // never a 500.
+      let etag = fields.__etag;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await client
+            .api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${tid}`)
+            .header("If-Match", etag)
+            .patch({ fields: patch });
+          break;
+        } catch (e) {
+          if (e.statusCode !== 412) throw e;
           const fresh = await getTicketFields(client, tid);
           if (isTerminalStatus(fresh.ApprovalStatus)) {
             return {
@@ -813,8 +827,11 @@ app.http("approvalAction", {
               jsonBody: { ok: false, reason: "already_decided", decidedBy: fresh.ApprovedByName, decidedDate: fresh.ApprovalDate },
             };
           }
+          if (attempt >= 1) {
+            return { status: 409, headers: corsHeaders, jsonBody: { ok: false, reason: "conflict_retry" } };
+          }
+          etag = fresh.__etag; // retry once against the fresh, non-terminal ETag
         }
-        throw e;
       }
 
       // Verify the status saved (mirror of the in-app verify step)
@@ -939,9 +956,11 @@ app.http("sendApprovalRequest", {
       const who = fields.ApprovalRequestedByName || requesterName || "A staff member";
 
       // SECURITY GATE: this endpoint is anonymous, so only mint + send tokens when the
-      // ticket is genuinely Pending approval. This blocks an anonymous caller from
-      // spamming GMs with approval emails for arbitrary or already-decided tickets.
-      // (Per design decision: pending-state gate rather than full bearer validation.)
+      // ticket is genuinely Pending approval — blocks minting for non-pending or
+      // already-decided tickets. (Residual, accepted: an anonymous caller could still
+      // re-trigger approval emails for a *currently-pending* ticket ID until it leaves
+      // Pending — far narrower than the original "any ticket" exposure. Chosen over
+      // full bearer-token validation for simplicity.)
       if (fields.ApprovalStatus !== "Pending") {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "not_pending" } };
       }

@@ -744,7 +744,7 @@ Expected: no errors; build succeeds.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/components/DetailsPanel.tsx
+git add src/components/DetailsPanel.tsx src/components/TicketDetail.tsx
 git commit -m "feat: send status-change emails to all participants"
 ```
 
