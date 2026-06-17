@@ -51,6 +51,8 @@ export interface Ticket {
   approvedBy?: User;
   approvalDate?: string;
   approvalNotes?: string;
+  // Participants (manually-added notification audience)
+  participantEmails?: string[];
   // Purchase request fields
   isPurchaseRequest?: boolean;
   purchaseLineItems?: PurchaseLineItem[];   // canonical (new) — dual-read with legacy columns below
@@ -221,6 +223,9 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     } : undefined,
     approvalDate: fields.ApprovalDate as string | undefined,
     approvalNotes: fields.ApprovalNotes as string | undefined,
+    participantEmails: (fields.ParticipantEmails as string | undefined)
+      ? (fields.ParticipantEmails as string).split(/[;,]/).map((e) => e.trim()).filter(Boolean)
+      : [],
     // Purchase request fields
     isPurchaseRequest: fields.IsPurchaseRequest as boolean | undefined,
     purchaseLineItems: parsePurchaseLineItems(fields),
