@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { loginRequest } from "@/lib/msalConfig";
+import { loginRequest, graphScopes } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
+import { getAppInsights } from "@/lib/appInsights";
 import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity, uploadAttachment, addComment } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
@@ -98,6 +99,7 @@ export default function NewTicketPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [showUrgentTooltip, setShowUrgentTooltip] = useState(false);
 
   // Staged files for upload after ticket creation
@@ -228,6 +230,28 @@ export default function NewTicketPage() {
       }
     } catch (e) {
       console.error("Login failed:", e);
+    }
+  };
+
+  // Re-authenticate without leaving the page so the filled-in form survives.
+  // Inside Teams, MSAL popups can't open - use the Teams-controlled popup.
+  const handleReauthenticate = async () => {
+    try {
+      if (isRunningInTeams()) {
+        const result = await openTeamsAuthPopup();
+        if (!result) {
+          setError("Sign-in was cancelled or failed. Please try again.");
+          return;
+        }
+      } else {
+        await instance.acquireTokenPopup({ ...graphScopes, account: accounts[0] });
+      }
+      setSessionExpired(false);
+      setError(null);
+      setSubmitStatus("Signed back in - click Submit to send your ticket.");
+    } catch (reauthError) {
+      console.error("Re-authentication failed:", reauthError);
+      setError("Sign-in failed. Please try again, or open the Help Desk in your browser at " + window.location.origin);
     }
   };
 
@@ -483,13 +507,36 @@ export default function NewTicketPage() {
     } catch (e: unknown) {
       console.error("Failed to create ticket:", e);
 
-      // Try to provide a more helpful error message based on the error type
-      const err = e as { statusCode?: number; code?: string; message?: string };
+      // Report to Application Insights so submit failures are diagnosable remotely
+      getAppInsights()?.trackException(
+        { exception: e instanceof Error ? e : new Error(String(e)) },
+        { source: "ticket_submit" }
+      );
+
+      // Try to provide a more helpful error message based on the error type.
+      // Graph SDK errors carry statusCode/code; MSAL errors carry errorCode.
+      const err = e as { statusCode?: number; code?: string; errorCode?: string; message?: string };
+      const msalAuthErrorCodes = [
+        "interaction_required",
+        "login_required",
+        "consent_required",
+        "popup_window_error",
+        "empty_window_error",
+        "user_cancelled",
+        "monitor_window_timeout",
+        "no_tokens_found",
+      ];
 
       if (err.statusCode === 403 || err.code === "accessDenied") {
         setError("You don't have permission to create tickets. Please contact your administrator to request access.");
-      } else if (err.statusCode === 401 || err.code === "InvalidAuthenticationToken" || err.code === "interaction_required") {
-        setError("Your session has expired. Please sign out and sign back in.");
+      } else if (
+        err.statusCode === 401 ||
+        err.code === "InvalidAuthenticationToken" ||
+        err.code === "interaction_required" ||
+        msalAuthErrorCodes.includes(err.errorCode ?? "")
+      ) {
+        setSessionExpired(true);
+        setError("Your session has expired. Sign in again below, then resubmit your ticket - your entries have been kept.");
       } else {
         setError("Failed to submit ticket. Please try again or contact support if the problem persists.");
       }
@@ -578,6 +625,15 @@ export default function NewTicketPage() {
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
                 {error}
+                {sessionExpired && (
+                  <button
+                    type="button"
+                    onClick={handleReauthenticate}
+                    className="mt-3 block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+                  >
+                    Sign in again
+                  </button>
+                )}
               </div>
             )}
 

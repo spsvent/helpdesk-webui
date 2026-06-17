@@ -16,9 +16,9 @@ import {
   deleteAttachment,
   downloadAttachment,
   logActivity,
+  triggerApprovalRequestEmail,
 } from "@/lib/graphClient";
 import {
-  sendApprovalRequestEmail,
   sendDecisionEmail,
   sendCommentEmail,
   sendPurchaseApprovedEmail,
@@ -37,6 +37,9 @@ import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
 import NudgeApprovalButton from "./NudgeApprovalButton";
 import ApprovalActionPanel from "./ApprovalActionPanel";
+import ParticipantsPanel from "./ParticipantsPanel";
+import { collectParticipants, staffSubset } from "@/lib/participants";
+import { getStaffEmails } from "@/lib/rbacService";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -257,32 +260,36 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         }),
       }).catch((e) => console.error("Failed to log comment activity:", e));
 
-      // Send email notifications for non-internal comments
-      if (!isInternal) {
-        // Notify requester if commenter is not the requester
-        if (ticket.requester.email && ticket.requester.email !== commenterEmail) {
-          sendCommentEmail(
-            client,
-            ticket,
-            ticket.requester.email,
-            commenterName,
-            text,
-            true // recipientIsRequester
-          ).catch((e) => console.error("Failed to send comment email to requester:", e));
+      // Notify participants. Public comments -> everyone; internal notes -> staff only.
+      try {
+        const participants = collectParticipants(
+          {
+            requesterEmail: ticket.requester.email,
+            assigneeEmail: ticket.originalAssignedTo || ticket.assignedTo?.email,
+            approverEmail: ticket.approvedBy?.email,
+            approvalRequesterEmail: ticket.approvalRequestedBy?.email,
+            manualEmails: ticket.participantEmails,
+            commenterEmails: comments.filter((c) => !c.isInternal).map((c) => c.createdBy.email),
+          },
+          commenterEmail
+        );
+
+        let recipients = participants;
+        if (isInternal) {
+          const staffEmails = await getStaffEmails(client);
+          recipients = staffSubset(participants, staffEmails);
         }
 
-        // Notify assignee if there is one and they're not the commenter
-        const assigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
-        if (assigneeEmail && assigneeEmail !== commenterEmail && assigneeEmail !== ticket.requester.email) {
-          sendCommentEmail(
-            client,
-            ticket,
-            assigneeEmail,
-            commenterName,
-            text,
-            false // recipientIsRequester
-          ).catch((e) => console.error("Failed to send comment email to assignee:", e));
-        }
+        const requesterEmailLc = ticket.requester.email?.toLowerCase();
+        await Promise.all(
+          recipients.map((email) =>
+            sendCommentEmail(client, ticket, email, commenterName, text, email === requesterEmailLc).catch((e) =>
+              console.error(`Failed to send comment email to ${email}:`, e)
+            )
+          )
+        );
+      } catch (e) {
+        console.error("Failed to send comment notifications:", e);
       }
 
       // Sync comment to Vikunja (fire-and-forget, Tech tickets only)
@@ -410,8 +417,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       }),
     }).catch((e) => console.error("Failed to log approval request:", e));
 
-    // Send email notifications to managers
-    await sendApprovalRequestEmail(client, updatedTicket, requesterName);
+    // Build + send the signed approval-request email server-side (links carry HMAC tokens)
+    triggerApprovalRequestEmail(ticket.id, requesterName)
+      .catch((e) => console.error("Failed to trigger approval request email:", e));
 
     // Add internal note about approval request
     const approvalComment = await addComment(
@@ -514,6 +522,19 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     if (ticket.requester?.email) decisionRecipients.add(ticket.requester.email.toLowerCase());
     if (ticket.assignedTo?.email) decisionRecipients.add(ticket.assignedTo.email.toLowerCase());
     decisionRecipients.delete(approverEmail.toLowerCase()); // Don't notify the person who made the decision
+
+    // Also notify participants of the decision
+    collectParticipants(
+      {
+        requesterEmail: ticket.requester.email,
+        assigneeEmail: ticket.originalAssignedTo || ticket.assignedTo?.email,
+        approverEmail: ticket.approvedBy?.email,
+        approvalRequesterEmail: updatedTicket.approvalRequestedBy?.email || ticket.approvalRequestedBy?.email,
+        manualEmails: ticket.participantEmails,
+        commenterEmails: comments.filter((c) => !c.isInternal).map((c) => c.createdBy.email),
+      },
+      approverEmail
+    ).forEach((email) => decisionRecipients.add(email));
 
     const emailPromises = Array.from(decisionRecipients).map((email) =>
       sendDecisionEmail(client, updatedTicket, decision, approverName, email, notes)
@@ -825,8 +846,10 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
             }`}
             style={isMobile ? undefined : { width: sidebarWidth }}
           >
+            <ParticipantsPanel ticket={ticket} comments={comments} onUpdate={onUpdate} />
             <DetailsPanel
               ticket={ticket}
+              comments={comments}
               onUpdate={onUpdate}
               canEdit={canEditThisTicket}
               onRequestApproval={handleRequestApproval}

@@ -1,6 +1,7 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
 import { graphScopes, sharepointScopes } from "./msalConfig";
+import { isRunningInTeams, openTeamsAuthPopup } from "./teamsAuth";
 import {
   Ticket,
   PurchaseLineItem,
@@ -23,9 +24,73 @@ const ACTIVITY_LOG_LIST_ID = process.env.NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID || "";
 // SharePoint site URL for REST API calls (attachments)
 const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
 
-// Shared interactive token promise to prevent multiple simultaneous popups
-// when parallel API calls all fail acquireTokenSilent at the same time
-let interactiveTokenPromise: Promise<string> | null = null;
+// Shared interactive token promises to prevent multiple simultaneous popups
+// when parallel API calls all fail acquireTokenSilent at the same time.
+// Keyed by scope set so a Graph popup and a SharePoint popup don't return
+// each other's tokens.
+const interactiveTokenPromises = new Map<string, Promise<string>>();
+
+// Shared Teams re-auth promise - the Teams popup refreshes the whole MSAL
+// session, so concurrent callers should wait on one popup, not open several.
+let teamsReauthPromise: Promise<boolean> | null = null;
+
+// Acquire a token interactively after acquireTokenSilent has failed.
+// Inside Teams, MSAL's acquireTokenPopup cannot open a window (the webview
+// suppresses window.open), so route through the Teams-controlled auth popup
+// (/auth-callback) instead - it writes fresh tokens to localStorage, after
+// which a silent retry succeeds. In a regular browser, use the MSAL popup.
+async function acquireTokenInteractive(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  request: { scopes: string[] }
+): Promise<string> {
+  if (isRunningInTeams()) {
+    if (!teamsReauthPromise) {
+      teamsReauthPromise = openTeamsAuthPopup()
+        .then((result) => result !== null)
+        .finally(() => { teamsReauthPromise = null; });
+    }
+    const reauthenticated = await teamsReauthPromise;
+    if (!reauthenticated) {
+      throw new InteractionRequiredAuthError(
+        "interaction_required",
+        "Teams re-authentication was cancelled or failed."
+      );
+    }
+    // The popup may have created a new account entry - re-resolve it
+    const freshAccount =
+      msalInstance.getAllAccounts().find((a) => a.homeAccountId === account.homeAccountId) ??
+      msalInstance.getAllAccounts()[0] ??
+      account;
+    const response = await msalInstance.acquireTokenSilent({ ...request, account: freshAccount });
+    return response.accessToken;
+  }
+
+  const key = [...request.scopes].sort().join(" ");
+  let promise = interactiveTokenPromises.get(key);
+  if (!promise) {
+    promise = msalInstance
+      .acquireTokenPopup({ ...request, account })
+      .then((response) => response.accessToken)
+      .finally(() => { interactiveTokenPromises.delete(key); });
+    interactiveTokenPromises.set(key, promise);
+  }
+  return promise;
+}
+
+// Acquire a SharePoint REST API token (silent first, interactive fallback)
+async function getSharePointToken(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo
+): Promise<string> {
+  try {
+    const response = await msalInstance.acquireTokenSilent({ ...sharepointScopes, account });
+    return response.accessToken;
+  } catch {
+    console.log("SharePoint token silent acquisition failed, trying interactive...");
+    return acquireTokenInteractive(msalInstance, account, sharepointScopes);
+  }
+}
 
 // Create authenticated Graph client
 export function getGraphClient(
@@ -41,20 +106,14 @@ export function getGraphClient(
         });
         done(null, response.accessToken);
       } catch (error) {
-        // If session expired, fall back to interactive popup to re-authenticate
+        // If session expired, fall back to interactive re-authentication
         if (error instanceof InteractionRequiredAuthError) {
           try {
-            if (!interactiveTokenPromise) {
-              interactiveTokenPromise = msalInstance
-                .acquireTokenPopup({ ...graphScopes, account })
-                .then((response) => response.accessToken)
-                .finally(() => { interactiveTokenPromise = null; });
-            }
-            const accessToken = await interactiveTokenPromise;
+            const accessToken = await acquireTokenInteractive(msalInstance, account, graphScopes);
             done(null, accessToken);
-          } catch (popupError) {
-            console.error("Interactive token acquisition failed:", popupError);
-            done(popupError as Error, null);
+          } catch (interactiveError) {
+            console.error("Interactive token acquisition failed:", interactiveError);
+            done(interactiveError as Error, null);
           }
         } else {
           console.error("Token acquisition failed:", error);
@@ -251,6 +310,29 @@ export async function updateTicket(
   });
 
   return mapToTicket(item);
+}
+
+// Update the ParticipantEmails column (manually-added notification audience).
+export async function updateTicketParticipants(
+  client: Client,
+  ticketId: string,
+  emails: string[]
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+  // De-dupe case-insensitively, preserve insertion order.
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const e of emails) {
+    const key = e.trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      deduped.push(e.trim());
+    }
+  }
+  await client.api(endpoint).patch({ fields: { ParticipantEmails: deduped.join("; ") } });
+  const updated = await client.api(`${endpoint}?$expand=fields`).get();
+  invalidateTicketsCache();
+  return mapToTicket(updated);
 }
 
 // Create a new ticket
@@ -658,6 +740,32 @@ export async function bulkUpdateLineItems(
 // If not set, falls back to /me/sendMail (delegated auth, requires user mailbox)
 const EMAIL_FUNCTION_URL = process.env.NEXT_PUBLIC_EMAIL_FUNCTION_URL || "";
 
+// Azure Function that builds + sends the approval-request email with signed action links.
+const SEND_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL || "";
+
+// Ask the server to send the signed approval-request email to the GM group.
+// Falls back silently (returns false) if the URL isn't configured.
+export async function triggerApprovalRequestEmail(
+  ticketId: string,
+  requesterName: string
+): Promise<boolean> {
+  if (!SEND_APPROVAL_REQUEST_URL) {
+    console.warn("[triggerApprovalRequestEmail] NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL not set");
+    return false;
+  }
+  try {
+    const res = await fetch(SEND_APPROVAL_REQUEST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId, requesterName }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("[triggerApprovalRequestEmail] failed:", e);
+    return false;
+  }
+}
+
 export async function sendEmail(
   client: Client,
   recipientEmail: string,
@@ -996,26 +1104,13 @@ export async function getAttachments(
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
-      let tokenResponse;
-      try {
-        tokenResponse = await msalInstance.acquireTokenSilent({
-          ...sharepointScopes,
-          account,
-        });
-      } catch {
-        // Silent acquisition failed, try interactive
-        console.log("SharePoint token silent acquisition failed, trying popup...");
-        tokenResponse = await msalInstance.acquireTokenPopup({
-          ...sharepointScopes,
-          account,
-        });
-      }
+      const accessToken = await getSharePointToken(msalInstance, account);
 
       const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles`;
 
       const response = await fetch(spRestUrl, {
         headers: {
-          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Authorization": `Bearer ${accessToken}`,
           "Accept": "application/json;odata=verbose",
         },
       });
@@ -1081,10 +1176,7 @@ export async function uploadAttachment(
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
-      const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...sharepointScopes,
-        account,
-      });
+      const accessToken = await getSharePointToken(msalInstance, account);
 
       const arrayBuffer = await file.arrayBuffer();
 
@@ -1093,7 +1185,7 @@ export async function uploadAttachment(
       const response = await fetch(spRestUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Authorization": `Bearer ${accessToken}`,
           "Accept": "application/json;odata=verbose",
           "Content-Type": "application/octet-stream",
         },
@@ -1188,17 +1280,14 @@ export async function deleteAttachment(
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
-      const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...sharepointScopes,
-        account,
-      });
+      const accessToken = await getSharePointToken(msalInstance, account);
 
       const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')`;
 
       const response = await fetch(spRestUrl, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Authorization": `Bearer ${accessToken}`,
           "Accept": "application/json;odata=verbose",
           "X-HTTP-Method": "DELETE",
         },
@@ -1235,16 +1324,13 @@ export async function downloadAttachment(
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
-      const tokenResponse = await msalInstance.acquireTokenSilent({
-        ...sharepointScopes,
-        account,
-      });
+      const accessToken = await getSharePointToken(msalInstance, account);
 
       const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')/$value`;
 
       const response = await fetch(spRestUrl, {
         headers: {
-          "Authorization": `Bearer ${tokenResponse.accessToken}`,
+          "Authorization": `Bearer ${accessToken}`,
         },
       });
 

@@ -49,6 +49,8 @@ jobs:
           NEXT_PUBLIC_INVENTORY_GROUP_ID: "3c9e89ce-83dd-4c31-a884-01404b81898e"
           NEXT_PUBLIC_APP_URL: "https://tickets.spsvent.net"
           NEXT_PUBLIC_EMAIL_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail"
+          NEXT_PUBLIC_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/approvalaction"
+          NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendapprovalrequest"
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
           NEXT_PUBLIC_TEAMS_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendteamsnotification"
           # Teams Notifications

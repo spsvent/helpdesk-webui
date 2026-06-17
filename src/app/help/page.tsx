@@ -438,9 +438,10 @@ const helpSections: HelpSection[] = [
 
         <h4 className="font-semibold text-text-primary mt-6">Hide Resolved Toggle</h4>
         <p>
-          Directly under the search box is a <strong>Hide resolved tickets</strong> checkbox.
+          Directly under the search box is a <strong>Hide resolved &amp; closed tickets</strong> checkbox.
           Resolved tickets are visible in the default feed so you can easily find recently completed work in your department.
-          Check the box if you want a cleaner view of only active tickets; uncheck it to bring resolved tickets back.
+          Check the box if you want a cleaner view of only active tickets — it hides both Resolved and Closed tickets.
+          Uncheck it to bring resolved tickets back (closed tickets stay hidden unless you use the status filter or the <strong>All Tickets</strong> view).
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Quick View Buttons</h4>
@@ -1049,6 +1050,41 @@ const helpSections: HelpSection[] = [
             <strong>Automatic Notes:</strong> All approval actions automatically create an internal
             note on the ticket documenting the decision, so there&apos;s always a record of what happened.
           </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "approving-by-email",
+    title: "Approving by Email",
+    content: (
+      <div className="space-y-4">
+        <p>Approval-request emails now include <strong>Approve</strong>, <strong>Deny</strong>, and <strong>Request Changes</strong> buttons.</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Tap a button in the email. A secure confirmation page opens — no sign-in required.</li>
+          <li>Optionally add a message to the team (required for <em>Request Changes</em>).</li>
+          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone on the ticket is notified.</li>
+        </ol>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>Tip:</strong> Links are personal and expire after 14 days. Once a ticket is approved or denied, the link shows that it was already decided.
+        </div>
+        <p className="text-sm text-text-secondary">Partial approvals and ordering directly still happen inside the app — those buttons link you to the ticket.</p>
+      </div>
+    ),
+  },
+  {
+    id: "participants",
+    title: "Participants & Notifications",
+    content: (
+      <div className="space-y-4">
+        <p>Each ticket has a <strong>Participants</strong> list — everyone who gets notified of new activity.</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Automatic:</strong> the requester, the assignee, the approver, and anyone who has commented.</li>
+          <li><strong>Manual:</strong> add anyone from the company directory in the Participants box on the ticket.</li>
+        </ul>
+        <p>Participants are emailed on every new comment, approval decision, and status change.</p>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Note:</strong> Internal staff notes are only sent to staff participants — they are never emailed to the requester or to non-staff people you add.
         </div>
       </div>
     ),
@@ -2736,6 +2772,73 @@ const helpSections: HelpSection[] = [
             If you notice a comment or status not syncing, it may take a few
             seconds to appear on the other side. If issues persist, contact your
             system administrator.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "session-troubleshooting",
+    title: "Sign-In & Session Issues",
+    content: (
+      <div className="space-y-4">
+        <p>
+          For security, your sign-in session expires after a period of
+          inactivity. The Help Desk renews it automatically in most cases, but
+          sometimes you need to sign in again — especially when using the Help
+          Desk <strong>inside Microsoft Teams</strong>.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          &quot;Your session has expired&quot;
+        </h4>
+        <p>
+          If you see a session-expired message or banner, click the{" "}
+          <strong>Sign in</strong> / <strong>Sign in again</strong> button next
+          to it. A sign-in window opens (in Teams, this window is opened by
+          Teams itself); it usually closes again within a second or two without
+          asking for your password. Afterwards, simply continue what you were
+          doing.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          &quot;Failed to submit ticket&quot;
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            If a <strong>Sign in again</strong> button is shown with the error,
+            click it, then click <strong>Submit</strong> again — everything you
+            typed is kept.
+          </li>
+          <li>
+            If the error keeps happening, open the Help Desk in your web
+            browser at{" "}
+            <code className="bg-bg-subtle px-1 rounded">
+              tickets.spsvent.net
+            </code>{" "}
+            and submit the ticket there.
+          </li>
+          <li>
+            If it fails in the browser too, use{" "}
+            <strong>Help → Report an Issue</strong> to send the IT team
+            diagnostic details.
+          </li>
+        </ol>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> You do not need to change your browser&apos;s
+            pop-up blocker settings. The sign-in window used by the Help Desk
+            is allowed automatically, both in the browser and in Teams.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> If the app looks signed in but nothing
+            loads, your cached session has likely expired. Watch for the
+            yellow &quot;session expired&quot; banner at the top of the page and use
+            its Sign in button.
           </p>
         </div>
       </div>

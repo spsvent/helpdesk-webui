@@ -59,24 +59,29 @@ export default function TicketFiltersComponent({
 
   const activeFilterCount = getActiveFilterCount(filters);
 
-  // "Hide resolved" = status filter is explicit and does not include "Resolved".
+  // "Hide resolved" = status filter is explicit and shows neither "Resolved" nor "Closed".
   // Empty status ("all") means everything is visible, so the box is unchecked.
   const isHidingResolved =
-    filters.status.length > 0 && !filters.status.includes("Resolved");
+    filters.status.length > 0 &&
+    !filters.status.includes("Resolved") &&
+    !filters.status.includes("Closed");
 
   const toggleHideResolved = useCallback(() => {
     setActivePreset(null);
     if (isHidingResolved) {
-      // Re-show Resolved tickets
+      // Re-show Resolved tickets. Closed stays hidden to match the default view;
+      // it remains reachable via the status chips or the "All Tickets" preset.
       onFiltersChange({ ...filters, status: [...filters.status, "Resolved"] });
       return;
     }
-    // Start hiding Resolved. If currently "all", switch to an explicit list
-    // containing every status except Resolved so the intent is preserved.
+    // Start hiding Resolved and Closed. If nothing else was selected ("all", or
+    // only Resolved/Closed), fall back to the active statuses — an empty list
+    // would mean "show everything".
+    const remaining = filters.status.filter(
+      (s) => s !== "Resolved" && s !== "Closed"
+    );
     const baseStatuses: Ticket["status"][] =
-      filters.status.length === 0
-        ? ["New", "In Progress", "On Hold", "Closed"]
-        : filters.status.filter((s) => s !== "Resolved");
+      remaining.length > 0 ? remaining : ["New", "In Progress", "On Hold"];
     onFiltersChange({ ...filters, status: baseStatuses });
   }, [filters, isHidingResolved, onFiltersChange]);
 
@@ -268,7 +273,7 @@ export default function TicketFiltersComponent({
             onChange={toggleHideResolved}
             className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-2 focus:ring-brand-primary cursor-pointer"
           />
-          Hide resolved tickets
+          Hide resolved &amp; closed tickets
         </label>
 
         {/* Preset View Buttons */}
