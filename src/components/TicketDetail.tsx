@@ -16,9 +16,9 @@ import {
   deleteAttachment,
   downloadAttachment,
   logActivity,
+  triggerApprovalRequestEmail,
 } from "@/lib/graphClient";
 import {
-  sendApprovalRequestEmail,
   sendDecisionEmail,
   sendCommentEmail,
   sendPurchaseApprovedEmail,
@@ -410,8 +410,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       }),
     }).catch((e) => console.error("Failed to log approval request:", e));
 
-    // Send email notifications to managers
-    await sendApprovalRequestEmail(client, updatedTicket, requesterName);
+    // Build + send the signed approval-request email server-side (links carry HMAC tokens)
+    triggerApprovalRequestEmail(ticket.id, requesterName)
+      .catch((e) => console.error("Failed to trigger approval request email:", e));
 
     // Add internal note about approval request
     const approvalComment = await addComment(

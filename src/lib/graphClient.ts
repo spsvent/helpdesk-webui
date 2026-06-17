@@ -717,6 +717,32 @@ export async function bulkUpdateLineItems(
 // If not set, falls back to /me/sendMail (delegated auth, requires user mailbox)
 const EMAIL_FUNCTION_URL = process.env.NEXT_PUBLIC_EMAIL_FUNCTION_URL || "";
 
+// Azure Function that builds + sends the approval-request email with signed action links.
+const SEND_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL || "";
+
+// Ask the server to send the signed approval-request email to the GM group.
+// Falls back silently (returns false) if the URL isn't configured.
+export async function triggerApprovalRequestEmail(
+  ticketId: string,
+  requesterName: string
+): Promise<boolean> {
+  if (!SEND_APPROVAL_REQUEST_URL) {
+    console.warn("[triggerApprovalRequestEmail] NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL not set");
+    return false;
+  }
+  try {
+    const res = await fetch(SEND_APPROVAL_REQUEST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId, requesterName }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("[triggerApprovalRequestEmail] failed:", e);
+    return false;
+  }
+}
+
 export async function sendEmail(
   client: Client,
   recipientEmail: string,
