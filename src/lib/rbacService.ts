@@ -554,3 +554,48 @@ export function canMarkReceived(
   if (!ticket.isPurchaseRequest) return false;
   return ticket.purchaseStatus === "Purchased" || ticket.purchaseStatus === "Ordered";
 }
+
+// ============================================
+// Staff email resolution (internal-note gating)
+// ============================================
+
+// Cached staff email set (members of the elevated RBAC groups) for internal-note gating
+let staffEmailsCache: string[] | null = null;
+
+/**
+ * Fetch the set of staff emails — members of every elevated group (admin + support +
+ * purchaser + inventory) per the authoritative SharePoint RBAC config (NOT the
+ * fallback constants). Used to gate internal (staff-only) notes so they never reach
+ * the requester or non-staff manually-added participants. Cached per session.
+ */
+export async function getStaffEmails(client: Client): Promise<string[]> {
+  if (staffEmailsCache) return staffEmailsCache;
+
+  const config = await initRBACConfig(client);
+  const groupIds = Array.from(config.elevatedGroupIds);
+
+  const memberArrays = await Promise.all(
+    groupIds.map(async (groupId) => {
+      try {
+        const response = await client
+          .api(`/groups/${groupId}/members`)
+          .select("mail,userPrincipalName")
+          .get();
+        return (response.value as Array<{ mail?: string; userPrincipalName?: string }>)
+          .map((m) => (m.mail || m.userPrincipalName || "").toLowerCase())
+          .filter(Boolean);
+      } catch (error) {
+        console.error(`Failed to fetch staff members for group ${groupId}:`, error);
+        return [] as string[];
+      }
+    })
+  );
+
+  const set = new Set<string>();
+  for (const arr of memberArrays) for (const e of arr) set.add(e);
+  // Hardcoded admins (NEXT_PUBLIC_ADMIN_EMAILS fallback) are staff too
+  for (const e of ADMIN_EMAILS) set.add(e.toLowerCase());
+
+  staffEmailsCache = Array.from(set);
+  return staffEmailsCache;
+}
