@@ -1073,6 +1073,23 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "participants",
+    title: "Participants & Notifications",
+    content: (
+      <div className="space-y-4">
+        <p>Each ticket has a <strong>Participants</strong> list — everyone who gets notified of new activity.</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Automatic:</strong> the requester, the assignee, the approver, and anyone who has commented.</li>
+          <li><strong>Manual:</strong> add anyone from the company directory in the Participants box on the ticket.</li>
+        </ul>
+        <p>Participants are emailed on every new comment, approval decision, and status change.</p>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Note:</strong> Internal staff notes are only sent to staff participants — they are never emailed to the requester or to non-staff people you add.
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "understanding-badges",
     title: "Understanding Status Badges",
     content: (
