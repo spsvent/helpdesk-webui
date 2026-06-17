@@ -1055,6 +1055,24 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "approving-by-email",
+    title: "Approving by Email",
+    content: (
+      <div className="space-y-4">
+        <p>Approval-request emails now include <strong>Approve</strong>, <strong>Deny</strong>, and <strong>Request Changes</strong> buttons.</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Tap a button in the email. A secure confirmation page opens — no sign-in required.</li>
+          <li>Optionally add a message to the team (required for <em>Request Changes</em>).</li>
+          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone on the ticket is notified.</li>
+        </ol>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>Tip:</strong> Links are personal and expire after 14 days. Once a ticket is approved or denied, the link shows that it was already decided.
+        </div>
+        <p className="text-sm text-text-secondary">Partial approvals and ordering directly still happen inside the app — those buttons link you to the ticket.</p>
+      </div>
+    ),
+  },
+  {
     id: "understanding-badges",
     title: "Understanding Status Badges",
     content: (
