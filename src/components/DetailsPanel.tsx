@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Attachment, PurchaseLineItem } from "@/types/ticket";
+import { Ticket, Attachment, PurchaseLineItem, Comment } from "@/types/ticket";
+import { collectParticipants } from "@/lib/participants";
 import {
   getGraphClient,
   updateTicketFields,
@@ -44,6 +45,7 @@ import { syncTicketUpdated, syncTicketRecategorized } from "@/lib/vikunjaSyncSer
 interface DetailsPanelProps {
   ticket: Ticket;
   onUpdate: (ticket: Ticket) => void;
+  comments?: Comment[];
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
   // Purchase workflow
@@ -74,6 +76,7 @@ const CATEGORY_OPTIONS: Ticket["category"][] = ["Request", "Problem"];
 export default function DetailsPanel({
   ticket,
   onUpdate,
+  comments = [],
   canEdit = true,
   onRequestApproval,
   onMarkPurchased,
@@ -407,32 +410,33 @@ export default function DetailsPanel({
         ).catch((e) => console.error("Failed to add assignment comment:", e));
       }
 
-      // Notify requester if status changed (email)
-      if (status !== oldStatus && ticket.requester.email) {
-        sendStatusChangeEmail(
-          client,
-          updated,
-          ticket.requester.email,
-          oldStatus,
-          currentUserName
-        ).then(() => {
-          // Log successful email
-          logActivity(client, {
-            eventType: "email_sent",
-            ticketId: ticket.id,
-            ticketNumber,
-            actor: accounts[0].username,
-            actorName: currentUserName,
-            description: `Status change notification sent to ${ticket.requester.displayName}`,
-            details: JSON.stringify({
-              emailType: "status_change_notification",
-              recipient: ticket.requester.email,
-              recipientName: ticket.requester.displayName,
-              oldStatus,
-              newStatus: status,
-            }),
-          }).catch((e) => console.error("Failed to log email sent:", e));
-        }).catch((e) => console.error("Failed to send status change email:", e));
+      // Notify all participants if status changed (email)
+      if (status !== oldStatus) {
+        const participants = collectParticipants(
+          {
+            requesterEmail: ticket.requester.email,
+            assigneeEmail: ticket.originalAssignedTo || ticket.assignedTo?.email,
+            approverEmail: ticket.approvedBy?.email,
+            approvalRequesterEmail: ticket.approvalRequestedBy?.email,
+            manualEmails: ticket.participantEmails,
+            commenterEmails: comments.filter((c) => !c.isInternal).map((c) => c.createdBy.email),
+          },
+          accounts[0].username
+        );
+        participants.forEach((email) =>
+          sendStatusChangeEmail(client, updated, email, oldStatus, currentUserName).catch((e) =>
+            console.error(`Failed to send status change email to ${email}:`, e)
+          )
+        );
+        logActivity(client, {
+          eventType: "email_sent",
+          ticketId: ticket.id,
+          ticketNumber,
+          actor: accounts[0].username,
+          actorName: currentUserName,
+          description: `Status change notification sent to ${participants.length} participant(s)`,
+          details: JSON.stringify({ emailType: "status_change_notification", recipients: participants, oldStatus, newStatus: status }),
+        }).catch((e) => console.error("Failed to log email sent:", e));
       }
 
       // Send Teams notification for status change (independent of email)
