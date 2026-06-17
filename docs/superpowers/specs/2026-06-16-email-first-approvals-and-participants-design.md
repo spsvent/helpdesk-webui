@@ -85,10 +85,15 @@ embeds the signed buttons — must be built and sent by an Azure Function, not b
   signed claims.
 - Secret: new Function App env var `APPROVAL_LINK_SECRET`.
 
-#### 2. `sendApprovalRequest` Function — new HTTP endpoint (anonymous)
+#### 2. `sendApprovalRequest` Function — new HTTP endpoint (anonymous, **pending-gated**)
 - Replaces the client-built approval-request email.
-- Input: ticket id (+ any context the Function can't cheaply re-fetch).
-- Resolves approver recipients (GM group, as `getApproverEmails()` does today).
+- Input: ticket id (+ requester name for display only).
+- **Security gate:** because this endpoint is anonymous and *mints capabilities*,
+  it only proceeds when the ticket's `ApprovalStatus` is genuinely `Pending`. This
+  blocks an anonymous caller from spamming GMs with approval emails for arbitrary
+  or already-decided tickets. (Chosen over full bearer-token validation for
+  simplicity; tokens are emailed to GMs, never returned to the caller.)
+- Resolves approver recipients (GM group) **with display names** for attribution.
 - For **each** recipient, mints a **per-recipient** token per action and builds
   that recipient's email with three buttons. Per-recipient tokens mean the
   decision is correctly attributed to whoever actually clicked.
@@ -104,10 +109,15 @@ embeds the signed buttons — must be built and sent by an Azure Function, not b
     `ApprovedByName`/`ApprovedByEmail`, `ApprovalNotes`, and purchase
     `PurchaseStatus`) — attributed to the **token's** approver, since nobody is
     logged in. Mirrors `processApprovalDecision()` in `graphClient.ts`.
-  - If `note` present, add it as a ticket comment.
-  - Append the standard internal "decision recorded" comment.
-  - Log the activity event.
-  - Send the decision email to **participants** (Piece C resolver).
+  - Uses **ETag `If-Match`** optimistic concurrency on the write so two
+    near-simultaneous clicks can't both pass the terminal-status check (closes the
+    TOCTOU replay race).
+  - Records the decision as a single **internal** comment (`📋 **<decision>** by
+    <name>` plus the optional note). The note is staff-internal; the requester
+    still sees it via the decision email.
+  - Logs the activity event (same field schema as the in-app `logActivity`:
+    `Title`/`EventType`/`Actor`/`TicketId`/`TicketNumber`/`ActorName`/`Details`).
+  - Sends the decision email to **participants** (Piece C resolver).
 - Enforces: `Request Changes` requires a non-empty `note`.
 
 #### 4. `/approve` page — new app route `src/app/approve/page.tsx`
@@ -128,13 +138,12 @@ Approval requested
           └─> each GM receives an email w/ 3 signed buttons (their own tokens)
 
 GM taps "Approve"
-   └─> tickets.spsvent.net/approve?token=…   (no login)
+   └─> tickets.spsvent.net/approve/?token=…   (no login)
           └─> GET approvalAction → render ticket summary + optional note box
                  └─> GM taps "Confirm" (+ optional note)
                         └─> POST approvalAction
-                               ├─ update SharePoint (attributed to token approver)
-                               ├─ note saved as comment (if provided)
-                               ├─ internal "decision recorded" comment
+                               ├─ update SharePoint (If-Match, attributed to token approver)
+                               ├─ internal decision comment (incl. note)
                                ├─ activity log event
                                └─ decision email → participants
                         └─> page shows "✓ Approved"
@@ -175,8 +184,8 @@ This single resolver feeds **every** ticket notification.
 | Public comment | All participants |
 | Internal comment | Participants **with a staff RBAC role** only |
 | Approval decision | Existing recipients **∪** participants |
-| Purchase-workflow step | Existing recipients **∪** participants |
-| **Status change** (new) | All participants |
+| Purchase-workflow step | Role recipients (purchaser/inventory) + requester — participants are covered via the decision + status-change emails, not separately on PurchaseStatus transitions |
+| **Status change** (new) | All participants (incl. prior public commenters) |
 
 - **Internal-note gate** keys off RBAC role, not directory membership — a
   manually-added regular employee never receives internal notes.
@@ -207,14 +216,20 @@ Azure Portal (per project conventions).
 
 - **Forgery:** Actions require a valid HMAC signature over the claims; the secret
   never leaves the Function App.
+- **Endpoint auth:** `approvalAction` is anonymous because the **token is the
+  capability** (no valid token → no action). `sendApprovalRequest` is different —
+  it *creates* capabilities — so it is anonymous **but pending-gated**: it only
+  mints and sends when the ticket's `ApprovalStatus` is genuinely `Pending`.
 - **Mail-scanner prefetch:** Only `POST` mutates state. `GET` is a read-only
   summary, so a scanner pre-opening the link cannot approve anything.
 - **Replay / reuse:** A second click after a **terminal** decision (Approved or
   Denied) sees the changed `ApprovalStatus` and shows "already decided." **Request
   Changes is non-terminal** — it sets `Changes Requested` but leaves the Approve
   and Deny links live, so an approver can request changes and later still
-  approve/deny from the same email. `jti` is reserved for a future one-time-use
-  store if needed; the state check is sufficient for now.
+  approve/deny from the same email. The write uses **ETag `If-Match` optimistic
+  concurrency**, so two near-simultaneous clicks can't both pass the status check
+  and both write (the TOCTOU race) — the loser gets "already decided." `jti`
+  remains reserved for a future one-time-use store.
 - **Expiry:** 14 days; expired links route the approver into the app.
 - **Attribution:** The decision records the **token's** approver identity (since
   no one is logged in). Per-recipient tokens keep multi-GM attribution correct.

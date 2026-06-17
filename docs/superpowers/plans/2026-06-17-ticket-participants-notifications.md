@@ -322,32 +322,28 @@ Used to gate internal comments to staff participants. Members of the admin group
 **Files:**
 - Modify: `src/lib/rbacService.ts`
 
-- [ ] **Step 1: Add the import.** Extend the existing `./rbacConfig` import (lines 10-13) to include the elevated-group list:
+- [ ] **Step 1: No new `rbacConfig` import needed.** `ADMIN_EMAILS` is already imported from `./rbacConfig`, and `initRBACConfig` is defined in this same file. Do **NOT** import `ALL_ELEVATED_GROUP_IDS` from `rbacConfig.ts` — that file is explicitly **fallback-only** (`rbacConfig.ts:1-4`); the authoritative elevated-group set comes from the SharePoint RBAC config via `rbacConfigService`.
+
+- [ ] **Step 2: Add a cache + resolver** at the end of the file. Use the SharePoint-derived `config.elevatedGroupIds` (admin + department + purchaser + inventory), not the hardcoded fallback — this gate decides who may receive internal notes, so it must use the live config:
 
 ```typescript
-import {
-  isHardcodedAdmin,
-  ADMIN_EMAILS,
-  ALL_ELEVATED_GROUP_IDS,
-} from "./rbacConfig";
-```
-
-- [ ] **Step 2: Add a cache + resolver** at the end of the file:
-
-```typescript
-// Cached staff email set (admin + support group members) for internal-note gating
+// Cached staff email set (members of the elevated RBAC groups) for internal-note gating
 let staffEmailsCache: string[] | null = null;
 
 /**
- * Fetch the set of staff emails — members of the admin group and every support
- * department group. Used to decide who may receive internal (staff-only) notes.
- * Cached per session.
+ * Fetch the set of staff emails — members of every elevated group (admin + support +
+ * purchaser + inventory) per the authoritative SharePoint RBAC config (NOT the
+ * fallback constants). Used to gate internal (staff-only) notes so they never reach
+ * the requester or non-staff manually-added participants. Cached per session.
  */
 export async function getStaffEmails(client: Client): Promise<string[]> {
   if (staffEmailsCache) return staffEmailsCache;
 
+  const config = await initRBACConfig(client);
+  const groupIds = [...config.elevatedGroupIds];
+
   const memberArrays = await Promise.all(
-    ALL_ELEVATED_GROUP_IDS.map(async (groupId) => {
+    groupIds.map(async (groupId) => {
       try {
         const response = await client
           .api(`/groups/${groupId}/members`)
@@ -365,7 +361,7 @@ export async function getStaffEmails(client: Client): Promise<string[]> {
 
   const set = new Set<string>();
   for (const arr of memberArrays) for (const e of arr) set.add(e);
-  // Hardcoded admins are staff too
+  // Hardcoded admins (NEXT_PUBLIC_ADMIN_EMAILS fallback) are staff too
   for (const e of ADMIN_EMAILS) set.add(e.toLowerCase());
 
   staffEmailsCache = [...set];
@@ -681,15 +677,33 @@ git commit -m "feat: include participants in approval decision emails"
 Replace the requester-only status email (`DetailsPanel.tsx:410-436`) with participant fan-out.
 
 **Files:**
-- Modify: `src/components/DetailsPanel.tsx`
+- Modify: `src/components/DetailsPanel.tsx` (props + status email)
+- Modify: `src/components/TicketDetail.tsx` (pass `comments` to `DetailsPanel`)
 
-- [ ] **Step 1: Add the import.** Near the top imports of `DetailsPanel.tsx`:
+- [ ] **Step 1: Thread `comments` into `DetailsPanel`** so the status fanout can include prior public commenters (the spec defines participants as requester + assignee + approver + **commenters** + manual adds; `DetailsPanel` previously had no comment data).
+
+  a. In `DetailsPanel.tsx`, add the imports (skip `Comment` if already imported):
 
 ```typescript
 import { collectParticipants } from "@/lib/participants";
+import { Comment } from "@/types/ticket";
 ```
 
-- [ ] **Step 2: Replace the status-email block** at lines 410-436 with:
+  b. Add `comments` to the props interface and destructure it with a safe default:
+
+```typescript
+// In DetailsPanelProps:
+  comments?: Comment[];
+// In the component signature, add to the destructure: `comments = []`
+```
+
+  c. In `TicketDetail.tsx`, pass the already-loaded comments to the panel:
+
+Run: `grep -n "<DetailsPanel" src/components/TicketDetail.tsx`
+
+Add `comments={comments}` to that `<DetailsPanel ... />` element.
+
+- [ ] **Step 2: Replace the status-email block** at `DetailsPanel.tsx:410-436` with participant fan-out that **includes commenters**:
 
 ```typescript
       // Notify all participants if status changed (email)
@@ -701,6 +715,7 @@ import { collectParticipants } from "@/lib/participants";
             approverEmail: ticket.approvedBy?.email,
             approvalRequesterEmail: ticket.approvalRequestedBy?.email,
             manualEmails: ticket.participantEmails,
+            commenterEmails: comments.filter((c) => !c.isInternal).map((c) => c.createdBy.email),
           },
           accounts[0].username
         );
@@ -796,6 +811,13 @@ git commit -m "docs: add Participants & Notifications help section"
 ```
 
 ---
+
+## Post-Codex-Review Revisions (2026-06-17)
+
+Revised after an adversarial Codex review:
+- **`getStaffEmails` source** (Task 4) now uses `initRBACConfig()` + the SharePoint-derived `config.elevatedGroupIds`, not the fallback-only `ALL_ELEVATED_GROUP_IDS`. This is the internal-note gate, so it must use the authoritative config — otherwise notes could mis-route.
+- **Status-change fanout** (Task 9) now threads `comments` into `DetailsPanel` and includes prior public commenters, matching the spec's participant definition.
+- **Purchase-workflow step emails (scope decision):** the spec's routing table listed "purchase-workflow step → participants," but ordered/received emails stay role-targeted (purchaser/inventory) + requester. Participants are covered via comments, the approval **decision** email, and ticket **status-change** emails — not separately on PurchaseStatus transitions. The spec routing table has been narrowed to match. Expanding to per-purchase-step participant fanout is a small follow-up if desired.
 
 ## Self-Review Checklist (completed during planning)
 

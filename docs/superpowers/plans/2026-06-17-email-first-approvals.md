@@ -493,7 +493,21 @@ async function getGroupMemberEmails(client, groupId) {
   }
 }
 
-module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails };
+// Like getGroupMemberEmails but returns { email, displayName } for correct attribution.
+async function getGroupMembers(client, groupId) {
+  if (!groupId) return [];
+  try {
+    const res = await client.api(`/groups/${groupId}/members`).select("mail,userPrincipalName,displayName").get();
+    return (res.value || [])
+      .map((m) => ({ email: m.mail || m.userPrincipalName, displayName: m.displayName }))
+      .filter((m) => m.email);
+  } catch (e) {
+    console.error("getGroupMembers failed:", e.message);
+    return [];
+  }
+}
+
+module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMembers };
 ```
 
 - [ ] **Step 2: Commit**
@@ -653,6 +667,8 @@ async function getTicketFields(client, ticketId) {
   fields.id = item.id;
   // Requester email comes from the item creator (mirrors mapToTicket).
   fields.RequesterEmail = item.createdBy?.user?.email || "";
+  // Capture the item ETag for optimistic-concurrency on the decision write.
+  fields.__etag = item["@odata.etag"] || "*";
   return fields;
 }
 
@@ -681,17 +697,20 @@ async function addInternalComment(client, ticketId, body) {
 async function logActivity(client, entry) {
   if (!config.activityLogListId) return;
   try {
-    await client.api(`/sites/${config.siteId}/lists/${config.activityLogListId}/items`).post({
-      fields: {
-        Title: entry.description.substring(0, 255),
-        EventType: entry.eventType,
-        TicketId: String(entry.ticketId || ""),
-        Actor: entry.actor || "",
-        ActorName: entry.actorName || "",
-        Description: entry.description,
-        Details: entry.details || "",
-      },
-    });
+    // Mirror the EXACT field schema written by src/lib/graphClient.ts logActivity:
+    // Title (= description), EventType, Actor, and optional TicketId / TicketNumber /
+    // ActorName / Details. The ActivityLog list has NO "Description" column — do not
+    // write one (the earlier draft did, which SharePoint drops or rejects).
+    const fields = {
+      Title: entry.description,
+      EventType: entry.eventType,
+      Actor: entry.actor || "",
+    };
+    if (entry.ticketId) fields.TicketId = String(entry.ticketId);
+    if (entry.ticketNumber) fields.TicketNumber = String(entry.ticketNumber);
+    if (entry.actorName) fields.ActorName = entry.actorName;
+    if (entry.details) fields.Details = entry.details;
+    await client.api(`/sites/${config.siteId}/lists/${config.activityLogListId}/items`).post({ fields });
   } catch (e) {
     console.error("logActivity failed:", e.message);
   }
@@ -772,7 +791,31 @@ app.http("approvalAction", {
 
       const nowIso = new Date().toISOString();
       const patch = buildDecisionFields(decision, approverName, approverEmail, note || undefined, isPurchase, nowIso);
-      await client.api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${tid}/fields`).patch(patch);
+
+      // Optimistic concurrency: condition the write on the ETag we just read so two
+      // near-simultaneous clicks can't both pass the terminal-status check above and
+      // both write (the TOCTOU race). PATCH the item endpoint (not /fields) because
+      // If-Match applies at the item level; this mirrors processApprovalDecision's
+      // `client.api(itemEndpoint).patch({ fields })` shape.
+      try {
+        await client
+          .api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${tid}`)
+          .header("If-Match", fields.__etag)
+          .patch({ fields: patch });
+      } catch (e) {
+        if (e.statusCode === 412) {
+          // Lost the race — re-read and report whoever won.
+          const fresh = await getTicketFields(client, tid);
+          if (isTerminalStatus(fresh.ApprovalStatus)) {
+            return {
+              status: 409,
+              headers: corsHeaders,
+              jsonBody: { ok: false, reason: "already_decided", decidedBy: fresh.ApprovedByName, decidedDate: fresh.ApprovalDate },
+            };
+          }
+        }
+        throw e;
+      }
 
       // Verify the status saved (mirror of the in-app verify step)
       const verify = await getTicketFields(client, tid);
@@ -787,6 +830,7 @@ app.http("approvalAction", {
       await logActivity(client, {
         eventType: decision === "Approved" ? "approval_approved" : "approval_rejected",
         ticketId: tid,
+        ticketNumber: verify.TicketNumber,
         actor: approverEmail,
         actorName: approverName,
         description: `Ticket ${decision.toLowerCase()} by ${approverName} (via email)`,
@@ -828,11 +872,16 @@ app.http("approvalAction", {
 cd azure-functions && npm install >/dev/null 2>&1; func start
 ```
 
-In a second shell, mint a token for a real pending ticket id (replace `42`) and call GET:
+In a second shell, mint a token for a real pending ticket id (replace `42`). Supply the
+secret via a silent prompt so it never lands in a file-scrape, the command line, or shell
+history (do NOT grep it out of `local.settings.json`):
 
 ```bash
-cd azure-functions && node -e "process.env.APPROVAL_LINK_SECRET=require('fs').readFileSync('local.settings.json','utf8').match(/APPROVAL_LINK_SECRET\"\s*:\s*\"([^\"]+)/)[1]; console.log(require('./src/lib/approvalToken').signToken({tid:'42',action:'approve',email:'you@x.com',name:'You'}))" > /tmp/tok.txt
-curl -s "http://localhost:7071/api/approvalaction?token=$(cat /tmp/tok.txt)" | head -c 400
+cd azure-functions
+read -rs -p "APPROVAL_LINK_SECRET: " SECRET; echo
+TOKEN=$(APPROVAL_LINK_SECRET="$SECRET" node -e "console.log(require('./src/lib/approvalToken').signToken({tid:'42',action:'approve',email:'you@x.com',name:'You'}))")
+unset SECRET
+curl -s "http://localhost:7071/api/approvalaction?token=$TOKEN" | head -c 400
 ```
 
 Expected: JSON `{"ok":true,"action":"approve",...,"ticket":{...}}`. (A `reason:"server_error"` here usually means missing local SharePoint env vars — fine to defer full execute-path testing to the deployed environment with a throwaway ticket.)
@@ -858,7 +907,7 @@ git commit -m "feat: add approvalAction function (GET summary + POST execute)"
 ```javascript
 const { app } = require("@azure/functions");
 const { signToken } = require("../lib/approvalToken");
-const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
+const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { approvalRequestEmail } = require("../lib/emailTemplates");
 
 const corsHeaders = {
@@ -886,20 +935,30 @@ app.http("sendApprovalRequest", {
       const fields = item.fields || {};
       fields.id = item.id;
       const ref = `Ticket #${fields.TicketNumber || item.id}`;
-      const who = requesterName || fields.ApprovalRequestedByName || "A staff member";
+      // Derive the requester name from SharePoint, not the (untrusted) browser param.
+      const who = fields.ApprovalRequestedByName || requesterName || "A staff member";
 
-      const approvers = await getGroupMemberEmails(client, config.generalManagersGroupId);
+      // SECURITY GATE: this endpoint is anonymous, so only mint + send tokens when the
+      // ticket is genuinely Pending approval. This blocks an anonymous caller from
+      // spamming GMs with approval emails for arbitrary or already-decided tickets.
+      // (Per design decision: pending-state gate rather than full bearer validation.)
+      if (fields.ApprovalStatus !== "Pending") {
+        return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "not_pending" } };
+      }
+
+      const approvers = await getGroupMembers(client, config.generalManagersGroupId);
       if (approvers.length === 0) {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "no approvers" } };
       }
 
       const subject = `[Approval Required] ${ref}: ${fields.Title}`;
       let sent = 0;
-      await Promise.all(approvers.map(async (email) => {
+      await Promise.all(approvers.map(async ({ email, displayName }) => {
+        const name = displayName || email; // attribute the decision to a real name when available
         const tokens = {
-          approve: signToken({ tid: String(item.id), action: "approve", email, name: email }),
-          deny: signToken({ tid: String(item.id), action: "deny", email, name: email }),
-          changes: signToken({ tid: String(item.id), action: "changes", email, name: email }),
+          approve: signToken({ tid: String(item.id), action: "approve", email, name }),
+          deny: signToken({ tid: String(item.id), action: "deny", email, name }),
+          changes: signToken({ tid: String(item.id), action: "changes", email, name }),
         };
         const html = approvalRequestEmail(fields, ref, who, tokens);
         try { await sendMail(client, email, subject, html); sent++; }
@@ -915,7 +974,7 @@ app.http("sendApprovalRequest", {
 });
 ```
 
-> The token's `name` is the approver's email (the function has only emails, not display names). The decision then attributes to that email; `ApprovedByName` shows the email. This is acceptable; a future enhancement can resolve display names via `getGroupMemberEmails` → `displayName`.
+> The token's `name` is the approver's **display name** (from `getGroupMembers`), so the recorded decision attributes to a real name rather than an email. Tokens are minted only for genuinely-pending tickets and are emailed to each GM individually — never returned to the HTTP caller.
 
 - [ ] **Step 2: Commit**
 
@@ -1003,17 +1062,19 @@ git commit -m "feat: trigger signed approval emails via sendApprovalRequest func
 ```typescript
         // No redirect response, check for existing accounts
         const accounts = msalInstance.getAllAccounts();
-        // /approve is a public, token-authorized page — never bounce it through
-        // a login redirect (that would drop the ?token= from the URL).
+        // /approve is a public, token-authorized page. Skip ALL auth bootstrapping
+        // for it: no cached-session validation (which redirects and would drop the
+        // ?token= from the URL) AND no Teams SSO. The page authorizes via its token.
         const isPublicActionPage =
           typeof window !== "undefined" && window.location.pathname.startsWith("/approve");
-        if (accounts.length > 0) {
+        if (isPublicActionPage) {
+          if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+          // intentionally no validateCachedSession and no ssoSilent — fall through
+        } else if (accounts.length > 0) {
           msalInstance.setActiveAccount(accounts[0]);
           setAuthenticatedUser(accounts[0].username, accounts[0].name ?? undefined);
-          if (!isPublicActionPage) {
-            // Fire-and-forget so app startup isn't blocked on a token round-trip
-            validateCachedSession(accounts[0], teamsAuth.isTeams);
-          }
+          // Fire-and-forget so app startup isn't blocked on a token round-trip
+          validateCachedSession(accounts[0], teamsAuth.isTeams);
         } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
 ```
 
@@ -1289,6 +1350,17 @@ git commit -m "docs: add Approving by Email help section"
 ```
 
 ---
+
+## Post-Codex-Review Revisions (2026-06-17)
+
+This plan was revised after an adversarial Codex review. Changes from the original draft:
+- **Pending-state gate** on `sendApprovalRequest` (Task 7) — anonymous callers can't mint/send tokens for non-pending tickets. (Per decision: gate rather than full bearer validation.)
+- **ETag `If-Match` optimistic concurrency** on the decision PATCH (Task 6) — closes the double-click / approve-vs-deny TOCTOU race.
+- **Activity-log schema** (Task 6) now mirrors `src/lib/graphClient.ts` exactly (no `Description` column; includes `TicketNumber`).
+- **`displayName` attribution** via new `getGroupMembers` helper (Tasks 4,7) instead of email-as-name.
+- **Layout guard** (Task 9) skips ALL auth/SSO bootstrapping for `/approve`, not just the cached-session redirect.
+- **Secret hygiene** (Task 6) — the local token-mint no longer scrapes `local.settings.json`.
+- **Attribution parity (accepted limitation):** the server writes the text fallbacks `ApprovedByName`/`ApprovedByEmail` (which the UI reads as the source of truth) but does NOT replicate the in-app best-effort `ApprovedByLookupId` Person-field patch — text-only attribution is accepted by design (the in-app Person patch is itself non-blocking).
 
 ## Self-Review Checklist (completed during planning)
 
