@@ -86,7 +86,15 @@ export default function RootLayout({
         } else {
           // No redirect response, check for existing accounts
           const accounts = msalInstance.getAllAccounts();
-          if (accounts.length > 0) {
+          // /approve is a public, token-authorized page. Skip ALL auth bootstrapping
+          // for it: no cached-session validation (which redirects and would drop the
+          // ?token= from the URL) AND no Teams SSO. The page authorizes via its token.
+          const isPublicActionPage =
+            typeof window !== "undefined" && window.location.pathname.startsWith("/approve");
+          if (isPublicActionPage) {
+            if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+            // intentionally no validateCachedSession and no ssoSilent — fall through
+          } else if (accounts.length > 0) {
             msalInstance.setActiveAccount(accounts[0]);
             setAuthenticatedUser(accounts[0].username, accounts[0].name ?? undefined);
             // Fire-and-forget so app startup isn't blocked on a token round-trip
