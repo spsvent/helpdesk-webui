@@ -312,6 +312,29 @@ export async function updateTicket(
   return mapToTicket(item);
 }
 
+// Update the ParticipantEmails column (manually-added notification audience).
+export async function updateTicketParticipants(
+  client: Client,
+  ticketId: string,
+  emails: string[]
+): Promise<Ticket> {
+  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
+  // De-dupe case-insensitively, preserve insertion order.
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const e of emails) {
+    const key = e.trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      deduped.push(e.trim());
+    }
+  }
+  await client.api(endpoint).patch({ fields: { ParticipantEmails: deduped.join("; ") } });
+  const updated = await client.api(`${endpoint}?$expand=fields`).get();
+  invalidateTicketsCache();
+  return mapToTicket(updated);
+}
+
 // Create a new ticket
 export interface CreateTicketData {
   title: string;
