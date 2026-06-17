@@ -47,15 +47,15 @@ export function collectParticipants(input: ParticipantInput, excludeEmail?: stri
 
   const exclude = clean(excludeEmail);
   if (exclude) out.delete(exclude);
-  return [...out];
+  return Array.from(out);
 }
 
 // Keep only participants whose email appears in the staff set.
 export function staffSubset(emails: string[], staffEmails: Iterable<string>): string[] {
   const staff = new Set<string>();
-  for (const e of staffEmails) {
+  Array.from(staffEmails).forEach((e) => {
     const c = clean(e);
     if (c) staff.add(c);
-  }
+  });
   return emails.filter((e) => staff.has(clean(e) || ""));
 }
