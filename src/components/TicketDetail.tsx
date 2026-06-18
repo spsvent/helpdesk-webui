@@ -40,6 +40,9 @@ import ApprovalActionPanel from "./ApprovalActionPanel";
 import ParticipantsPanel from "./ParticipantsPanel";
 import { collectParticipants, staffSubset } from "@/lib/participants";
 import { getStaffEmails } from "@/lib/rbacService";
+import { ensureFreshToken } from "@/lib/authActions";
+import { saveDraft } from "@/lib/formDraft";
+import { graphScopes } from "@/lib/msalConfig";
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -235,6 +238,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       if (detailsPanelSaveRef.current?.hasChanges) {
         await detailsPanelSaveRef.current.save();
       }
+
+      // Pre-flight: snapshot the comment so a renewal redirect (rare) doesn't lose it.
+      const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+        onBeforeRedirect: () => saveDraft(`comment:${ticket.id}`, { text, isInternal }),
+      });
+      if (!tokenOk) { setSubmitting(false); return; }
 
       const client = getGraphClient(instance, accounts[0]);
       const newComment = await addComment(
@@ -439,6 +448,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   ) => {
     if (!accounts[0]) return;
 
+    // Pre-flight: snapshot the decision so a renewal redirect doesn't lose it.
+    const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+      onBeforeRedirect: () => saveDraft(`approval:${ticket.id}`, { decision, notes, options }),
+    });
+    if (!tokenOk) return;
+
     const client = getGraphClient(instance, accounts[0]);
     const approverName = accounts[0].name || accounts[0].username;
     const approverEmail = accounts[0].username;
@@ -582,6 +597,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const handleMarkPurchased = async (orderItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
 
+    const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+      onBeforeRedirect: () => saveDraft(`purchase:${ticket.id}`, { orderItems, notes }),
+    });
+    if (!tokenOk) return;
+
     const client = getGraphClient(instance, accounts[0]);
     const purchaserEmail = accounts[0].username;
     const purchaserName = accounts[0].name || accounts[0].username;
@@ -623,6 +643,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   // Handle marking a purchase as received (per-item)
   const handleMarkReceived = async (receivedItems: PurchaseLineItem[], notes?: string) => {
     if (!accounts[0]) return;
+
+    const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+      onBeforeRedirect: () => saveDraft(`receive:${ticket.id}`, { receivedItems, notes }),
+    });
+    if (!tokenOk) return;
 
     const client = getGraphClient(instance, accounts[0]);
     const receiverEmail = accounts[0].username;
@@ -819,6 +844,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 <CommentInput
                   onSubmit={handleAddComment}
                   disabled={submitting}
+                  ticketId={ticket.id}
                 />
               </div>
             ) : (

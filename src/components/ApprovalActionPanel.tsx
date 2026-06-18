@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, PurchaseLineItem } from "@/types/ticket";
+import { loadDraft, clearDraft } from "@/lib/formDraft";
 import LineItemsTable from "./LineItemsTable";
 import { computeEstimatedTotal, distinctVendorCount } from "@/lib/lineItemHelpers";
 import { getGraphClient } from "@/lib/graphClient";
@@ -53,6 +54,17 @@ export default function ApprovalActionPanel({ ticket, isPurchaseRequest = false,
   const [gmMembers, setGmMembers] = useState<GroupMember[] | null>(null);
   const [inventoryMembers, setInventoryMembers] = useState<GroupMember[] | null>(null);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
+
+  // Restore a decision draft snapshotted before a renewal redirect, then clear it (one-shot).
+  useEffect(() => {
+    const d = loadDraft<{ notes?: string; options?: { orderItems?: PurchaseLineItem[] } }>(`approval:${ticket.id}`);
+    if (d) {
+      if (typeof d.notes === "string") setNotes(d.notes);
+      if (d.options?.orderItems) setOrderItems(d.options.orderItems);
+      clearDraft(`approval:${ticket.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const willNotifyPurchasers =
     isPurchaseRequest &&

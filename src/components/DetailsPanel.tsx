@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Attachment, PurchaseLineItem, Comment } from "@/types/ticket";
 import { collectParticipants } from "@/lib/participants";
+import { ensureFreshToken } from "@/lib/authActions";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
+import { graphScopes } from "@/lib/msalConfig";
 import {
   getGraphClient,
   updateTicketFields,
@@ -122,6 +125,23 @@ export default function DetailsPanel({
 
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Restore an edits draft snapshotted before a renewal redirect, then clear it (one-shot).
+  // Setting the fields re-triggers the hasChanges effect, so Save re-arms automatically.
+  useEffect(() => {
+    const d = loadDraft<{ status: Ticket["status"]; priority: Ticket["priority"]; category: Ticket["category"]; problemType: string; problemTypeSub: string; problemTypeSub2: string; assigneeEmail?: string }>(`details:${ticket.id}`);
+    if (d) {
+      setStatus(d.status);
+      setPriority(d.priority);
+      setCategory(d.category);
+      setProblemType(d.problemType);
+      setProblemTypeSub(d.problemTypeSub);
+      setProblemTypeSub2(d.problemTypeSub2);
+      if (d.assigneeEmail) setSelectedAssignee({ displayName: d.assigneeEmail, email: d.assigneeEmail });
+      clearDraft(`details:${ticket.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [autoAssignSuggestion, setAutoAssignSuggestion] = useState<string | null>(null);
 
   // Reset all local state when ticket changes (e.g., user selects a different ticket)
@@ -295,6 +315,15 @@ export default function DetailsPanel({
     const oldAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
 
     try {
+      // Pre-flight: snapshot the edits so a renewal redirect doesn't lose them.
+      const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+        onBeforeRedirect: () => saveDraft(`details:${ticket.id}`, {
+          status, priority, category, problemType, problemTypeSub, problemTypeSub2,
+          assigneeEmail: selectedAssignee?.email,
+        }),
+      });
+      if (!tokenOk) { setSaving(false); return; }
+
       const client = getGraphClient(instance, accounts[0]);
 
       // Build updates object

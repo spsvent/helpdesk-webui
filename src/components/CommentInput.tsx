@@ -1,15 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { loadDraft, clearDraft } from "@/lib/formDraft";
 
 interface CommentInputProps {
   onSubmit: (text: string, isInternal: boolean) => void;
   disabled?: boolean;
+  ticketId?: string;
 }
 
-export default function CommentInput({ onSubmit, disabled }: CommentInputProps) {
+export default function CommentInput({ onSubmit, disabled, ticketId }: CommentInputProps) {
   const [text, setText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const draftKey = ticketId ? `comment:${ticketId}` : null;
+
+  // Restore a comment draft snapshotted before a renewal redirect, then clear it (one-shot).
+  useEffect(() => {
+    if (!draftKey) return;
+    const d = loadDraft<{ text: string; isInternal: boolean }>(draftKey);
+    if (d) {
+      setText(d.text);
+      setIsInternal(d.isInternal);
+      clearDraft(draftKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,6 +32,7 @@ export default function CommentInput({ onSubmit, disabled }: CommentInputProps) 
       onSubmit(text, isInternal);
       setText("");
       setIsInternal(false);
+      if (draftKey) clearDraft(draftKey);
     }
   };
 
