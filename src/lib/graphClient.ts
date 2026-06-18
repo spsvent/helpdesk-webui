@@ -2,7 +2,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
 import { graphScopes, sharepointScopes } from "./msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "./teamsAuth";
-import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError } from "./authActions";
+import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError, ssoSilentWithTimeout } from "./authActions";
 import {
   Ticket,
   PurchaseLineItem,
@@ -75,8 +75,7 @@ async function acquireTokenInteractive(
       //    session cookie is alive (succeeds in non-ITP browsers where the cached
       //    token renewal just failed).
       try {
-        const sso = await msalInstance.ssoSilent({ ...request, loginHint: account.username, account });
-        return sso.accessToken;
+        return await ssoSilentWithTimeout(msalInstance, account, request);
       } catch {
         /* fall through */
       }

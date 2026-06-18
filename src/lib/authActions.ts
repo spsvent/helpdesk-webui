@@ -22,19 +22,29 @@ export function isInteractionInProgressError(e: unknown): boolean {
   return code === "interaction_in_progress" || code === "redirect_in_iframe";
 }
 
-export function renewalRedirectAllowed(s: SessionLike | null = store()): boolean {
-  return !s || !s.getItem(RENEWAL_KEY);
+// A redirect is allowed unless one was started within the last RENEWAL_TTL_MS. The marker
+// embeds the start timestamp (`renewal:<homeAccountId>:<Date.now()>`), so a STRANDED marker
+// — declined consent, tab closed on the Entra page, manual sign-in (empty state), a
+// redirect that never returns — self-heals after the window instead of permanently
+// disabling auto-renewal for the whole tab session.
+export const RENEWAL_TTL_MS = 90_000;
+export function renewalRedirectAllowed(s: SessionLike | null = store(), now: number = Date.now()): boolean {
+  if (!s) return true;
+  const v = s.getItem(RENEWAL_KEY);
+  if (!v) return true;
+  const ts = Number(v.split(":").pop());
+  if (!Number.isFinite(ts) || now - ts > RENEWAL_TTL_MS) {
+    s.removeItem(RENEWAL_KEY); // stale -> self-heal
+    return true;
+  }
+  return false; // a renewal redirect is genuinely in flight within the window
 }
 export function markRenewalAttempt(state: string, s: SessionLike | null = store()): void {
   s?.setItem(RENEWAL_KEY, state);
 }
-// Clear ONLY when the returned redirect state matches our stored attempt — so a login
-// redirect's return cannot disarm the renewal guard.
-export function clearRenewalAttemptIfMatches(
-  returnedState: string | undefined | null,
-  s: SessionLike | null = store(),
-): void {
-  if (returnedState && s && s.getItem(RENEWAL_KEY) === returnedState) s.removeItem(RENEWAL_KEY);
+// Re-arm renewal unconditionally after any successful auth (login or renewal return).
+export function clearRenewalAttempt(s: SessionLike | null = store()): void {
+  s?.removeItem(RENEWAL_KEY);
 }
 
 // ---- authReady: resolved by layout once its initial handleRedirectPromise settles ----
@@ -53,10 +63,17 @@ export async function ssoSilentWithTimeout(
   request: { scopes: string[] },
   ms = 5000,
 ): Promise<string> {
+  let id: ReturnType<typeof setTimeout> | undefined;
   const sso = instance.ssoSilent({ ...request, loginHint: account.username, account });
-  const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("ssoSilent timeout")), ms));
-  const res = await Promise.race([sso, timeout]);
-  return res.accessToken;
+  const timeout = new Promise<never>((_, rej) => {
+    id = setTimeout(() => rej(new Error("ssoSilent timeout")), ms);
+  });
+  try {
+    const res = await Promise.race([sso, timeout]);
+    return res.accessToken;
+  } finally {
+    if (id) clearTimeout(id);
+  }
 }
 
 // Start a loop-guarded, draft-snapshotting renewal redirect (browser). Page unloads,

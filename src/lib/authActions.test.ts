@@ -4,7 +4,7 @@ import {
   isInteractionInProgressError,
   renewalRedirectAllowed,
   markRenewalAttempt,
-  clearRenewalAttemptIfMatches,
+  clearRenewalAttempt,
   RENEWAL_KEY,
 } from "./authActions";
 
@@ -31,19 +31,23 @@ describe("isInteractionInProgressError", () => {
 });
 
 describe("renewal loop guard", () => {
-  it("allows a redirect when no attempt is marked, blocks after", () => {
+  it("allows when no attempt is marked, blocks within the TTL window", () => {
     const s = mockStore();
-    expect(renewalRedirectAllowed(s)).toBe(true);
-    markRenewalAttempt("renewal:abc", s);
-    expect(renewalRedirectAllowed(s)).toBe(false);
+    expect(renewalRedirectAllowed(s, 1000)).toBe(true);
+    markRenewalAttempt("renewal:uid.utid:1000", s);
+    expect(renewalRedirectAllowed(s, 1000)).toBe(false);
   });
-  it("clears only when the returned state matches the stored attempt", () => {
+  it("self-heals a stale marker past the TTL", () => {
     const s = mockStore();
-    markRenewalAttempt("renewal:abc", s);
-    clearRenewalAttemptIfMatches("login:other", s); // non-matching (e.g. a login return)
-    expect(renewalRedirectAllowed(s)).toBe(false);
-    clearRenewalAttemptIfMatches("renewal:abc", s); // matching
-    expect(renewalRedirectAllowed(s)).toBe(true);
+    markRenewalAttempt("renewal:uid.utid:1000", s);
+    expect(renewalRedirectAllowed(s, 1000 + 91_000)).toBe(true); // stale -> allowed + cleared
+    expect(s.getItem(RENEWAL_KEY)).toBeNull();
+  });
+  it("clearRenewalAttempt re-arms unconditionally", () => {
+    const s = mockStore();
+    markRenewalAttempt("renewal:uid.utid:1000", s);
+    clearRenewalAttempt(s);
+    expect(renewalRedirectAllowed(s, 1000)).toBe(true);
   });
   it("stores under RENEWAL_KEY distinct from the login marker", () => {
     expect(RENEWAL_KEY).toBe("helpdesk-token-renewal-attempted");
