@@ -9,6 +9,8 @@ import { loginRequest, graphScopes } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
 import { getAppInsights } from "@/lib/appInsights";
 import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity, uploadAttachment, addComment } from "@/lib/graphClient";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
+import { ensureFreshToken } from "@/lib/authActions";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
@@ -104,6 +106,25 @@ export default function NewTicketPage() {
 
   // Staged files for upload after ticket creation
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+
+  // Draft persistence: survive a renewal redirect without losing in-progress entry.
+  // (stagedFiles are File[] and can't be serialized — restore prompts a re-attach.)
+  const DRAFT_KEY = "new-ticket";
+  const snapshotDraft = () => saveDraft(DRAFT_KEY, { formData, isPurchaseRequest, lineItems, purchaseShared });
+  useEffect(() => {
+    const d = loadDraft<{ formData: CreateTicketData; isPurchaseRequest: boolean; lineItems: PurchaseLineItem[]; purchaseShared: { justification: string; project: string } }>(DRAFT_KEY);
+    if (d) {
+      setFormData(d.formData);
+      setIsPurchaseRequest(d.isPurchaseRequest);
+      setLineItems(d.lineItems);
+      setPurchaseShared(d.purchaseShared);
+      setSubmitStatus("Restored your in-progress ticket — please re-attach any files.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    saveDraft(DRAFT_KEY, { formData, isPurchaseRequest, lineItems, purchaseShared });
+  }, [formData, isPurchaseRequest, lineItems, purchaseShared]);
 
   const handleStageFile = async (file: File): Promise<boolean> => {
     setStagedFiles((prev) => [...prev, file]);
@@ -244,7 +265,8 @@ export default function NewTicketPage() {
           return;
         }
       } else {
-        await instance.acquireTokenPopup({ ...graphScopes, account: accounts[0] });
+        const ok = await ensureFreshToken(instance, accounts[0], graphScopes, { onBeforeRedirect: snapshotDraft });
+        if (!ok) { setError("Please sign in to continue."); return; }
       }
       setSessionExpired(false);
       setError(null);
@@ -314,6 +336,17 @@ export default function NewTicketPage() {
     setError(null);
 
     try {
+      // Pre-flight: ensure a fresh token BEFORE any write, so a renewal redirect fires
+      // here (with the draft saved) rather than mid-create (which would risk a duplicate).
+      const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
+        onBeforeRedirect: snapshotDraft,
+      });
+      if (!tokenOk) {
+        setSessionExpired(true);
+        setSubmitting(false);
+        return;
+      }
+
       const client = getGraphClient(instance, accounts[0]);
       const requesterEmail = accounts[0]?.username;
 
@@ -502,7 +535,8 @@ export default function NewTicketPage() {
       // Wait for all post-creation tasks (don't block redirect on failure)
       await Promise.allSettled(postCreationTasks);
 
-      // Redirect to the main page with the new ticket selected
+      // Success — clear the saved draft, then go to the new ticket.
+      clearDraft(DRAFT_KEY);
       router.push(`/?ticket=${newTicket.id}`);
     } catch (e: unknown) {
       console.error("Failed to create ticket:", e);
