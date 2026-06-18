@@ -97,4 +97,22 @@ function purchaseApprovedEmail(fields, ticketRef, approverName) {
   </div></body></html>`;
 }
 
-module.exports = { approvalRequestEmail, decisionEmail, purchaseApprovedEmail, escapeHtml };
+function commentEmail(fields, ticketRef, commenterName, commentText) {
+  const preview = String(commentText || "").substring(0, 600);
+  return `<!DOCTYPE html><html><head><style>${styles}</style></head><body>
+  <div class="container">
+    <div class="header"><h1 style="margin:0;font-size:24px;">New Comment</h1>
+      <p style="margin:8px 0 0 0;opacity:.9;">SkyPark Help Desk</p></div>
+    <div class="content">
+      <p><strong>${escapeHtml(commenterName)}</strong> replied to ${ticketRef}.</p>
+      <div class="ticket-info">
+        <h3 style="margin:0 0 8px 0;color:#1e3a5f;">${escapeHtml(fields.Title)}</h3>
+        <p style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px;white-space:pre-wrap;">${escapeHtml(preview)}</p>
+      </div>
+      <div class="actions"><a href="${config.appUrl}/?ticket=${fields.id}" class="btn btn-view">View Conversation</a></div>
+    </div>
+    <div class="footer"><p>Reply to this email to add to the conversation.</p></div>
+  </div></body></html>`;
+}
+
+module.exports = { approvalRequestEmail, decisionEmail, purchaseApprovedEmail, commentEmail, escapeHtml };
