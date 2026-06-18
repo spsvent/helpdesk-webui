@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
 import { initAppInsights, setAuthenticatedUser } from "@/lib/appInsights";
+import { markAuthReady, clearRenewalAttemptIfMatches } from "@/lib/authActions";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -83,6 +84,8 @@ export default function RootLayout({
           // User just logged in via redirect
           msalInstance.setActiveAccount(response.account);
           setAuthenticatedUser(response.account?.username ?? "", response.account?.name ?? undefined);
+          // A token-renewal redirect echoes its state; clear the renewal guard only on a match
+          clearRenewalAttemptIfMatches(response.state);
         } else {
           // No redirect response, check for existing accounts
           const accounts = msalInstance.getAllAccounts();
@@ -129,6 +132,9 @@ export default function RootLayout({
         console.error("MSAL initialization error:", error);
       }
 
+      // Let graphClient/ensureFreshToken know the initial redirect handling has settled,
+      // so a token-renewal redirect won't collide with this startup interaction.
+      markAuthReady();
       setIsInitialized(true);
     };
 
