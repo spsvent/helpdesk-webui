@@ -91,11 +91,17 @@ async function acquireTokenInteractive(
       markRenewalAttempt(state);
       try {
         await msalInstance.acquireTokenRedirect({ ...request, account, state });
+        // The page is navigating away; never resolve.
+        return await new Promise<string>(() => {});
       } catch (e) {
-        if (!isInteractionInProgressError(e)) throw e;
+        // interaction_in_progress means another redirect is already underway — do NOT
+        // return the never-resolving promise (no navigation happened here, so the call
+        // would hang forever). Surface interaction-required so it fails cleanly/retries.
+        if (isInteractionInProgressError(e)) {
+          throw new InteractionRequiredAuthError("interaction_in_progress", "Authentication already in progress. Please retry.");
+        }
+        throw e;
       }
-      // The page is navigating away; never resolve.
-      return new Promise<string>(() => {});
     })().finally(() => { interactiveTokenPromises.delete(key); });
     interactiveTokenPromises.set(key, promise);
   }
