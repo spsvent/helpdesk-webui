@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ticket, PurchaseLineItem } from "@/types/ticket";
+import { loadDraft, clearDraft } from "@/lib/formDraft";
 
 interface PurchaseActionPanelProps {
   ticket: Ticket;
@@ -13,6 +14,19 @@ export default function PurchaseActionPanel({ ticket, onMarkPurchased }: Purchas
   const [orderItems, setOrderItems] = useState<PurchaseLineItem[]>(ticket.purchaseLineItems ?? []);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Restore an order draft snapshotted before a renewal redirect, then clear it (one-shot).
+  // Re-expand the panel so the restored order details are visible.
+  useEffect(() => {
+    const d = loadDraft<{ orderItems?: PurchaseLineItem[]; notes?: string }>(`purchase:${ticket.id}`);
+    if (d) {
+      if (d.orderItems) setOrderItems(d.orderItems);
+      if (typeof d.notes === "string") setNotes(d.notes);
+      setIsExpanded(true);
+      clearDraft(`purchase:${ticket.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isValid =
     orderItems.length > 0 &&
