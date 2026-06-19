@@ -2,6 +2,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
 import { graphScopes, sharepointScopes } from "./msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup } from "./teamsAuth";
+import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError, ssoSilentWithTimeout } from "./authActions";
 import {
   Ticket,
   PurchaseLineItem,
@@ -69,10 +70,38 @@ async function acquireTokenInteractive(
   const key = [...request.scopes].sort().join(" ");
   let promise = interactiveTokenPromises.get(key);
   if (!promise) {
-    promise = msalInstance
-      .acquireTokenPopup({ ...request, account })
-      .then((response) => response.accessToken)
-      .finally(() => { interactiveTokenPromises.delete(key); });
+    promise = (async () => {
+      // 1. ssoSilent (Entra SSO cookie) — renews with no popup/redirect when the
+      //    session cookie is alive (succeeds in non-ITP browsers where the cached
+      //    token renewal just failed).
+      try {
+        return await ssoSilentWithTimeout(msalInstance, account, request);
+      } catch {
+        /* fall through */
+      }
+      // 2. Redirect — last resort. graphClient can't read msal-react's inProgress, so
+      //    gate on authReady (set after layout's handleRedirectPromise) and tolerate the
+      //    thrown interaction_in_progress instead of a precondition check.
+      await authReady;
+      if (!renewalRedirectAllowed()) {
+        throw new InteractionRequiredAuthError("interaction_required", "Sign in required");
+      }
+      const state = `renewal:${account.homeAccountId}:${Date.now()}`;
+      markRenewalAttempt(state);
+      try {
+        await msalInstance.acquireTokenRedirect({ ...request, account, state });
+        // The page is navigating away; never resolve.
+        return await new Promise<string>(() => {});
+      } catch (e) {
+        // interaction_in_progress means another redirect is already underway — do NOT
+        // return the never-resolving promise (no navigation happened here, so the call
+        // would hang forever). Surface interaction-required so it fails cleanly/retries.
+        if (isInteractionInProgressError(e)) {
+          throw new InteractionRequiredAuthError("interaction_in_progress", "Authentication already in progress. Please retry.");
+        }
+        throw e;
+      }
+    })().finally(() => { interactiveTokenPromises.delete(key); });
     interactiveTokenPromises.set(key, promise);
   }
   return promise;

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ticket, PurchaseLineItem } from "@/types/ticket";
+import { loadDraft, clearDraft } from "@/lib/formDraft";
 
 interface ReceiveActionPanelProps {
   ticket: Ticket;
@@ -21,6 +22,17 @@ export default function ReceiveActionPanel({ ticket, onMarkReceived }: ReceiveAc
   );
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Restore a receive draft snapshotted before a renewal redirect, then clear it (one-shot).
+  useEffect(() => {
+    const d = loadDraft<{ receivedItems?: PurchaseLineItem[]; notes?: string }>(`receive:${ticket.id}`);
+    if (d) {
+      if (d.receivedItems) setReceivedItems(d.receivedItems);
+      if (typeof d.notes === "string") setNotes(d.notes);
+      clearDraft(`receive:${ticket.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Valid if at least one item has both a received date and qty > 0
   const isValid =

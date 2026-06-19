@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
 import { initAppInsights, setAuthenticatedUser } from "@/lib/appInsights";
+import { markAuthReady, clearRenewalAttempt } from "@/lib/authActions";
 import "./globals.css";
 
 // Initialize MSAL instance
@@ -83,6 +84,8 @@ export default function RootLayout({
           // User just logged in via redirect
           msalInstance.setActiveAccount(response.account);
           setAuthenticatedUser(response.account?.username ?? "", response.account?.name ?? undefined);
+          // Any successful auth (login or renewal return) re-arms auto-renewal.
+          clearRenewalAttempt();
         } else {
           // No redirect response, check for existing accounts
           const accounts = msalInstance.getAllAccounts();
@@ -127,8 +130,14 @@ export default function RootLayout({
         }
       } catch (error) {
         console.error("MSAL initialization error:", error);
+        // A renewal redirect that returned with an error still resolved the attempt —
+        // re-arm so a transient failure doesn't strand auto-renewal.
+        clearRenewalAttempt();
       }
 
+      // Let graphClient/ensureFreshToken know the initial redirect handling has settled,
+      // so a token-renewal redirect won't collide with this startup interaction.
+      markAuthReady();
       setIsInitialized(true);
     };
 
@@ -138,6 +147,7 @@ export default function RootLayout({
         const payload = event.payload as AuthenticationResult;
         msalInstance.setActiveAccount(payload.account);
         setAuthenticatedUser(payload.account?.username ?? "", payload.account?.name ?? undefined);
+        clearRenewalAttempt(); // re-arm auto-renewal after a successful login
       }
     });
 
