@@ -404,6 +404,16 @@ export default function TicketFiltersComponent({
       {/* Active filter summary pills (when panel collapsed) */}
       {!showFilters && activeFilterCount > 0 && (
         <div className="px-3 pb-2 flex gap-1 overflow-hidden">
+          {filters.approvalStatus && filters.approvalStatus.length > 0 && (
+            <button
+              onClick={() => onFiltersChange({ ...filters, approvalStatus: undefined })}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] bg-yellow-100 text-yellow-800 rounded-full whitespace-nowrap hover:bg-yellow-200"
+              title="Clear approval filter"
+            >
+              Awaiting Approval
+              <span aria-hidden>×</span>
+            </button>
+          )}
           {getActiveFilterSummary(filters).map((label) => (
             <span
               key={label}

@@ -127,6 +127,13 @@ export function filterTickets(
       }
     }
 
+    // Approval status filter
+    if (filters.approvalStatus && filters.approvalStatus.length > 0) {
+      if (!filters.approvalStatus.includes(ticket.approvalStatus)) {
+        return false;
+      }
+    }
+
     return true;
   });
 }
@@ -228,6 +235,7 @@ export function getActiveFilterCount(filters: TicketFilters): number {
   if (filters.assignee) count++;
   if (filters.location) count++;
   if (filters.dateRange !== "all") count++;
+  if (filters.approvalStatus && filters.approvalStatus.length > 0) count++;
 
   return count;
 }
