@@ -325,20 +325,12 @@ export default function Home() {
     }
   }, [searchParams, isAuthenticated, accounts, instance, loading, canApprove]);
 
-  // Filter tickets for pending approvals (for badge click handling)
+  // Filter the ticket list to tickets awaiting an approval decision
+  // (Pending or Changes Requested). Applied via the shared preset pattern
+  // so it self-resets like the purchase presets.
   const handlePendingApprovalsClick = useCallback(() => {
-    // Filter to show only pending approval tickets
-    setFilters((prev) => ({
-      ...prev,
-      status: ["New", "In Progress", "On Hold", "Resolved", "Closed"], // All statuses
-      search: "", // Clear search
-    }));
-    // Select the first pending approval ticket if available
-    const pendingTicket = tickets.find((t) => t.approvalStatus === "Pending");
-    if (pendingTicket) {
-      setSelectedTicket(pendingTicket);
-    }
-  }, [tickets]);
+    setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.pendingApprovals.filters } as TicketFilters);
+  }, []);
 
   // Fetch tickets when authenticated
   const fetchTickets = useCallback(async (options?: { silent?: boolean }) => {

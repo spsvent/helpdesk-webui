@@ -1027,8 +1027,11 @@ const helpSections: HelpSection[] = [
           <div className="p-3 border border-gray-200 rounded-lg">
             <p className="font-medium">2. Pending Approvals Badge</p>
             <p className="text-sm text-gray-600 mt-1">
-              Click the yellow &quot;Approvals&quot; badge in the header to see pending approval requests.
-              The badge shows a count of tickets awaiting your decision.
+              Click the yellow &quot;Approvals&quot; badge in the header to filter the ticket list
+              down to only the tickets awaiting a decision (those marked <em>Pending</em> or
+              <em> Changes Requested</em>). The badge shows a count of tickets awaiting your decision.
+              While the filter is active, an <strong>&quot;Awaiting Approval&quot;</strong> chip appears
+              in the filter summary — click its <strong>×</strong> to clear it and return to the full list.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">

@@ -6,7 +6,7 @@ export type SortOption = "default" | "urgency" | "recent" | "oldest";
 
 export type DateRange = "today" | "week" | "month" | "all";
 
-export type PresetView = "default" | "urgency" | "all" | "open" | "purchaseQueue" | "incomingOrders";
+export type PresetView = "default" | "urgency" | "all" | "open" | "purchaseQueue" | "incomingOrders" | "pendingApprovals";
 
 export interface TicketFilters {
   search: string;
@@ -23,6 +23,8 @@ export interface TicketFilters {
   // Purchase request filters
   isPurchaseRequest?: boolean;
   purchaseStatus?: string[];
+  // Approval workflow filter (e.g. ["Pending", "Changes Requested"])
+  approvalStatus?: string[];
 }
 
 // Default view: show active + resolved (Closed stays hidden), urgent on top, then by date
@@ -107,6 +109,15 @@ export const PRESET_VIEWS: Record<PresetView, { label: string; description: stri
       sort: "recent",
       isPurchaseRequest: true,
       purchaseStatus: ["Purchased", "Ordered"],
+    },
+  },
+  pendingApprovals: {
+    label: "Awaiting Approval",
+    description: "Tickets pending an approval decision",
+    filters: {
+      status: [],
+      sort: "recent",
+      approvalStatus: ["Pending", "Changes Requested"],
     },
   },
 };
