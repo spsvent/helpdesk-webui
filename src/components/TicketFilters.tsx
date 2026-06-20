@@ -9,10 +9,9 @@ import {
   SORT_OPTIONS,
   DEFAULT_FILTERS,
   EMPTY_FILTERS,
-  PRESET_VIEWS,
-  PresetView,
 } from "@/types/filters";
 import { Ticket } from "@/types/ticket";
+import { UserPermissions } from "@/types/rbac";
 import { getActiveFilterCount, filtersMatchDefault, getActiveFilterSummary } from "@/lib/filterUtils";
 import { getProblemTypes, getProblemTypeSubs, getProblemTypeSub2s } from "@/lib/categoryConfig";
 
@@ -25,6 +24,7 @@ interface TicketFiltersProps {
   loadingArchived: boolean;
   onLoadArchived: () => void;
   tickets: Ticket[];  // For extracting unique assignees
+  permissions?: UserPermissions | null;  // Drives role-aware quick-filter chips
 }
 
 export default function TicketFiltersComponent({
@@ -36,10 +36,10 @@ export default function TicketFiltersComponent({
   loadingArchived,
   onLoadArchived,
   tickets,
+  permissions,
 }: TicketFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search);
-  const [activePreset, setActivePreset] = useState<PresetView | null>("default");
 
   // Keep a ref to latest filters so debounce doesn't close over stale state
   const filtersRef = useRef(filters);
@@ -59,31 +59,69 @@ export default function TicketFiltersComponent({
 
   const activeFilterCount = getActiveFilterCount(filters);
 
-  // "Hide resolved" = status filter is explicit and shows neither "Resolved" nor "Closed".
-  // Empty status ("all") means everything is visible, so the box is unchecked.
-  const isHidingResolved =
-    filters.status.length > 0 &&
-    !filters.status.includes("Resolved") &&
-    !filters.status.includes("Closed");
+  // "Show resolved & closed" is ON when either Resolved or Closed is in the
+  // status set. Toggling it adds/removes BOTH so it matches its label, and the
+  // default view (which lists neither) starts with it OFF.
+  const isShowingResolvedClosed =
+    filters.status.includes("Resolved") || filters.status.includes("Closed");
 
-  const toggleHideResolved = useCallback(() => {
-    setActivePreset(null);
-    if (isHidingResolved) {
-      // Re-show Resolved tickets. Closed stays hidden to match the default view;
-      // it remains reachable via the status chips or the "All Tickets" preset.
-      onFiltersChange({ ...filters, status: [...filters.status, "Resolved"] });
+  const toggleShowResolvedClosed = useCallback(() => {
+    if (isShowingResolvedClosed) {
+      // Hide both. If that would leave an empty list ("show everything"), fall
+      // back to the active statuses instead.
+      const remaining = filters.status.filter(
+        (s) => s !== "Resolved" && s !== "Closed"
+      );
+      const baseStatuses: Ticket["status"][] =
+        remaining.length > 0 ? remaining : ["New", "In Progress", "On Hold"];
+      onFiltersChange({ ...filters, status: baseStatuses });
       return;
     }
-    // Start hiding Resolved and Closed. If nothing else was selected ("all", or
-    // only Resolved/Closed), fall back to the active statuses — an empty list
-    // would mean "show everything".
-    const remaining = filters.status.filter(
-      (s) => s !== "Resolved" && s !== "Closed"
+    // Show both, preserving whatever statuses are already selected.
+    const withResolvedClosed = Array.from(
+      new Set<Ticket["status"]>([...filters.status, "Resolved", "Closed"])
     );
-    const baseStatuses: Ticket["status"][] =
-      remaining.length > 0 ? remaining : ["New", "In Progress", "On Hold"];
-    onFiltersChange({ ...filters, status: baseStatuses });
-  }, [filters, isHidingResolved, onFiltersChange]);
+    onFiltersChange({ ...filters, status: withResolvedClosed });
+  }, [filters, isShowingResolvedClosed, onFiltersChange]);
+
+  // Toggle a boolean quick filter (combinable; AND together)
+  const toggleQuickFilter = useCallback(
+    (key: "myDepartmentOnly" | "assignedToMeOnly" | "requestedByMeOnly" | "unassignedOnly") => {
+      onFiltersChange({ ...filters, [key]: !filters[key] });
+    },
+    [filters, onFiltersChange]
+  );
+
+  // "Urgent" quick chip reuses the priority filter, so it stays in sync with the
+  // advanced Priority chips (and is reflected in the More-filters badge).
+  const isUrgentActive = filters.priority.includes("Urgent");
+  const toggleUrgent = useCallback(() => {
+    const next: Ticket["priority"][] = filters.priority.includes("Urgent")
+      ? filters.priority.filter((p) => p !== "Urgent")
+      : [...filters.priority, "Urgent"];
+    onFiltersChange({ ...filters, priority: next });
+  }, [filters, onFiltersChange]);
+
+  // Which quick chips to show, based on role:
+  //  - My Dept: support staff who actually have department(s) to scope to
+  //  - Assigned to me / Unassigned: support + admin (people who triage/own tickets)
+  //  - My requests: any authenticated user (incl. regular staff)
+  //  - Urgent: everyone
+  const role = permissions?.role;
+  const showMyDept = role === "support" && (permissions?.editableDepartments.length ?? 0) > 0;
+  const showAssignedToMe = role === "support" || role === "admin";
+  const showUnassigned = role === "support" || role === "admin";
+  const showMyRequests = !!permissions;
+  const showUrgent = true;
+  const hasQuickChips =
+    showMyDept || showAssignedToMe || showUnassigned || showMyRequests || showUrgent;
+
+  const chipClass = (active: boolean) =>
+    `px-2.5 py-1 text-xs rounded-full border transition-colors ${
+      active
+        ? "bg-brand-primary text-white border-brand-primary"
+        : "border-gray-300 hover:bg-gray-100"
+    }`;
 
   // Extract unique assignees from tickets (check both assignedTo and originalAssignedTo)
   const uniqueAssignees = useMemo(() => {
@@ -127,7 +165,6 @@ export default function TicketFiltersComponent({
   // Toggle status in multi-select
   const toggleStatus = useCallback(
     (status: Ticket["status"]) => {
-      setActivePreset(null);
       const newStatus = filters.status.includes(status)
         ? filters.status.filter((s) => s !== status)
         : [...filters.status, status];
@@ -139,7 +176,6 @@ export default function TicketFiltersComponent({
   // Toggle priority in multi-select
   const togglePriority = useCallback(
     (priority: Ticket["priority"]) => {
-      setActivePreset(null);
       const newPriority = filters.priority.includes(priority)
         ? filters.priority.filter((p) => p !== priority)
         : [...filters.priority, priority];
@@ -151,7 +187,6 @@ export default function TicketFiltersComponent({
   // Handle cascading department filters
   const handleProblemTypeChange = useCallback(
     (value: string) => {
-      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemType: value || null,
@@ -164,7 +199,6 @@ export default function TicketFiltersComponent({
 
   const handleProblemTypeSubChange = useCallback(
     (value: string) => {
-      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemTypeSub: value || null,
@@ -176,7 +210,6 @@ export default function TicketFiltersComponent({
 
   const handleProblemTypeSub2Change = useCallback(
     (value: string) => {
-      setActivePreset(null);
       onFiltersChange({
         ...filters,
         problemTypeSub2: value || null,
@@ -185,24 +218,9 @@ export default function TicketFiltersComponent({
     [filters, onFiltersChange]
   );
 
-  // Apply preset view
-  const applyPreset = useCallback(
-    (preset: PresetView) => {
-      setActivePreset(preset);
-      const presetConfig = PRESET_VIEWS[preset];
-      onFiltersChange({
-        ...DEFAULT_FILTERS,
-        ...presetConfig.filters,
-        search: searchInput, // Keep current search
-      });
-    },
-    [onFiltersChange, searchInput]
-  );
-
   // Clear all filters (show everything)
   const clearAllFilters = useCallback(() => {
     setSearchInput("");
-    setActivePreset("all");
     setShowFilters(false);
     onFiltersChange({ ...EMPTY_FILTERS });
   }, [onFiltersChange]);
@@ -210,7 +228,6 @@ export default function TicketFiltersComponent({
   // Reset to default view
   const resetToDefault = useCallback(() => {
     setSearchInput("");
-    setActivePreset("default");
     setShowFilters(false);
     onFiltersChange({ ...DEFAULT_FILTERS });
   }, [onFiltersChange]);
@@ -229,7 +246,7 @@ export default function TicketFiltersComponent({
 
   return (
     <div className="border-b border-border">
-      {/* Search and Sort Row */}
+      {/* Tier 1 — always-visible bar */}
       <div className="p-3 space-y-2">
         {/* Search Input */}
         <div className="relative">
@@ -265,42 +282,78 @@ export default function TicketFiltersComponent({
           )}
         </div>
 
-        {/* Hide Resolved quick toggle — placed near search so it's always visible */}
+        {/* Quick-filter chips — role-aware, combinable (AND together) */}
+        {hasQuickChips && (
+          <div className="flex flex-wrap gap-1.5">
+            {showMyDept && (
+              <button
+                onClick={() => toggleQuickFilter("myDepartmentOnly")}
+                title="Only tickets in your department(s)"
+                className={chipClass(filters.myDepartmentOnly)}
+              >
+                My Dept
+              </button>
+            )}
+            {showAssignedToMe && (
+              <button
+                onClick={() => toggleQuickFilter("assignedToMeOnly")}
+                title="Only tickets assigned to you"
+                className={chipClass(filters.assignedToMeOnly)}
+              >
+                Assigned to me
+              </button>
+            )}
+            {showMyRequests && (
+              <button
+                onClick={() => toggleQuickFilter("requestedByMeOnly")}
+                title="Only tickets you opened"
+                className={chipClass(filters.requestedByMeOnly)}
+              >
+                My requests
+              </button>
+            )}
+            {showUnassigned && (
+              <button
+                onClick={() => toggleQuickFilter("unassignedOnly")}
+                title="Only unassigned tickets (nobody working them yet)"
+                className={chipClass(filters.unassignedOnly)}
+              >
+                Unassigned
+              </button>
+            )}
+            {showUrgent && (
+              <button
+                onClick={toggleUrgent}
+                title="Only urgent tickets"
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  isUrgentActive
+                    ? "bg-red-600 text-white border-red-600"
+                    : "border-gray-300 hover:bg-gray-100"
+                }`}
+              >
+                Urgent
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Show resolved & closed toggle — placed near search so it's always visible */}
         <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none w-fit">
           <input
             type="checkbox"
-            checked={isHidingResolved}
-            onChange={toggleHideResolved}
+            checked={isShowingResolvedClosed}
+            onChange={toggleShowResolvedClosed}
             className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-2 focus:ring-brand-primary cursor-pointer"
           />
-          Hide resolved &amp; closed tickets
+          Show resolved &amp; closed
         </label>
 
-        {/* Preset View Buttons */}
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {(Object.keys(PRESET_VIEWS) as PresetView[]).map((preset) => (
-            <button
-              key={preset}
-              onClick={() => applyPreset(preset)}
-              title={PRESET_VIEWS[preset].description}
-              className={`px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors ${
-                activePreset === preset
-                  ? "bg-brand-primary text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {PRESET_VIEWS[preset].label}
-            </button>
-          ))}
-        </div>
-
-        {/* Sort and Filter Toggle Row */}
+        {/* Sort and More-filters Row */}
         <div className="flex items-center gap-1.5">
           {/* Sort Dropdown */}
           <select
             value={filters.sort}
             onChange={(e) => {
-              setActivePreset(null);
               onFiltersChange({ ...filters, sort: e.target.value as TicketFilters["sort"] });
             }}
             className="flex-1 text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary min-w-0"
@@ -329,7 +382,7 @@ export default function TicketFiltersComponent({
                 d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
               />
             </svg>
-            Filters
+            More filters
             {activeFilterCount > 0 && (
               <span className="bg-white text-brand-primary text-xs font-bold px-1.5 py-0.5 rounded-full">
                 {activeFilterCount}
@@ -372,7 +425,7 @@ export default function TicketFiltersComponent({
         </div>
       )}
 
-      {/* Collapsible Filter Panel */}
+      {/* Tier 2 — collapsible "More filters" panel */}
       {showFilters && (
         <div className="px-3 pb-3 space-y-3 border-t border-border pt-3">
           {/* Status Chips */}
@@ -487,7 +540,7 @@ export default function TicketFiltersComponent({
             </label>
             <div className="flex gap-1.5">
               <button
-                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: null }); }}
+                onClick={() => onFiltersChange({ ...filters, category: null })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === null
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -497,7 +550,7 @@ export default function TicketFiltersComponent({
                 All
               </button>
               <button
-                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: "Request" }); }}
+                onClick={() => onFiltersChange({ ...filters, category: "Request" })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Request"
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -507,7 +560,7 @@ export default function TicketFiltersComponent({
                 Request
               </button>
               <button
-                onClick={() => { setActivePreset(null); onFiltersChange({ ...filters, category: "Problem" }); }}
+                onClick={() => onFiltersChange({ ...filters, category: "Problem" })}
                 className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                   filters.category === "Problem"
                     ? "bg-brand-primary text-white border-brand-primary"
@@ -528,7 +581,6 @@ export default function TicketFiltersComponent({
               <select
                 value={filters.assignee || ""}
                 onChange={(e) => {
-                  setActivePreset(null);
                   onFiltersChange({ ...filters, assignee: e.target.value || null });
                 }}
                 className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
@@ -552,7 +604,6 @@ export default function TicketFiltersComponent({
               <select
                 value={filters.location || ""}
                 onChange={(e) => {
-                  setActivePreset(null);
                   onFiltersChange({ ...filters, location: e.target.value || null });
                 }}
                 className="w-full text-xs px-2 py-1.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
@@ -575,7 +626,6 @@ export default function TicketFiltersComponent({
             <select
               value={filters.dateRange}
               onChange={(e) => {
-                setActivePreset(null);
                 onFiltersChange({
                   ...filters,
                   dateRange: e.target.value as TicketFilters["dateRange"],

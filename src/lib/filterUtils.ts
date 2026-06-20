@@ -3,10 +3,25 @@
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, SortOption, DateRange, DEFAULT_FILTERS } from "@/types/filters";
 
+/** Identity of the logged-in user, used by the viewer-relative quick filters. */
+export interface FilterViewer {
+  email: string;
+  editableDepartments: string[];
+}
+
 /**
- * Filter tickets based on all filter criteria
+ * Filter tickets based on all filter criteria.
+ *
+ * `viewer` powers the combinable quick-filter chips (assignedToMeOnly,
+ * requestedByMeOnly, myDepartmentOnly). When omitted, those three filters are
+ * skipped — the same set of tickets the chips would have hidden simply stays
+ * visible (the chips aren't rendered until the viewer is known).
  */
-export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket[] {
+export function filterTickets(
+  tickets: Ticket[],
+  filters: TicketFilters,
+  viewer?: FilterViewer
+): Ticket[] {
   return tickets.filter((ticket) => {
     // Search filter (title, description, requester, assignee, ticket ID, location)
     // Uses short-circuit evaluation - returns early on first match
@@ -63,6 +78,35 @@ export function filterTickets(tickets: Ticket[], filters: TicketFilters): Ticket
     // Location filter
     if (filters.location && ticket.location !== filters.location) {
       return false;
+    }
+
+    // Unassigned quick filter (viewer-independent triage). A ticket counts as
+    // assigned if it has either a Person-field assignee or a legacy original email.
+    if (filters.unassignedOnly && (ticket.assignedTo?.email || ticket.originalAssignedTo)) {
+      return false;
+    }
+
+    // Viewer-relative quick filters (combinable; AND together). Skipped when no
+    // viewer is supplied. Email resolution mirrors the assignee filter above:
+    // the legacy `original*` string takes priority, falling back to the Person field.
+    if (viewer) {
+      const viewerEmail = viewer.email.toLowerCase();
+
+      if (filters.assignedToMeOnly) {
+        const assigneeEmail =
+          ticket.originalAssignedTo?.toLowerCase() || ticket.assignedTo?.email?.toLowerCase() || "";
+        if (assigneeEmail !== viewerEmail) return false;
+      }
+
+      if (filters.requestedByMeOnly) {
+        const requesterEmail =
+          ticket.originalRequester?.toLowerCase() || ticket.requester.email?.toLowerCase() || "";
+        if (requesterEmail !== viewerEmail) return false;
+      }
+
+      if (filters.myDepartmentOnly && !viewer.editableDepartments.includes(ticket.problemType)) {
+        return false;
+      }
     }
 
     // Date range filter
@@ -237,7 +281,11 @@ export function filtersMatchDefault(filters: TicketFilters): boolean {
     filters.assignee === DEFAULT_FILTERS.assignee &&
     filters.location === DEFAULT_FILTERS.location &&
     filters.dateRange === DEFAULT_FILTERS.dateRange &&
-    filters.sort === DEFAULT_FILTERS.sort
+    filters.sort === DEFAULT_FILTERS.sort &&
+    filters.myDepartmentOnly === DEFAULT_FILTERS.myDepartmentOnly &&
+    filters.assignedToMeOnly === DEFAULT_FILTERS.assignedToMeOnly &&
+    filters.requestedByMeOnly === DEFAULT_FILTERS.requestedByMeOnly &&
+    filters.unassignedOnly === DEFAULT_FILTERS.unassignedOnly
   );
 }
 
