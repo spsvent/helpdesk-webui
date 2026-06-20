@@ -590,7 +590,11 @@ export default function DetailsPanel({
       {/* Merge Ticket */}
       {canEdit && onMergeComplete && (
         <>
-          <MergeTicketPanel ticket={ticket} onMergeComplete={onMergeComplete} />
+          {/* key={ticket.id} remounts the panel when a different ticket is
+              selected, resetting its internal flow (incl. the terminal "Merge
+              complete" prompt) so it can't linger on the next ticket. Same id
+              across background refreshes keeps an in-progress merge intact. */}
+          <MergeTicketPanel key={ticket.id} ticket={ticket} onMergeComplete={onMergeComplete} />
           <hr className="border-border" />
         </>
       )}
