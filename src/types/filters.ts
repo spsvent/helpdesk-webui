@@ -6,7 +6,7 @@ export type SortOption = "default" | "urgency" | "recent" | "oldest";
 
 export type DateRange = "today" | "week" | "month" | "all";
 
-export type PresetView = "default" | "urgency" | "all" | "open" | "purchaseQueue" | "incomingOrders";
+export type PresetView = "purchaseQueue" | "incomingOrders";
 
 export interface TicketFilters {
   search: string;
@@ -20,15 +20,23 @@ export interface TicketFilters {
   location: string | null;         // Filter by location
   dateRange: DateRange;
   sort: SortOption;
+  // Viewer-relative quick filters (combinable; evaluated against the logged-in
+  // user via the optional `viewer` argument to filterTickets)
+  myDepartmentOnly: boolean;       // ticket.problemType is in viewer's editable departments
+  assignedToMeOnly: boolean;       // ticket assignee email === viewer email
+  requestedByMeOnly: boolean;      // ticket requester email === viewer email
+  // Viewer-independent quick filter
+  unassignedOnly: boolean;         // ticket has no assignee (triage)
   // Purchase request filters
   isPurchaseRequest?: boolean;
   purchaseStatus?: string[];
 }
 
-// Default view: show active + resolved (Closed stays hidden), urgent on top, then by date
+// Default view: active tickets only (Resolved AND Closed hidden), urgent on top,
+// then by date. The "Show resolved & closed" toggle adds them back.
 export const DEFAULT_FILTERS: TicketFilters = {
   search: "",
-  status: ["New", "In Progress", "On Hold", "Resolved"], // Resolved shown by default; "Hide resolved" toggle removes it
+  status: ["New", "In Progress", "On Hold"], // Resolved & Closed hidden by default
   priority: [],
   problemType: null,
   problemTypeSub: null,
@@ -38,6 +46,10 @@ export const DEFAULT_FILTERS: TicketFilters = {
   location: null,
   dateRange: "all",
   sort: "default",
+  myDepartmentOnly: false,
+  assignedToMeOnly: false,
+  requestedByMeOnly: false,
+  unassignedOnly: false,
 };
 
 // Empty filters - show everything
@@ -53,42 +65,17 @@ export const EMPTY_FILTERS: TicketFilters = {
   location: null,
   dateRange: "all",
   sort: "recent",
+  myDepartmentOnly: false,
+  assignedToMeOnly: false,
+  requestedByMeOnly: false,
+  unassignedOnly: false,
 };
 
-// Preset view configurations
+// Preset view configurations (role-gated quick views that reset the whole filter
+// state). The former generic presets — Active / By Priority / All / Open — were
+// removed in favour of the new default + the "Show resolved & closed" toggle +
+// the combinable quick-filter chips.
 export const PRESET_VIEWS: Record<PresetView, { label: string; description: string; filters: Partial<TicketFilters> }> = {
-  default: {
-    label: "Active Tickets",
-    description: "Urgent on top, then by date",
-    filters: {
-      status: ["New", "In Progress", "On Hold", "Resolved"],
-      sort: "default",
-    },
-  },
-  urgency: {
-    label: "By Priority",
-    description: "Sorted by urgency, then date",
-    filters: {
-      status: ["New", "In Progress", "On Hold", "Resolved"],
-      sort: "urgency",
-    },
-  },
-  all: {
-    label: "All Tickets",
-    description: "Everything, newest first",
-    filters: {
-      status: [],
-      sort: "recent",
-    },
-  },
-  open: {
-    label: "Open Only",
-    description: "New & In Progress only",
-    filters: {
-      status: ["New", "In Progress"],
-      sort: "default",
-    },
-  },
   purchaseQueue: {
     label: "Purchase Queue",
     description: "Approved purchases waiting to be ordered",

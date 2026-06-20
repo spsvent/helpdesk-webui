@@ -436,40 +436,51 @@ const helpSections: HelpSection[] = [
           Search results update as you type (with a small delay to avoid flickering).
         </p>
 
-        <h4 className="font-semibold text-text-primary mt-6">Hide Resolved Toggle</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Show Resolved &amp; Closed Toggle</h4>
         <p>
-          Directly under the search box is a <strong>Hide resolved &amp; closed tickets</strong> checkbox.
-          Resolved tickets are visible in the default feed so you can easily find recently completed work in your department.
-          Check the box if you want a cleaner view of only active tickets — it hides both Resolved and Closed tickets.
-          Uncheck it to bring resolved tickets back (closed tickets stay hidden unless you use the status filter or the <strong>All Tickets</strong> view).
+          By default the ticket list shows only <strong>active</strong> work — New, In Progress, and On Hold.
+          Resolved and Closed tickets are hidden so your list stays focused on what still needs attention.
+          Under the search box is a <strong>Show resolved &amp; closed</strong> checkbox — tick it to bring both
+          Resolved and Closed tickets back into the list, and untick it to hide them again.
         </p>
 
-        <h4 className="font-semibold text-text-primary mt-6">Quick View Buttons</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Quick Filter Chips</h4>
         <p>
-          Use the preset view buttons for common filtering needs:
+          Below the search box are one-tap <strong>quick filter chips</strong>. They are
+          <strong> combinable</strong> — turn on more than one and the list narrows to tickets that match
+          all of them. Tap a chip again to turn it off. Which chips you see depends on your role:
         </p>
         <div className="space-y-2 mt-3">
           <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-blue text-white">Active Tickets</span>
-            <span className="text-sm">Default view — New, In Progress, On Hold, and Resolved; urgent on top</span>
+            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">My Dept</span>
+            <span className="text-sm">Support staff only — tickets in the department(s) you cover</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">By Priority</span>
-            <span className="text-sm">Sorted by urgency level, then by date</span>
+            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">Assigned to me</span>
+            <span className="text-sm">Support &amp; admin — tickets currently assigned to you</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">All Tickets</span>
-            <span className="text-sm">Shows everything including resolved/closed</span>
+            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">My requests</span>
+            <span className="text-sm">Everyone — tickets you opened</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Open Only</span>
-            <span className="text-sm">New and In Progress tickets only</span>
+            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">Unassigned</span>
+            <span className="text-sm">Support &amp; admin — tickets nobody is working yet (triage)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs rounded-full bg-red-600 text-white">Urgent</span>
+            <span className="text-sm">Everyone — only Urgent-priority tickets</span>
           </div>
         </div>
+        <p className="mt-2 text-sm text-text-secondary">
+          The <strong>Urgent</strong> chip is a shortcut for the Urgent priority filter, so it stays in
+          sync with the Priority chips in the advanced panel. Purchasers and inventory staff also see
+          <strong> Purchase Queue</strong> and <strong>Incoming Orders</strong> buttons for their workflows.
+        </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Advanced Filters</h4>
         <p>
-          Click the <strong>Filters</strong> button to expand the filter panel with more options:
+          Click the <strong>More filters</strong> button to expand the panel with the full set of options:
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
           <li>
@@ -520,21 +531,13 @@ const helpSections: HelpSection[] = [
           <p><strong>Oldest first:</strong> Oldest tickets first</p>
         </div>
 
-        <h4 className="font-semibold text-text-primary mt-6">Preset Highlighting</h4>
-        <p>
-          The active preset button (e.g. <em>Active Tickets</em>) stays highlighted to show which
-          view you&apos;re using. If you manually change any filter — such as toggling a status chip,
-          picking an assignee, or changing the sort — the preset highlight clears automatically,
-          since your view no longer matches a preset.
-        </p>
-
         <h4 className="font-semibold text-text-primary mt-6">Clearing Filters</h4>
         <p>
           When you have active filters, two buttons appear at the bottom of the filter panel:
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
           <li>
-            <strong>Reset to default:</strong> Returns to the &quot;Active Tickets&quot; view (hides resolved/closed) and collapses the filter panel
+            <strong>Reset to default:</strong> Returns to the default view (active tickets only, resolved/closed hidden) and collapses the panel
           </li>
           <li>
             <strong>Show all tickets:</strong> Clears ALL filters to show every ticket and collapses the filter panel
@@ -549,14 +552,15 @@ const helpSections: HelpSection[] = [
         <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
           <li>Click the <strong>&quot;Load archived tickets (90+ days old)&quot;</strong> button at the bottom of the filter area</li>
           <li>Wait for the archived tickets to load</li>
-          <li>Switch to &quot;All Tickets&quot; view to see them</li>
+          <li>Tick <strong>Show resolved &amp; closed</strong> (and clear other filters) to see them</li>
         </ol>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> The filter badge on the Filters button shows how many
-            filters are currently active. When the panel is collapsed, summary pills
-            below the button show exactly which filters are narrowing your view.
+            <strong>Tip:</strong> The badge on the <strong>More filters</strong> button shows how many
+            advanced filters are active. When the panel is collapsed, summary pills below the button
+            show exactly which filters are narrowing your view. (The quick filter chips stay visible,
+            so they aren&apos;t counted in the badge.)
           </p>
         </div>
       </div>
