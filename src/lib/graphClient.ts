@@ -1135,6 +1135,8 @@ export async function updateTicketFields(
     AssignedToLookupId: number;
     Location: string;
     OriginalAssignedTo: string;
+    // Cleared when a Request awaiting approval is converted to a Problem.
+    ApprovalStatus: string;
   }>
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
@@ -1980,6 +1982,7 @@ export type ActivityEventType =
   | "approval_rejected"
   | "escalation_triggered"
   | "ticket_merged"
+  | "ticket_converted"
   | "purchase_ordered"
   | "purchase_items_changed"
   | "purchase_received";
