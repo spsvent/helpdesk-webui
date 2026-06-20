@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "@/lib/teamsAuth";
 import { useRBAC } from "@/contexts/RBACContext";
 
 // Dynamic imports for Settings tabs - only load the active tab
@@ -45,12 +45,19 @@ export default function SettingsPage() {
   const { permissions, loading: rbacLoading } = useRBAC();
   const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "teams" | "activity-log" | "request-visibility">("auto-assign");
 
-  // Handle authentication - use Teams SDK popup in Teams (MSAL popups get blocked in desktop app)
+  // Handle authentication. Under NAA the Teams host brokers loginPopup; down-level
+  // Teams uses the Teams SDK popup; the browser uses a redirect.
   useEffect(() => {
     const handleAuth = async () => {
       if (!isAuthenticated && inProgress === InteractionStatus.None) {
-        if (isRunningInTeams()) {
-          console.log("Settings: Running in Teams, using Teams SDK auth popup");
+        if (isNaaActive()) {
+          try {
+            await instance.loginPopup(loginRequest);
+          } catch (popupError) {
+            console.error("Settings: NAA loginPopup failed:", popupError);
+          }
+        } else if (isRunningInTeams()) {
+          console.log("Settings: Running in Teams (down-level), using Teams SDK auth popup");
           const result = await openTeamsAuthPopup();
           if (result) {
             window.location.reload();

@@ -4,7 +4,7 @@ import {
   InteractionRequiredAuthError,
   BrowserAuthError,
 } from "@azure/msal-browser";
-import { isRunningInTeams, openTeamsAuthPopup } from "./teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "./teamsAuth";
 import type { SessionLike } from "./formDraft";
 
 export const RENEWAL_KEY = "helpdesk-token-renewal-attempted";
@@ -114,6 +114,16 @@ export async function ensureFreshToken(
     if (!(e instanceof InteractionRequiredAuthError)) return true; // transient — let the real call surface it
   }
   if (opts.isTeams ?? isRunningInTeams()) {
+    if (isNaaActive()) {
+      // NAA: the host brokers the interactive token (no real popup window). On
+      // success the renewed token is cached, so the upcoming write succeeds.
+      try {
+        await instance.acquireTokenPopup({ ...request, account });
+        return true;
+      } catch {
+        return false;
+      }
+    }
     return (await openTeamsAuthPopup()) !== null;
   }
   try {

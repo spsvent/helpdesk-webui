@@ -1,8 +1,9 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
 import { graphScopes, sharepointScopes } from "./msalConfig";
-import { isRunningInTeams, openTeamsAuthPopup } from "./teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "./teamsAuth";
 import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError, ssoSilentWithTimeout } from "./authActions";
+import { trackEvent } from "./appInsights";
 import {
   Ticket,
   PurchaseLineItem,
@@ -45,6 +46,30 @@ async function acquireTokenInteractive(
   account: AccountInfo,
   request: { scopes: string[] }
 ): Promise<string> {
+  // NAA: the Teams host brokers the interactive token (no real popup window).
+  // Dedupe per scope set via the shared interactiveTokenPromises map so a Graph
+  // and a SharePoint request fired together share one interaction — MSAL throws
+  // interaction_in_progress on concurrent interactive calls rather than queuing.
+  if (isNaaActive()) {
+    const naaKey = [...request.scopes].sort().join(" ");
+    let naaPromise = interactiveTokenPromises.get(naaKey);
+    if (!naaPromise) {
+      naaPromise = msalInstance
+        .acquireTokenPopup({ ...request, account })
+        .then((r) => {
+          trackEvent("TeamsAuth", { step: "popup_ok", scope: naaKey });
+          return r.accessToken;
+        })
+        .catch((e) => {
+          trackEvent("TeamsAuth", { step: "popup_failed", error: e instanceof Error ? e.message : "unknown" });
+          throw e;
+        })
+        .finally(() => { interactiveTokenPromises.delete(naaKey); });
+      interactiveTokenPromises.set(naaKey, naaPromise);
+    }
+    return naaPromise;
+  }
+
   if (isRunningInTeams()) {
     if (!teamsReauthPromise) {
       teamsReauthPromise = openTeamsAuthPopup()
@@ -112,12 +137,26 @@ async function getSharePointToken(
   msalInstance: IPublicClientApplication,
   account: AccountInfo
 ): Promise<string> {
+  // SharePoint uses a NON-Graph audience (.../<tenant>.sharepoint.com/.default).
+  // Whether the NAA host broker mints this audience is unproven for this tenant,
+  // so emit SharePoint-specific telemetry (distinct from the Graph steps) — the
+  // shared acquireTokenInteractive can't tell a SP failure from a Graph one.
   try {
     const response = await msalInstance.acquireTokenSilent({ ...sharepointScopes, account });
+    if (isRunningInTeams()) trackEvent("TeamsAuth", { step: "sp_silent_ok" });
     return response.accessToken;
   } catch {
     console.log("SharePoint token silent acquisition failed, trying interactive...");
-    return acquireTokenInteractive(msalInstance, account, sharepointScopes);
+    try {
+      const token = await acquireTokenInteractive(msalInstance, account, sharepointScopes);
+      if (isRunningInTeams()) trackEvent("TeamsAuth", { step: "sp_popup_ok" });
+      return token;
+    } catch (e) {
+      if (isRunningInTeams()) {
+        trackEvent("TeamsAuth", { step: "sp_failed", error: e instanceof Error ? e.message : "unknown" });
+      }
+      throw e;
+    }
   }
 }
 
@@ -1149,9 +1188,12 @@ export async function getAttachments(
         if (response.status === 404 || response.status === 400) {
           return [];
         }
-        // 401 might mean consent not granted - silently return empty
+        // 401 might mean consent not granted - return empty, but emit a distinct
+        // signal: under NAA a broken SharePoint token looks identical to "no
+        // attachments" here, so without this a SP-token failure would be invisible.
         if (response.status === 401) {
           console.warn("SharePoint attachment access denied (401) - check AllSites.Write permission");
+          if (isRunningInTeams()) trackEvent("TeamsAuth", { step: "sp_failed", reason: "attachments_401" });
           return [];
         }
         throw new Error(`SharePoint REST API error: ${response.status}`);

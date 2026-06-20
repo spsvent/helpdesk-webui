@@ -1,8 +1,21 @@
 /**
  * Teams SSO Authentication Helper
- * Detects if running inside Microsoft Teams and handles silent SSO
+ *
+ * Detects if running inside Microsoft Teams and bridges to Nested App
+ * Authentication (NAA). TeamsJS is now imported from the npm package
+ * (`@microsoft/teams-js`) rather than the old CDN 2.0.0 build, because NAA's
+ * host bridge / `nestedAppAuth` module only exists in newer TeamsJS releases.
+ *
+ * NAA lets MSAL.js broker tokens *through the Teams host*, so silent token
+ * acquisition works inside the webview with no Entra cookie, no popups, and no
+ * redirects. The legacy `/auth-callback` popup helpers below are retained only
+ * as a down-level fallback for Teams clients that don't recommend NAA.
  */
 
+import { app, authentication, nestedAppAuth } from "@microsoft/teams-js";
+
+// Kept for the legacy /auth-callback + teams-config pages, which still load the
+// CDN TeamsJS build and reference window.microsoftTeams. NAA does not use this.
 declare global {
   interface Window {
     microsoftTeams?: {
@@ -51,8 +64,10 @@ declare global {
 let teamsInitialized = false;
 let isTeamsContext = false;
 let teamsLoginHint: string | null = null;
+let naaActive = false;
 
-// Timeout for Teams operations (in ms)
+// Timeout for Teams operations (in ms). app.initialize()/getContext() never
+// resolve outside a Teams host, so every call is raced against a timeout.
 const TEAMS_TIMEOUT = 3000;
 
 /**
@@ -66,30 +81,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 }
 
 /**
- * Load the Teams SDK dynamically with timeout
- */
-async function loadTeamsSDK(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-
-  // Check if already loaded
-  if (window.microsoftTeams) return true;
-
-  const loadPromise = new Promise<boolean>((resolve) => {
-    const script = document.createElement("script");
-    script.src = "https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js";
-    script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-
-  // Timeout SDK loading after 2 seconds
-  return withTimeout(loadPromise, 2000, false);
-}
-
-/**
- * Initialize Teams SDK and check if running inside Teams
- * Returns the user's login hint if in Teams context
+ * Initialize TeamsJS and check if running inside Teams.
+ * Returns the user's login hint if in a Teams context.
+ *
+ * IMPORTANT: TeamsJS must be initialized BEFORE MSAL is created, so the NAA
+ * host bridge is established when `createNestablePublicClientApplication` runs.
  */
 export async function initializeTeamsAuth(): Promise<{
   isTeams: boolean;
@@ -100,35 +96,22 @@ export async function initializeTeamsAuth(): Promise<{
   }
 
   try {
-    // Try to load SDK (with timeout)
-    const sdkLoaded = await loadTeamsSDK();
-    if (!sdkLoaded || !window.microsoftTeams) {
-      console.log("Teams SDK not available");
-      teamsInitialized = true;
-      return { isTeams: false, loginHint: null };
-    }
-
-    // Initialize Teams SDK (with timeout - can hang when not in Teams)
+    // Initialize TeamsJS (with timeout - app.initialize() hangs when not in Teams)
     const initResult = await withTimeout(
-      window.microsoftTeams.app.initialize().then(() => true),
+      app.initialize().then(() => true),
       TEAMS_TIMEOUT,
       false
     );
 
     if (!initResult) {
-      console.log("Teams SDK init timed out - not in Teams");
+      console.log("TeamsJS init timed out - not in Teams");
       teamsInitialized = true;
       return { isTeams: false, loginHint: null };
     }
 
     // Get context to check if we're in Teams (with timeout)
-    const context = await withTimeout(
-      window.microsoftTeams.app.getContext(),
-      TEAMS_TIMEOUT,
-      null
-    );
+    const context = await withTimeout(app.getContext(), TEAMS_TIMEOUT, null);
 
-    // Check if we have a valid Teams context
     if (context?.page?.frameContext) {
       isTeamsContext = true;
       teamsLoginHint = context.user?.loginHint || context.user?.userPrincipalName || null;
@@ -140,7 +123,7 @@ export async function initializeTeamsAuth(): Promise<{
     teamsInitialized = true;
     return { isTeams: isTeamsContext, loginHint: teamsLoginHint };
   } catch (error) {
-    // Not in Teams or SDK failed - this is expected when not in Teams
+    // Not in Teams or TeamsJS failed - expected when not in Teams
     console.log("Not running inside Teams:", error);
     teamsInitialized = true;
     return { isTeams: false, loginHint: null };
@@ -155,24 +138,49 @@ export function isRunningInTeams(): boolean {
 }
 
 /**
- * Get the Teams SSO token (only works inside Teams)
- * This uses the Teams SDK's built-in authentication which works better in desktop app
+ * Whether the Teams host recommends the MSAL-NAA channel. Used by the layout to
+ * decide whether to create a nestable (brokered) MSAL instance. Returns false
+ * on any error or on down-level hosts that don't support NAA.
+ */
+export function isNaaRecommended(): boolean {
+  try {
+    return isTeamsContext && nestedAppAuth.isNAAChannelRecommended();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Set/get whether the active MSAL instance was created as a nestable (NAA)
+ * client. The layout sets this once after creating the instance; graphClient,
+ * authActions and the page login handlers read it to choose the NAA token path
+ * (acquireTokenPopup) over the legacy Teams-SDK popup.
+ */
+export function setNaaActive(active: boolean): void {
+  naaActive = active;
+}
+export function isNaaActive(): boolean {
+  return naaActive;
+}
+
+/**
+ * Get the Teams SSO token (down-level path only — NAA does not use this).
+ * Retained for compatibility with the legacy /auth-callback flow.
  */
 export async function getTeamsSSOToken(): Promise<string | null> {
-  if (!isTeamsContext || !window.microsoftTeams) {
+  if (!isTeamsContext) {
     return null;
   }
 
   try {
     // Try silent first
-    const token = await window.microsoftTeams.authentication.getAuthToken({ silent: true });
+    const token = await authentication.getAuthToken({ silent: true });
     console.log("Got Teams SSO token (silent)");
     return token;
   } catch (silentError) {
     console.log("Silent Teams token failed, trying interactive:", silentError);
     try {
-      // Try interactive (will show consent prompt if needed)
-      const token = await window.microsoftTeams.authentication.getAuthToken({ silent: false });
+      const token = await authentication.getAuthToken({ silent: false });
       console.log("Got Teams SSO token (interactive)");
       return token;
     } catch (interactiveError) {
@@ -190,47 +198,24 @@ export function getTeamsLoginHint(): string | null {
 }
 
 /**
- * Open Teams authentication popup (works in Teams desktop app)
- * This uses the Teams SDK's built-in popup mechanism which is allowed in desktop
+ * Open the Teams-controlled authentication popup (down-level path only).
+ * Used when NAA is unavailable; it opens /auth-callback which runs a legacy
+ * MSAL redirect login and writes tokens to the shared localStorage cache.
  */
 export async function openTeamsAuthPopup(): Promise<string | null> {
-  const teamsSDK = window.microsoftTeams;
-  if (!teamsSDK) {
-    console.error("Teams SDK not available for auth popup");
-    return null;
-  }
-
   return new Promise((resolve) => {
-    // The Teams SDK has a different authentication API
-    // We need to use microsoftTeams.authentication.authenticate() which opens a popup
     const authUrl = `${window.location.origin}/auth-callback`;
-
     console.log("Opening Teams auth popup with URL:", authUrl);
 
-    // Teams SDK 2.0 uses a different API
-    if (teamsSDK.authentication) {
-      // Try the authenticate method which opens a popup that Teams controls
-      const authParams = {
-        url: authUrl,
-        width: 600,
-        height: 535,
-        isExternal: false,
-      };
-
-      // The Teams SDK will handle the popup
-      // We need to create the auth page that will call notifySuccess/notifyFailure
-      teamsSDK.authentication.authenticate(authParams)
-        .then((result: string) => {
-          console.log("Teams auth popup succeeded:", result);
-          resolve(result);
-        })
-        .catch((error: Error) => {
-          console.error("Teams auth popup failed:", error);
-          resolve(null);
-        });
-    } else {
-      console.error("Teams authentication API not available");
-      resolve(null);
-    }
+    authentication
+      .authenticate({ url: authUrl, width: 600, height: 535, isExternal: false })
+      .then((result: string) => {
+        console.log("Teams auth popup succeeded:", result);
+        resolve(result);
+      })
+      .catch((error: unknown) => {
+        console.error("Teams auth popup failed:", error);
+        resolve(null);
+      });
   });
 }
