@@ -181,9 +181,15 @@ export default function Home() {
 
   // Apply user filters and sort on top of RBAC filtering
   const filteredAndSortedTickets = useMemo(() => {
-    const filtered = filterTickets(rbacFilteredTickets, filters);
+    // Viewer powers the combinable quick-filter chips (My Dept / Assigned to me /
+    // My requests). Undefined until permissions load, which simply leaves those
+    // chips' filters inert — they aren't rendered yet either.
+    const viewer = permissions
+      ? { email: permissions.email, editableDepartments: permissions.editableDepartments }
+      : undefined;
+    const filtered = filterTickets(rbacFilteredTickets, filters, viewer);
     return sortTickets(filtered, filters.sort);
-  }, [rbacFilteredTickets, filters]);
+  }, [rbacFilteredTickets, filters, permissions]);
 
   // Pre-compute ticket IDs and index map for O(1) lookups in checkbox handler
   const { ticketIds, ticketIndexMap } = useMemo(() => {
@@ -571,6 +577,7 @@ export default function Home() {
             loadingArchived={loadingArchived}
             onLoadArchived={loadArchivedTickets}
             tickets={rbacFilteredTickets}
+            permissions={permissions}
           />
 
           {/* Purchase workflow preset buttons */}
