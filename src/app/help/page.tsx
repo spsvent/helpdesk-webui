@@ -1074,6 +1074,23 @@ const helpSections: HelpSection[] = [
             note on the ticket documenting the decision, so there&apos;s always a record of what happened.
           </p>
         </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Converting a Request to a Problem</h4>
+        <p>
+          Admins can change a ticket&apos;s <strong>Category</strong> from Request to Problem in the
+          Details panel. Because Problems don&apos;t go through approval, converting a Request that is
+          still <strong>awaiting a decision</strong> (Pending or Changes Requested) automatically
+          removes it from the approval flow — it drops out of the Approvals badge count and the
+          &quot;Awaiting Approval&quot; filter, and the approve/deny actions no longer appear.
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>A completed <strong>Approved</strong> or <strong>Denied</strong> record is kept as history.</li>
+          <li>The conversion is recorded in the Activity Log.</li>
+          <li>
+            <strong>Purchase requests cannot be converted to Problems</strong> — they run their own
+            purchase workflow, so the Problem option is disabled for them.
+          </li>
+        </ul>
       </div>
     ),
   },

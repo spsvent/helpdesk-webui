@@ -25,6 +25,7 @@ import {
 } from "@/lib/categoryConfig";
 import { getSuggestedAssignee } from "@/lib/autoAssignConfig";
 import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/autoAssignConfigService";
+import { shouldClearApprovalOnConversion, isProblemConversionBlocked } from "@/lib/approvalFlow";
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
@@ -312,7 +313,15 @@ export default function DetailsPanel({
     const currentUserName = accounts[0].name || accounts[0].username;
     const oldStatus = ticket.status;
     const oldPriority = ticket.priority;
+    const oldCategory = ticket.category;
     const oldAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
+
+    // Purchase requests can't be reclassified as Problems — they run their own
+    // purchase workflow. The category dropdown disables that option, but guard
+    // the write too so the conversion can't slip through.
+    const effectiveCategory = isProblemConversionBlocked(ticket, category)
+      ? oldCategory
+      : category;
 
     try {
       // Pre-flight: snapshot the edits so a renewal redirect doesn't lose them.
@@ -334,10 +343,17 @@ export default function DetailsPanel({
 
       // Add admin-only fields if user is admin
       if (isAdmin) {
-        updates.Category = category;
+        updates.Category = effectiveCategory;
         updates.ProblemType = problemType;
         updates.ProblemTypeSub = problemTypeSub || undefined;
         updates.ProblemTypeSub2 = problemTypeSub2 || undefined;
+
+        // Converting a Request that's awaiting a decision into a Problem removes
+        // it from the approval flow (a Problem never needs approval). Terminal
+        // Approved/Denied records are left intact as history.
+        if (shouldClearApprovalOnConversion(oldCategory, effectiveCategory, ticket.approvalStatus)) {
+          updates.ApprovalStatus = "None";
+        }
 
         // Handle assignee change - update OriginalAssignedTo field
         const currentAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
@@ -378,6 +394,20 @@ export default function DetailsPanel({
           description: `Priority changed from "${oldPriority}" to "${priority}"`,
           details: JSON.stringify({ oldPriority, newPriority: priority }),
         }).catch((e) => console.error("Failed to log priority change:", e));
+      }
+
+      // Log category conversion (and note when it cleared a pending approval)
+      if (isAdmin && effectiveCategory !== oldCategory) {
+        const clearedApproval = updates.ApprovalStatus === "None";
+        logActivity(client, {
+          eventType: "ticket_converted",
+          ticketId: ticket.id,
+          ticketNumber,
+          actor: accounts[0].username,
+          actorName: currentUserName,
+          description: `Category changed from "${oldCategory}" to "${effectiveCategory}"${clearedApproval ? " — pending approval cleared" : ""}`,
+          details: JSON.stringify({ oldCategory, newCategory: effectiveCategory, clearedApproval }),
+        }).catch((e) => console.error("Failed to log category conversion:", e));
       }
 
       // Log assignment change
@@ -665,17 +695,24 @@ export default function DetailsPanel({
           {isAdmin && <span className="ml-1 text-brand-blue">(editable)</span>}
         </label>
         {isAdmin && canEdit ? (
-          <select
-            value={category}
-            onChange={(e) => handleCategoryChange(e.target.value as Ticket["category"])}
-            className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
-          >
-            {CATEGORY_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              value={category}
+              onChange={(e) => handleCategoryChange(e.target.value as Ticket["category"])}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+            >
+              {CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt} disabled={isProblemConversionBlocked(ticket, opt)}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            {ticket.isPurchaseRequest && (
+              <p className="mt-1 text-xs text-text-secondary">
+                Purchase requests can&apos;t be converted to Problems.
+              </p>
+            )}
+          </>
         ) : (
           <span className="text-sm">{category}</span>
         )}
