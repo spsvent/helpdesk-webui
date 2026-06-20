@@ -57,6 +57,9 @@ jobs:
           NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED: "true"
           NEXT_PUBLIC_TEAMS_CHANNELS_LIST_ID: "e95f1cea-76ce-472e-b55c-423f5627c734"
           NEXT_PUBLIC_TEAMS_NOTIFICATIONS_START_DATE: "2026-01-27"
+          # Teams Nested App Authentication (NAA). Set to "false" + redeploy to roll back.
+          # Requires the brk-multihub://tickets.spsvent.net SPA redirect URI on the Entra app.
+          NEXT_PUBLIC_TEAMS_NAA_ENABLED: "true"
           # Vikunja Sync
           NEXT_PUBLIC_VIKUNJA_SYNC_ENABLED: "true"
           NEXT_PUBLIC_VIKUNJA_SYNC_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/synctovikunja"

@@ -43,6 +43,22 @@ const helpSections: HelpSection[] = [
           </p>
         </div>
 
+        <h4 className="font-semibold text-text-primary mt-6">Using the Help Desk inside Microsoft Teams</h4>
+        <p>
+          When you open the Help Desk from its Microsoft Teams tab, it now signs you in{" "}
+          <strong>automatically</strong> using your Teams identity — there&apos;s no separate
+          sign-in step and no pop-up window. You should land directly on the dashboard, already
+          signed in, and be able to add comments, approvals, and edits without interruption.
+        </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> The first time you open the Help Desk in Teams you may see a
+            one-time Microsoft consent prompt. After you approve it, sign-in stays seamless. If
+            you ever see a &quot;session has expired&quot; banner, just click{" "}
+            <strong>Sign in</strong> on it to refresh — your in-progress work is preserved.
+          </p>
+        </div>
+
         <h4 className="font-semibold text-text-primary mt-6">
           Interface Overview
         </h4>

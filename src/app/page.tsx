@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
-import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "@/lib/teamsAuth";
 import { getGraphClient, getTickets, getArchivedTickets, getTicket, invalidateTicketsCache } from "@/lib/graphClient";
 import { Ticket } from "@/types/ticket";
 import { TicketFilters, DEFAULT_FILTERS, PRESET_VIEWS, EMPTY_FILTERS } from "@/types/filters";
@@ -257,11 +257,14 @@ export default function Home() {
     }
   }, [accounts, instance, clearBulkSelection, selectedTicket]);
 
-  // Handle login - use Teams SDK popup in Teams (MSAL popups get blocked in desktop app)
+  // Handle login. Under NAA the Teams host brokers loginPopup (no real window);
+  // down-level Teams uses the Teams SDK popup; the browser uses a redirect.
   const handleLogin = async () => {
     try {
-      if (isRunningInTeams()) {
-        console.log("Running in Teams, using Teams SDK auth popup");
+      if (isNaaActive()) {
+        await instance.loginPopup(loginRequest);
+      } else if (isRunningInTeams()) {
+        console.log("Running in Teams (down-level), using Teams SDK auth popup");
         const result = await openTeamsAuthPopup();
         if (result) {
           console.log("Teams auth popup returned:", result);

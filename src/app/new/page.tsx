@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest, graphScopes, sharepointScopes } from "@/lib/msalConfig";
-import { isRunningInTeams, openTeamsAuthPopup } from "@/lib/teamsAuth";
+import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "@/lib/teamsAuth";
 import { getAppInsights } from "@/lib/appInsights";
 import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, addAssignmentComment, logActivity, uploadAttachment, addComment } from "@/lib/graphClient";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
@@ -235,8 +235,11 @@ export default function NewTicketPage() {
 
   const handleLogin = async () => {
     try {
-      if (isRunningInTeams()) {
-        console.log("Running in Teams, using Teams SDK auth popup");
+      if (isNaaActive()) {
+        // NAA: the Teams host brokers login via a popup with no real window.
+        await instance.loginPopup(loginRequest);
+      } else if (isRunningInTeams()) {
+        console.log("Running in Teams (down-level), using Teams SDK auth popup");
         const result = await openTeamsAuthPopup();
         if (result) {
           window.location.reload();
@@ -257,10 +260,11 @@ export default function NewTicketPage() {
   };
 
   // Re-authenticate without leaving the page so the filled-in form survives.
-  // Inside Teams, MSAL popups can't open - use the Teams-controlled popup.
+  // Under NAA (and in the browser) route through ensureFreshToken, which brokers
+  // a fresh token; only the down-level Teams client uses the legacy popup.
   const handleReauthenticate = async () => {
     try {
-      if (isRunningInTeams()) {
+      if (isRunningInTeams() && !isNaaActive()) {
         const result = await openTeamsAuthPopup();
         if (!result) {
           setError("Sign-in was cancelled or failed. Please try again.");

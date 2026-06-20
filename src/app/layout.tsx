@@ -2,19 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { MsalProvider } from "@azure/msal-react";
-import { PublicClientApplication, EventType, AuthenticationResult, InteractionRequiredAuthError, AccountInfo } from "@azure/msal-browser";
+import { PublicClientApplication, createNestablePublicClientApplication, IPublicClientApplication, EventType, AuthenticationResult, InteractionRequiredAuthError, AccountInfo } from "@azure/msal-browser";
 import { msalConfig, loginRequest, graphScopes } from "@/lib/msalConfig";
-import { initializeTeamsAuth, openTeamsAuthPopup } from "@/lib/teamsAuth";
+import { initializeTeamsAuth, openTeamsAuthPopup, isNaaRecommended, isNaaActive, setNaaActive } from "@/lib/teamsAuth";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
-import { initAppInsights, setAuthenticatedUser } from "@/lib/appInsights";
+import { initAppInsights, setAuthenticatedUser, trackEvent } from "@/lib/appInsights";
 import { markAuthReady, clearRenewalAttempt } from "@/lib/authActions";
 import "./globals.css";
-
-// Initialize MSAL instance
-const msalInstance = new PublicClientApplication(msalConfig);
 
 export default function RootLayout({
   children,
@@ -23,8 +20,24 @@ export default function RootLayout({
 }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [needsTeamsReauth, setNeedsTeamsReauth] = useState(false);
+  // MSAL is now created asynchronously (NAA's createNestablePublicClientApplication
+  // returns a promise and TeamsJS must initialize first), so the instance lives in
+  // state and MsalProvider only renders once it exists.
+  const [msalInstance, setMsalInstance] = useState<IPublicClientApplication | null>(null);
 
   const handleTeamsReauth = async () => {
+    if (!msalInstance) return;
+    try {
+      if (isNaaActive()) {
+        // NAA: the host brokers an interactive token with no real popup window.
+        await msalInstance.acquireTokenPopup({ ...graphScopes, account: msalInstance.getActiveAccount() ?? undefined });
+        setNeedsTeamsReauth(false);
+        return;
+      }
+    } catch (e) {
+      console.error("NAA re-auth failed:", e);
+    }
+    // Down-level Teams: route through the Teams-controlled /auth-callback popup.
     const result = await openTeamsAuthPopup();
     if (result) {
       window.location.reload();
@@ -34,20 +47,24 @@ export default function RootLayout({
   useEffect(() => {
     // A cached MSAL account makes the app render as signed in even when its
     // tokens can no longer be renewed silently (SPA refresh tokens last 24h,
-    // and silent iframe renewal is blocked inside the Teams webview).
-    // Validate up front so the user gets a working sign-in path instead of
-    // every API call failing with a generic error.
-    const validateCachedSession = async (account: AccountInfo, isTeams: boolean) => {
+    // and silent iframe renewal is blocked inside the Teams webview). Under NAA
+    // the host brokers renewal so this rarely fires, but down-level Teams and
+    // the browser still need a working sign-in path instead of opaque failures.
+    const validateCachedSession = async (
+      instance: IPublicClientApplication,
+      account: AccountInfo,
+      isTeams: boolean,
+    ) => {
       try {
-        await msalInstance.acquireTokenSilent({ ...graphScopes, account });
+        await instance.acquireTokenSilent({ ...graphScopes, account });
       } catch (error) {
         // Only react to errors that definitively require interaction -
         // transient failures will be retried by individual API calls
         if (!(error instanceof InteractionRequiredAuthError)) return;
 
         if (isTeams) {
-          // Redirects can't run inside the Teams webview - show a banner
-          // that routes through the Teams-controlled auth popup
+          // Redirects can't run inside the Teams webview - show a banner that
+          // re-auths via NAA (acquireTokenPopup) or the Teams-controlled popup.
           setNeedsTeamsReauth(true);
           return;
         }
@@ -57,7 +74,7 @@ export default function RootLayout({
         // Guard with sessionStorage so a failing account can't redirect-loop.
         if (!sessionStorage.getItem("helpdesk-reauth-attempted")) {
           sessionStorage.setItem("helpdesk-reauth-attempted", "1");
-          await msalInstance.loginRedirect({ ...loginRequest, account });
+          await instance.loginRedirect({ ...loginRequest, account });
         }
       }
     };
@@ -70,46 +87,86 @@ export default function RootLayout({
 
     // Initialize MSAL and handle any redirect response
     const initializeMsal = async () => {
+      let instance: IPublicClientApplication | null = null;
       try {
-        // Must initialize MSAL before calling any other methods
-        await msalInstance.initialize();
-
-        // Check if running inside Teams (do this early)
+        // TeamsJS MUST initialize before MSAL so the NAA host bridge is ready
+        // when createNestablePublicClientApplication runs.
         const teamsAuth = await initializeTeamsAuth();
 
-        // Handle redirect promise - this processes the auth response after redirect
-        const response = await msalInstance.handleRedirectPromise();
+        // Create the MSAL instance. Use a nestable (NAA-brokered) client only
+        // when the flag is on AND the Teams host recommends NAA; otherwise fall
+        // back to the standard client (identical to pre-NAA behavior — our
+        // rollback path). createNestable* can throw, so guard with a fallback.
+        const naaWanted = process.env.NEXT_PUBLIC_TEAMS_NAA_ENABLED === "true";
+        const useNaa = naaWanted && teamsAuth.isTeams && isNaaRecommended();
+        try {
+          if (useNaa) {
+            instance = await createNestablePublicClientApplication(msalConfig);
+            setNaaActive(true);
+          } else {
+            const std = new PublicClientApplication(msalConfig);
+            await std.initialize();
+            instance = std;
+          }
+        } catch (createErr) {
+          console.error("NAA instance creation failed, falling back to standard:", createErr);
+          setNaaActive(false);
+          const std = new PublicClientApplication(msalConfig);
+          await std.initialize();
+          instance = std;
+        }
+        const naaEngaged = isNaaActive();
+        // Distinguish "NAA actually engaged" from a silent fallback in telemetry —
+        // the build-time flag alone can't tell you the instance became nestable.
+        trackEvent("TeamsAuth", {
+          step: "naa_active",
+          value: String(naaEngaged),
+          inTeams: String(teamsAuth.isTeams),
+        });
+
+        // Re-arm auto-renewal after any successful interactive login.
+        instance.addEventCallback((event) => {
+          if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
+            const payload = event.payload as AuthenticationResult;
+            instance?.setActiveAccount(payload.account);
+            setAuthenticatedUser(payload.account?.username ?? "", payload.account?.name ?? undefined);
+            clearRenewalAttempt();
+          }
+        });
+
+        // handleRedirectPromise is unsupported under NAA (no redirects in the
+        // webview); only process a redirect response on the standard client.
+        const response = naaEngaged ? null : await instance.handleRedirectPromise();
 
         if (response) {
           // User just logged in via redirect
-          msalInstance.setActiveAccount(response.account);
+          instance.setActiveAccount(response.account);
           setAuthenticatedUser(response.account?.username ?? "", response.account?.name ?? undefined);
           // Any successful auth (login or renewal return) re-arms auto-renewal.
           clearRenewalAttempt();
         } else {
           // No redirect response, check for existing accounts
-          const accounts = msalInstance.getAllAccounts();
+          const accounts = instance.getAllAccounts();
           // /approve is a public, token-authorized page. Skip ALL auth bootstrapping
           // for it: no cached-session validation (which redirects and would drop the
           // ?token= from the URL) AND no Teams SSO. The page authorizes via its token.
           const isPublicActionPage =
             typeof window !== "undefined" && window.location.pathname.startsWith("/approve");
           if (isPublicActionPage) {
-            if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+            if (accounts.length > 0) instance.setActiveAccount(accounts[0]);
             // intentionally no validateCachedSession and no ssoSilent — fall through
           } else if (accounts.length > 0) {
-            msalInstance.setActiveAccount(accounts[0]);
+            instance.setActiveAccount(accounts[0]);
             setAuthenticatedUser(accounts[0].username, accounts[0].name ?? undefined);
             // Fire-and-forget so app startup isn't blocked on a token round-trip
-            validateCachedSession(accounts[0], teamsAuth.isTeams);
+            validateCachedSession(instance, accounts[0], teamsAuth.isTeams);
           } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
-            // Running in Teams with no existing account - try silent SSO only
-            // Don't try popups in Teams as they hang in the desktop app
-            console.log("Attempting Teams SSO with login hint:", teamsAuth.loginHint);
-
+            // No cached account in Teams. ssoSilent({loginHint}) is NAA-valid and,
+            // under NAA, is brokered by the host (works in the webview). Down-level
+            // it depends on the Entra cookie and may fail -> user clicks Sign in.
             try {
               // Add timeout to ssoSilent (5 seconds) to prevent hanging
-              const ssoPromise = msalInstance.ssoSilent({
+              const ssoPromise = instance.ssoSilent({
                 ...loginRequest,
                 loginHint: teamsAuth.loginHint,
               });
@@ -118,12 +175,13 @@ export default function RootLayout({
               );
               const ssoResult = await Promise.race([ssoPromise, timeoutPromise]);
               if (ssoResult?.account) {
-                msalInstance.setActiveAccount(ssoResult.account);
+                instance.setActiveAccount(ssoResult.account);
                 setAuthenticatedUser(ssoResult.account.username, ssoResult.account.name ?? undefined);
-                console.log("Teams SSO successful:", ssoResult.account.username);
+                trackEvent("TeamsAuth", { step: "silent_ok", naa: String(naaEngaged) });
               }
             } catch (ssoError) {
               // Silent SSO failed or timed out - user will need to click sign in button
+              trackEvent("TeamsAuth", { step: "silent_interaction_required", naa: String(naaEngaged) });
               console.log("Teams SSO silent auth failed, will show login button:", ssoError);
             }
           }
@@ -135,27 +193,18 @@ export default function RootLayout({
         clearRenewalAttempt();
       }
 
+      if (instance) setMsalInstance(instance);
       // Let graphClient/ensureFreshToken know the initial redirect handling has settled,
       // so a token-renewal redirect won't collide with this startup interaction.
       markAuthReady();
       setIsInitialized(true);
     };
 
-    // Add event callback for future login events
-    msalInstance.addEventCallback((event) => {
-      if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-        const payload = event.payload as AuthenticationResult;
-        msalInstance.setActiveAccount(payload.account);
-        setAuthenticatedUser(payload.account?.username ?? "", payload.account?.name ?? undefined);
-        clearRenewalAttempt(); // re-arm auto-renewal after a successful login
-      }
-    });
-
     initializeMsal();
   }, []);
 
-  // Show loading while MSAL initializes
-  if (!isInitialized) {
+  // Show loading while MSAL initializes (instance is created asynchronously)
+  if (!isInitialized || !msalInstance) {
     return (
       <html lang="en">
         <head>
