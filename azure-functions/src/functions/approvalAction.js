@@ -97,6 +97,11 @@ app.http("approvalAction", {
     if (!result.valid) {
       return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: result.reason } };
     }
+    // This endpoint handles ticket tokens only. Reject tokens tagged for another
+    // entity (e.g. kind:'cdw') so a token minted for one list can't act on another.
+    if (result.payload.kind && result.payload.kind !== "ticket") {
+      return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "wrong_entity" } };
+    }
     const { tid, action, email: approverEmail, name: approverName } = result.payload;
     const decision = actionToDecision(action);
     if (!decision) {
