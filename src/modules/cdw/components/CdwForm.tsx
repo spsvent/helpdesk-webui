@@ -14,7 +14,7 @@ import { CDW_FIELDS } from "../fields";
 import { CdwWritable } from "../types";
 import { validateCdw, briefToFormState } from "../validation";
 import { canCreateCdw, canEditCdw } from "../access";
-import { createCdw, getCdw, updateCdw, submitForApproval, uploadCdwAttachment } from "../cdwService";
+import { createCdw, getCdw, updateCdw, submitForApproval, uploadCdwAttachment, isCdwConfigured } from "../cdwService";
 
 const DRAFT_KEY = "cdw-new";
 
@@ -151,6 +151,21 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
     "w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary";
 
   if (loadingBrief || rbacLoading) return <div className="p-8"><LoadingSpinner /></div>;
+
+  // The CDW list must exist before briefs can be saved.
+  if (!isCdwConfigured()) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <p className="text-sm text-text-secondary">
+          Creative Briefs aren’t set up yet. An administrator needs to create the CDW list first
+          (Briefs page → “Set up CDW list”).
+        </p>
+        <Link href="/cdw" className="mt-3 inline-block text-sm text-brand-primary underline">
+          Back to briefs
+        </Link>
+      </div>
+    );
+  }
 
   // Authorization: creating requires CDW-requester access; editing requires ownership.
   const notAuthorized =
