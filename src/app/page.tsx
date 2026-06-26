@@ -19,6 +19,7 @@ import AwaitingOrderBadge from "@/components/AwaitingOrderBadge";
 import AwaitingReceiptBadge from "@/components/AwaitingReceiptBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
 import DarkModeToggle from "@/components/DarkModeToggle";
+import NewFormMenu from "@/components/NewFormMenu";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useRBAC } from "@/contexts/RBACContext";
 import { debugCapture } from "@/lib/debugCapture";
@@ -471,12 +472,9 @@ export default function Home() {
           <h1 className="text-lg font-semibold text-text-primary sm:hidden">
             Help Desk
           </h1>
-          <Link
-            href="/new"
-            className="px-3 sm:px-4 py-1.5 sm:py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors touch-manipulation"
-          >
-            + New
-          </Link>
+          {/* Manifest-driven "+ New" entry point. One creatable module → a single
+              link (unchanged); add-on modules (e.g. CDW) make it a dropdown. */}
+          <NewFormMenu permissions={permissions} />
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
           <button

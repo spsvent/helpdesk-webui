@@ -11,6 +11,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
 import { initAppInsights, setAuthenticatedUser, trackEvent } from "@/lib/appInsights";
 import { markAuthReady, clearRenewalAttempt } from "@/lib/authActions";
+import { modulePublicRoutePrefixes } from "@/shared/formModules";
 import "./globals.css";
 
 export default function RootLayout({
@@ -147,11 +148,15 @@ export default function RootLayout({
         } else {
           // No redirect response, check for existing accounts
           const accounts = instance.getAllAccounts();
-          // /approve is a public, token-authorized page. Skip ALL auth bootstrapping
-          // for it: no cached-session validation (which redirects and would drop the
-          // ?token= from the URL) AND no Teams SSO. The page authorizes via its token.
+          // Public, token-authorized pages skip ALL auth bootstrapping: no cached-session
+          // validation (which redirects and would drop the ?token= from the URL) AND no
+          // Teams SSO. The page authorizes via its token. The built-in ticket /approve
+          // page plus any module-contributed prefixes (e.g. the CDW /cdw/approve landing)
+          // come from the form-module manifest, so the shell stays decoupled from modules.
+          const publicPrefixes = ["/approve", ...modulePublicRoutePrefixes()];
           const isPublicActionPage =
-            typeof window !== "undefined" && window.location.pathname.startsWith("/approve");
+            typeof window !== "undefined" &&
+            publicPrefixes.some((p) => window.location.pathname.startsWith(p));
           if (isPublicActionPage) {
             if (accounts.length > 0) instance.setActiveAccount(accounts[0]);
             // intentionally no validateCachedSession and no ssoSilent — fall through

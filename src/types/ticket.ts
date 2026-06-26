@@ -1,5 +1,11 @@
 // SharePoint list item types for the Helpdesk system
 
+import { getPersonDisplayName, getPersonEmail } from "@/shared/spTypes";
+import type { SharePointListItem } from "@/shared/spTypes";
+// SharePoint list envelopes + Person/Lookup helpers live in the shared layer now
+// (reused by every form module). Re-exported so existing ticket imports are unchanged.
+export type { SharePointListItem, SharePointListResponse } from "@/shared/spTypes";
+
 // Approval workflow status
 export type ApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Changes Requested";
 
@@ -102,43 +108,9 @@ export interface Attachment {
   contentUrl: string;  // URL to download the file
 }
 
-// SharePoint Graph API response types
-export interface SharePointListItem {
-  id: string;
-  fields: Record<string, unknown>;
-  createdDateTime: string;
-  lastModifiedDateTime: string;
-  createdBy: {
-    user: {
-      id: string;
-      displayName: string;
-      email?: string;
-    };
-  };
-}
-
-export interface SharePointListResponse {
-  value: SharePointListItem[];
-  "@odata.nextLink"?: string;
-}
-
-// Extract display name from a SharePoint Person/Lookup field.
-// Graph API may return these as an object with LookupValue, or as a plain string.
-function getPersonDisplayName(field: unknown): string {
-  if (!field) return "";
-  if (typeof field === "string") return field;
-  if (typeof field === "object") {
-    const obj = field as Record<string, unknown>;
-    return (obj.LookupValue as string) || (obj.Title as string) || (obj.Email as string) || "";
-  }
-  return "";
-}
-
-function getPersonEmail(field: unknown): string {
-  if (!field || typeof field !== "object") return "";
-  const obj = field as Record<string, unknown>;
-  return (obj.Email as string) || "";
-}
+// SharePointListItem / SharePointListResponse and the getPersonDisplayName /
+// getPersonEmail helpers now live in @/shared/spTypes (imported + re-exported at
+// the top of this file). Kept out of ticket.ts so any form module can reuse them.
 
 function parsePurchaseLineItems(fields: Record<string, unknown>): PurchaseLineItem[] | undefined {
   if (!fields.IsPurchaseRequest) return undefined;

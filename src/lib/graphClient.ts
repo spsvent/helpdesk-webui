@@ -133,7 +133,8 @@ async function acquireTokenInteractive(
 }
 
 // Acquire a SharePoint REST API token (silent first, interactive fallback)
-async function getSharePointToken(
+// Exported for the shared layer (form modules reuse it for their own list attachments).
+export async function getSharePointToken(
   msalInstance: IPublicClientApplication,
   account: AccountInfo
 ): Promise<string> {
@@ -194,7 +195,8 @@ export function getGraphClient(
 
 // Get site user ID for Person field lookup
 // SharePoint Person fields require the user's ID from the site's User Information List
-async function getSiteUserId(client: Client, email: string): Promise<number | null> {
+// Exported for the shared layer (form modules that write Person columns reuse it).
+export async function getSiteUserId(client: Client, email: string): Promise<number | null> {
   try {
     // The EMail field in User Information List is not indexed, so we need to add
     // the Prefer header to allow non-indexed queries. This may be slow on very large
@@ -1168,15 +1170,17 @@ export async function getAttachments(
   client: Client,
   ticketId: string,
   msalInstance?: IPublicClientApplication,
-  account?: AccountInfo
+  account?: AccountInfo,
+  listId?: string
 ): Promise<Attachment[]> {
+  const targetListId = listId || TICKETS_LIST_ID;
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const accessToken = await getSharePointToken(msalInstance, account);
 
-      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles`;
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${targetListId}')/items(${ticketId})/AttachmentFiles`;
 
       const response = await fetch(spRestUrl, {
         headers: {
@@ -1218,7 +1222,7 @@ export async function getAttachments(
   }
 
   // Fallback: try Graph API (may not work for SharePoint list attachments)
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
+  const endpoint = `/sites/${SITE_ID}/lists/${targetListId}/items/${ticketId}/attachments`;
 
   try {
     const response = await client.api(endpoint).get();
@@ -1240,8 +1244,10 @@ export async function uploadAttachment(
   ticketId: string,
   file: File,
   msalInstance?: IPublicClientApplication,
-  account?: AccountInfo
+  account?: AccountInfo,
+  listId?: string
 ): Promise<Attachment | null> {
+  const targetListId = listId || TICKETS_LIST_ID;
   // Sanitize filename
   const sanitizedName = file.name.replace(/[#%&*:<>?\/\\|]/g, "_");
 
@@ -1253,7 +1259,7 @@ export async function uploadAttachment(
 
       const arrayBuffer = await file.arrayBuffer();
 
-      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/add(FileName='${encodeURIComponent(sanitizedName)}')`;
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${targetListId}')/items(${ticketId})/AttachmentFiles/add(FileName='${encodeURIComponent(sanitizedName)}')`;
 
       const response = await fetch(spRestUrl, {
         method: "POST",
@@ -1283,7 +1289,7 @@ export async function uploadAttachment(
   }
 
   // Fallback: try Graph API (may not work)
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments`;
+  const endpoint = `/sites/${SITE_ID}/lists/${targetListId}/items/${ticketId}/attachments`;
 
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -1313,11 +1319,13 @@ export async function uploadAttachment(
 export async function uploadAttachmentDirect(
   client: Client,
   ticketId: string,
-  file: File
+  file: File,
+  listId?: string
 ): Promise<Attachment | null> {
+  const targetListId = listId || TICKETS_LIST_ID;
   // Sanitize filename - remove special characters that SharePoint doesn't like
   const sanitizedName = file.name.replace(/[#%&*:<>?\/\\|]/g, "_");
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(sanitizedName)}/content`;
+  const endpoint = `/sites/${SITE_ID}/lists/${targetListId}/items/${ticketId}/attachments/${encodeURIComponent(sanitizedName)}/content`;
 
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -1328,7 +1336,7 @@ export async function uploadAttachmentDirect(
       .put(arrayBuffer);
 
     // Fetch the attachment details after upload
-    const attachments = await getAttachments(client, ticketId);
+    const attachments = await getAttachments(client, ticketId, undefined, undefined, targetListId);
     return attachments.find(a => a.name === sanitizedName) || {
       name: sanitizedName,
       contentType: file.type || "application/octet-stream",
@@ -1347,15 +1355,17 @@ export async function deleteAttachment(
   ticketId: string,
   filename: string,
   msalInstance?: IPublicClientApplication,
-  account?: AccountInfo
+  account?: AccountInfo,
+  listId?: string
 ): Promise<boolean> {
+  const targetListId = listId || TICKETS_LIST_ID;
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const accessToken = await getSharePointToken(msalInstance, account);
 
-      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')`;
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${targetListId}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')`;
 
       const response = await fetch(spRestUrl, {
         method: "DELETE",
@@ -1374,7 +1384,7 @@ export async function deleteAttachment(
   }
 
   // Fallback: try Graph API (may not work)
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}`;
+  const endpoint = `/sites/${SITE_ID}/lists/${targetListId}/items/${ticketId}/attachments/${encodeURIComponent(filename)}`;
 
   try {
     await client.api(endpoint).delete();
@@ -1391,15 +1401,17 @@ export async function downloadAttachment(
   ticketId: string,
   filename: string,
   msalInstance?: IPublicClientApplication,
-  account?: AccountInfo
+  account?: AccountInfo,
+  listId?: string
 ): Promise<Blob | null> {
+  const targetListId = listId || TICKETS_LIST_ID;
   // If MSAL instance provided, use SharePoint REST API
   if (msalInstance && account) {
     try {
       // Get SharePoint-specific token (Graph tokens don't work for SP REST API)
       const accessToken = await getSharePointToken(msalInstance, account);
 
-      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${TICKETS_LIST_ID}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')/$value`;
+      const spRestUrl = `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${targetListId}')/items(${ticketId})/AttachmentFiles/getByFileName('${encodeURIComponent(filename)}')/$value`;
 
       const response = await fetch(spRestUrl, {
         headers: {
@@ -1419,7 +1431,7 @@ export async function downloadAttachment(
   }
 
   // Fallback: try Graph API (may not work)
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}/attachments/${encodeURIComponent(filename)}/$value`;
+  const endpoint = `/sites/${SITE_ID}/lists/${targetListId}/items/${ticketId}/attachments/${encodeURIComponent(filename)}/$value`;
 
   try {
     const response = await client.api(endpoint).get();

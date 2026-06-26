@@ -51,6 +51,11 @@ jobs:
           NEXT_PUBLIC_EMAIL_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail"
           NEXT_PUBLIC_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/approvalaction"
           NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendapprovalrequest"
+          # CDW (Creative Brief) form module. NEXT_PUBLIC_CDW_LIST_ID is filled in after the
+          # CDW SharePoint list is created (admin runs ensureCdwList or creates it manually).
+          NEXT_PUBLIC_CDW_LIST_ID: ""
+          NEXT_PUBLIC_CDW_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/cdwapprovalaction"
+          NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendcdwapprovalrequest"
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
           NEXT_PUBLIC_TEAMS_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendteamsnotification"
           # Teams Notifications

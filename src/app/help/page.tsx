@@ -1130,6 +1130,39 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "creative-briefs-cdw",
+    title: "Creative Briefs (CDW)",
+    content: (
+      <div className="space-y-4">
+        <p>
+          A <strong>Creative Brief (CDW)</strong> is the Campaign &amp; Creative Development Worksheet,
+          built into the Help Desk. Use it to request design/creative work — it must be approved by a
+          General Manager before it becomes public.
+        </p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Click <strong>+ New</strong> in the header and choose <strong>New CDW</strong> (or go to <strong>/cdw</strong>).</li>
+          <li>Fill out the worksheet: project name, deadline, project manager, audience, specifications, timeline, and so on.</li>
+          <li>Choose <strong>who should receive the final deliverable</strong> once the brief is approved.</li>
+          <li>Click <strong>Submit for Approval</strong> — or <strong>Save as Draft</strong> to finish later.</li>
+        </ol>
+        <p>
+          On submit, the General Managers are notified. A GM can approve, deny, or request changes
+          either inside the app or with the one-click buttons in the email. When a brief is
+          <strong> approved</strong> it becomes <strong>public</strong> and the named recipient is emailed that
+          they’ll receive the final.
+        </p>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>Visibility:</strong> Before approval a brief is visible only to its creator, the named
+          project manager, and the approvers. Once approved, it’s visible to everyone.
+        </div>
+        <p className="text-sm text-text-secondary">
+          If the “New CDW” option doesn’t appear, the CDW list hasn’t been configured yet — an
+          administrator needs to set it up first.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: "understanding-badges",
     title: "Understanding Status Badges",
     content: (

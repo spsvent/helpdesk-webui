@@ -8,6 +8,7 @@ const config = {
   senderEmail: process.env.SENDER_EMAIL || "supportdesk@skyparksantasvillage.com",
   siteId: process.env.SHAREPOINT_SITE_ID,
   ticketsListId: process.env.TICKETS_LIST_ID,
+  cdwListId: process.env.CDW_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
