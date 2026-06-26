@@ -24,6 +24,7 @@ export const LOCATION_OPTIONS = [
   "Magic Tree Bouldering Room",
   "Merry Moments Photo Shoppe",
   "Park Wide",
+  "Pavilion",
   "Pedal Pub",
   "Reindeer Adoption Room",
   "Royal Encampment at Sky Trading",
