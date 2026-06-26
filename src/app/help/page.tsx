@@ -1156,8 +1156,9 @@ const helpSections: HelpSection[] = [
           project manager, and the approvers. Once approved, it’s visible to everyone.
         </div>
         <p className="text-sm text-text-secondary">
-          If the “New CDW” option doesn’t appear, the CDW list hasn’t been configured yet — an
-          administrator needs to set it up first.
+          If the “New CDW” option doesn’t appear, either you don’t have permission to create briefs
+          (creation is limited to the creative/marketing team) or the CDW list hasn’t been configured
+          yet — ask an administrator.
         </p>
       </div>
     ),

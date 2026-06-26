@@ -13,6 +13,7 @@
 // Nothing else in core references this module — the shell reads it only via the manifest.
 
 import type { FormModule } from "@/shared/formModules";
+import { canCreateCdw } from "./access";
 
 export const cdwModule: FormModule = {
   id: "cdw",
@@ -20,8 +21,9 @@ export const cdwModule: FormModule = {
   newLabel: "New CDW",
   creatable: true,
   newHref: "/cdw/new",
-  // Any signed-in user can create a CDW; approval is gated separately (GM/admin).
-  visibleWhen: () => true,
+  // Restricted to CDW requesters (see access.ts: a configurable group, with admins
+  // always allowed and staff as the fallback). Approval is gated separately (GM/admin).
+  visibleWhen: canCreateCdw,
   // The email-approval landing page authorizes via its token, not a login session.
   publicRoutePrefixes: ["/cdw/approve"],
 };

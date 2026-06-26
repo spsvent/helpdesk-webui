@@ -7,6 +7,7 @@ import { getGraphClient } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { CDWBrief } from "../types";
+import { canCreateCdw } from "../access";
 import { ensureCdwList, isCdwConfigured, listCdw, visibleCdw } from "../cdwService";
 import CdwStatusBadge from "./CdwStatusBadge";
 
@@ -57,12 +58,14 @@ export default function CdwList() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text-primary">Creative Briefs (CDW)</h1>
-        <Link
-          href="/cdw/new"
-          className="px-3 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors"
-        >
-          + New CDW
-        </Link>
+        {canCreateCdw(permissions) && (
+          <Link
+            href="/cdw/new"
+            className="px-3 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors"
+          >
+            + New CDW
+          </Link>
+        )}
       </div>
 
       {!isCdwConfigured() && (

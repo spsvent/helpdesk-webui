@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { visibleCdw, mapToCdw, CDWBrief } from "./types";
 import { validateCdw, validateBrief, briefToFormState } from "./validation";
+import { canCreateCdw, canEditCdw } from "./access";
 import type { UserPermissions } from "@/types/rbac";
 
 function brief(overrides: Partial<CDWBrief> = {}): CDWBrief {
@@ -85,6 +86,37 @@ describe("validateCdw", () => {
   });
   it("passes when every required field is present", () => {
     expect(validateCdw(complete.values, complete.persons, true)).toBeNull();
+  });
+});
+
+describe("canCreateCdw / canEditCdw (access)", () => {
+  const GROUP = "marketing-group-id";
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_CDW_REQUESTERS_GROUP_ID;
+  });
+
+  it("admins can always create", () => {
+    expect(canCreateCdw(perms({ role: "admin" }))).toBe(true);
+  });
+  it("with no requesters group set, only staff (support) can create — not plain users", () => {
+    expect(canCreateCdw(perms({ role: "support" }))).toBe(true);
+    expect(canCreateCdw(perms({ role: "user" }))).toBe(false);
+    expect(canCreateCdw(null)).toBe(false);
+  });
+  it("with a requesters group set, only its members can create (admins still can)", () => {
+    process.env.NEXT_PUBLIC_CDW_REQUESTERS_GROUP_ID = GROUP;
+    expect(canCreateCdw(perms({ role: "user", groupMemberships: [GROUP] }))).toBe(true);
+    expect(canCreateCdw(perms({ role: "user", groupMemberships: ["other"] }))).toBe(false);
+    // a staff member NOT in the group no longer qualifies once the group gates it
+    expect(canCreateCdw(perms({ role: "support", groupMemberships: [] }))).toBe(false);
+    expect(canCreateCdw(perms({ role: "admin", groupMemberships: [] }))).toBe(true);
+  });
+
+  it("canEditCdw: owner (creator/requester) or admin only", () => {
+    const owned = { createdByEmail: "pm@x.com", requesterEmail: "pm@x.com" };
+    expect(canEditCdw(owned, perms({ email: "pm@x.com" }))).toBe(true);
+    expect(canEditCdw(owned, perms({ email: "other@x.com" }))).toBe(false);
+    expect(canEditCdw(owned, perms({ role: "admin", email: "gm@x.com" }))).toBe(true);
   });
 });
 

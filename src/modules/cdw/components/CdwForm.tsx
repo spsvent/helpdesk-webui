@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
+import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import UserSearchDropdown from "@/components/UserSearchDropdown";
 import AttachmentUpload from "@/components/AttachmentUpload";
@@ -11,6 +13,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { CDW_FIELDS } from "../fields";
 import { CdwWritable } from "../types";
 import { validateCdw, briefToFormState } from "../validation";
+import { canCreateCdw, canEditCdw } from "../access";
 import { createCdw, getCdw, updateCdw, submitForApproval, uploadCdwAttachment } from "../cdwService";
 
 const DRAFT_KEY = "cdw-new";
@@ -26,6 +29,7 @@ interface DraftShape {
 export default function CdwForm({ briefId }: { briefId?: string }) {
   const router = useRouter();
   const { instance, accounts } = useMsal();
+  const { permissions, loading: rbacLoading } = useRBAC();
   const account = accounts[0];
   const isEdit = !!briefId;
 
@@ -35,6 +39,8 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
   const [saving, setSaving] = useState<null | "draft" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingBrief, setLoadingBrief] = useState(isEdit);
+  // Owner identity of the brief being edited, for the edit authorization check.
+  const [briefOwner, setBriefOwner] = useState<{ createdByEmail: string; requesterEmail: string } | null>(null);
 
   // Edit mode: hydrate from the existing brief. New mode: one-shot draft restore.
   useEffect(() => {
@@ -43,7 +49,9 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
       (async () => {
         try {
           const client = getGraphClient(instance, account);
-          const { values: v, persons: p } = briefToFormState(await getCdw(client, briefId!));
+          const brief = await getCdw(client, briefId!);
+          setBriefOwner({ createdByEmail: brief.createdByEmail, requesterEmail: brief.requesterEmail });
+          const { values: v, persons: p } = briefToFormState(brief);
           setValues(v);
           setPersons(p);
         } catch (e) {
@@ -142,7 +150,26 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
   const inputClass =
     "w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary";
 
-  if (loadingBrief) return <div className="p-8"><LoadingSpinner /></div>;
+  if (loadingBrief || rbacLoading) return <div className="p-8"><LoadingSpinner /></div>;
+
+  // Authorization: creating requires CDW-requester access; editing requires ownership.
+  const notAuthorized =
+    (!isEdit && !canCreateCdw(permissions)) ||
+    (isEdit && briefOwner && !canEditCdw(briefOwner, permissions));
+  if (notAuthorized) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <p className="text-sm text-text-secondary">
+          {isEdit
+            ? "You can only edit your own briefs."
+            : "You don’t have permission to create a CDW. Ask an administrator if you need access."}
+        </p>
+        <Link href="/cdw" className="mt-3 inline-block text-sm text-brand-primary underline">
+          Back to briefs
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
