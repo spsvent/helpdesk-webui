@@ -21,8 +21,8 @@ export const cdwModule: FormModule = {
   newLabel: "New CDW",
   creatable: true,
   newHref: "/cdw/new",
-  // Restricted to CDW requesters (see access.ts: a configurable group, with admins
-  // always allowed and staff as the fallback). Approval is gated separately (GM/admin).
+  // Gated by canCreateCdw (see access.ts): any signed-in user by default, or a
+  // configurable requesters group. Approval is gated separately (GM/admin).
   visibleWhen: canCreateCdw,
   // The email-approval landing page authorizes via its token, not a login session.
   publicRoutePrefixes: ["/cdw/approve"],

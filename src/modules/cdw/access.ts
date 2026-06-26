@@ -14,16 +14,15 @@ function requestersGroupId(): string {
  * Can this user create / submit a CDW brief?
  * - Admins always can.
  * - If NEXT_PUBLIC_CDW_REQUESTERS_GROUP_ID is set, only members of that group can
- *   (the precise knob — point it at the marketing/creative team).
- * - Otherwise it falls back to staff (role "support"), so it is never open to every
- *   signed-in user.
+ *   (the precise knob — point it at the marketing/creative team to lock it down).
+ * - Otherwise (the current default) any signed-in user can.
  */
 export function canCreateCdw(perms: UserPermissions | null): boolean {
   if (!perms) return false;
   if (perms.role === "admin") return true;
   const group = requestersGroupId();
   if (group) return (perms.groupMemberships || []).includes(group);
-  return perms.role === "support";
+  return true; // no requesters group configured → open to any signed-in user
 }
 
 /** Can this user edit an existing brief? The brief's owner (creator/requester) or an admin. */

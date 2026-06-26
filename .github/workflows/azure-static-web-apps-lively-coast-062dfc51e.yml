@@ -54,7 +54,7 @@ jobs:
           # CDW (Creative Brief) form module. NEXT_PUBLIC_CDW_LIST_ID is filled in after the
           # CDW SharePoint list is created (admin runs ensureCdwList or creates it manually).
           NEXT_PUBLIC_CDW_LIST_ID: ""
-          # Entra group allowed to create CDWs (marketing/creative team). Blank = staff-only fallback.
+          # Entra group allowed to create CDWs (marketing/creative team). Blank = any signed-in user.
           NEXT_PUBLIC_CDW_REQUESTERS_GROUP_ID: ""
           NEXT_PUBLIC_CDW_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/cdwapprovalaction"
           NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendcdwapprovalrequest"

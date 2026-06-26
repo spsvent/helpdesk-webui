@@ -98,9 +98,9 @@ describe("canCreateCdw / canEditCdw (access)", () => {
   it("admins can always create", () => {
     expect(canCreateCdw(perms({ role: "admin" }))).toBe(true);
   });
-  it("with no requesters group set, only staff (support) can create — not plain users", () => {
+  it("with no requesters group set, any signed-in user can create (but not anonymous)", () => {
+    expect(canCreateCdw(perms({ role: "user" }))).toBe(true);
     expect(canCreateCdw(perms({ role: "support" }))).toBe(true);
-    expect(canCreateCdw(perms({ role: "user" }))).toBe(false);
     expect(canCreateCdw(null)).toBe(false);
   });
   it("with a requesters group set, only its members can create (admins still can)", () => {
