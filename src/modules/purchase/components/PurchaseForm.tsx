@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient, getTicket, updateTicket, addComment } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -15,6 +15,14 @@ import { createPurchase, isPurchaseConfigured, triggerPurchaseApprovalRequest } 
 import LineItemsField from "./LineItemsField";
 
 const DRAFT_KEY = "purchase-new";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://tickets.spsvent.net";
+
+interface SourceTicket {
+  id: string;
+  number?: number;
+  requesterName: string;
+  requesterEmail: string;
+}
 
 interface DraftShape {
   title: string;
@@ -23,11 +31,12 @@ interface DraftShape {
   lineItems: PurchaseLineItem[];
 }
 
-export default function PurchaseForm() {
+export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string } = {}) {
   const router = useRouter();
   const { instance, accounts } = useMsal();
   const { permissions, loading: rbacLoading } = useRBAC();
   const account = accounts[0];
+  const isConvert = !!fromTicketId;
 
   const [title, setTitle] = useState("");
   const [justification, setJustification] = useState("");
@@ -35,8 +44,12 @@ export default function PurchaseForm() {
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceTicket, setSourceTicket] = useState<SourceTicket | null>(null);
+  const [loadingTicket, setLoadingTicket] = useState(isConvert);
 
+  // Restore a draft (new mode only — conversions prefill from the ticket instead).
   useEffect(() => {
+    if (isConvert) return;
     const d = loadDraft<DraftShape>(DRAFT_KEY);
     if (d) {
       setTitle(d.title || "");
@@ -44,11 +57,30 @@ export default function PurchaseForm() {
       setProject(d.project || "");
       if (d.lineItems?.length) setLineItems(d.lineItems);
     }
-  }, []);
+  }, [isConvert]);
 
   useEffect(() => {
-    saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
-  }, [title, justification, project, lineItems]);
+    if (!isConvert) saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
+  }, [isConvert, title, justification, project, lineItems]);
+
+  // Convert mode: load the source ticket and prefill from it.
+  useEffect(() => {
+    if (!fromTicketId || !account) return;
+    (async () => {
+      try {
+        const client = getGraphClient(instance, account);
+        const t = await getTicket(client, fromTicketId);
+        setTitle(t.title);
+        setJustification(t.description || "");
+        setSourceTicket({ id: fromTicketId, number: t.ticketNumber, requesterName: t.requester.displayName, requesterEmail: t.requester.email });
+      } catch (e) {
+        console.error("[PurchaseForm] load ticket for convert failed:", e);
+        setError("Could not load the ticket to convert.");
+      } finally {
+        setLoadingTicket(false);
+      }
+    })();
+  }, [fromTicketId, account, instance]);
 
   function validate(): string | null {
     if (!title.trim()) return "A title is required.";
@@ -75,12 +107,28 @@ export default function PurchaseForm() {
         title: title.trim(),
         justification: justification.trim(),
         project: project.trim() || undefined,
-        requesterName: account.name || account.username || "",
-        requesterEmail: account.username || "",
+        // Converted requests keep the original ticket's requester; otherwise the submitter.
+        requesterName: sourceTicket?.requesterName || account.name || account.username || "",
+        requesterEmail: sourceTicket?.requesterEmail || account.username || "",
         approvalRequestedDate: new Date().toISOString().slice(0, 10),
+        sourceTicketId: sourceTicket?.id,
+        sourceTicketNumber: sourceTicket?.number,
         lineItems: items,
       });
       await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
+
+      // Convert: resolve the source ticket and link it to the new PR (best-effort).
+      if (sourceTicket) {
+        try {
+          await updateTicket(client, sourceTicket.id, { Status: "Resolved" });
+          if (sourceTicket.number != null) {
+            await addComment(client, sourceTicket.number, `🛒 Converted to a Purchase Request — ${APP_URL}/purchase?id=${pr.id}`, false);
+          }
+        } catch (e) {
+          console.error("[PurchaseForm] resolving source ticket failed (non-blocking):", e);
+        }
+      }
+
       clearDraft(DRAFT_KEY);
       router.push(`/purchase/?id=${pr.id}`);
     } catch (e) {
@@ -90,7 +138,7 @@ export default function PurchaseForm() {
     }
   }
 
-  if (rbacLoading) return <div className="p-8"><LoadingSpinner /></div>;
+  if (rbacLoading || loadingTicket) return <div className="p-8"><LoadingSpinner /></div>;
   if (!isPurchaseConfigured()) {
     return (
       <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">
@@ -107,10 +155,13 @@ export default function PurchaseForm() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-xl font-semibold text-text-primary">New Purchase Request</h1>
+      <h1 className="text-xl font-semibold text-text-primary">
+        {isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
+      </h1>
       <p className="mt-1 text-sm text-text-secondary">
-        Add the items you need and submit for approval. Once a General Manager approves it, the
-        purchasing team can order it.
+        {isConvert && sourceTicket?.number != null
+          ? `From ticket #${sourceTicket.number}. Add the items needed and submit — the original ticket will be resolved and linked to this request.`
+          : "Add the items you need and submit for approval. Once a General Manager approves it, the purchasing team can order it."}
       </p>
 
       <div className="mt-6 space-y-5">
