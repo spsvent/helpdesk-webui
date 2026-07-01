@@ -254,6 +254,22 @@ export function toggleResolvedClosedStatuses(
 }
 
 /**
+ * Clear the "Awaiting Approval" filter (set by the pendingApprovals preset).
+ *
+ * The preset replaces the whole filter state (status: [], sort: "recent"), so
+ * just dropping `approvalStatus` would strand an odd "all statuses, newest
+ * first" view. Restore the default status/sort for any field still carrying
+ * that preset residue, while preserving the user's search text and anything
+ * they've deliberately changed since (e.g. hand-picked statuses).
+ */
+export function clearApprovalFilter(filters: TicketFilters): TicketFilters {
+  const next: TicketFilters = { ...filters, approvalStatus: undefined };
+  if (filters.status.length === 0) next.status = [...DEFAULT_FILTERS.status];
+  if (filters.sort === "recent") next.sort = DEFAULT_FILTERS.sort;
+  return next;
+}
+
+/**
  * Is the status filter meaningfully narrowed by the user? The default status
  * set (active tickets only) is the baseline view, not an "active filter", so
  * it shouldn't badge the More-filters button or render a summary pill.

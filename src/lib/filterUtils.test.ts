@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  clearApprovalFilter,
   filterTickets,
   filtersMatchDefault,
   getActiveFilterCount,
@@ -228,5 +229,41 @@ describe("filtersMatchDefault", () => {
     expect(filtersMatchDefault({ ...DEFAULT_FILTERS, myDepartmentOnly: true })).toBe(false);
     expect(filtersMatchDefault({ ...DEFAULT_FILTERS, requestedByMeOnly: true })).toBe(false);
     expect(filtersMatchDefault({ ...DEFAULT_FILTERS, unassignedOnly: true })).toBe(false);
+  });
+});
+
+describe("clearApprovalFilter — clearing the Awaiting Approval chip", () => {
+  // What the pendingApprovals preset actually produces in page.tsx.
+  const presetState: TicketFilters = {
+    ...EMPTY_FILTERS,
+    status: [],
+    sort: "recent",
+    approvalStatus: ["Pending", "Changes Requested"],
+  };
+
+  it("drops approvalStatus and restores the default status/sort from the preset residue", () => {
+    const next = clearApprovalFilter(presetState);
+    expect(next.approvalStatus).toBeUndefined();
+    expect(next.status).toEqual(DEFAULT_FILTERS.status);
+    expect(next.sort).toBe(DEFAULT_FILTERS.sort);
+  });
+
+  it("preserves the current search text", () => {
+    const next = clearApprovalFilter({ ...presetState, search: "printer" });
+    expect(next.search).toBe("printer");
+    expect(next.approvalStatus).toBeUndefined();
+  });
+
+  it("keeps statuses the user hand-picked after applying the preset", () => {
+    const next = clearApprovalFilter({ ...presetState, status: ["On Hold"] });
+    expect(next.status).toEqual(["On Hold"]);
+    expect(next.approvalStatus).toBeUndefined();
+  });
+
+  it("does not mutate the input filters", () => {
+    const input = { ...presetState };
+    clearApprovalFilter(input);
+    expect(input.approvalStatus).toEqual(["Pending", "Changes Requested"]);
+    expect(input.status).toEqual([]);
   });
 });
