@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Attachment } from "@/types/ticket";
 import { isBrowserPreviewable } from "@/lib/attachmentComments";
+import { isHeic } from "@/lib/heicRenditions";
 import { formatFileSize } from "./fileTypeIcon";
 
 interface ImageLightboxProps {
@@ -259,10 +260,18 @@ export default function ImageLightbox({
               className="max-w-full max-h-[calc(100vh-8rem)] object-contain rounded-lg shadow-2xl"
             />
           ) : view.state === "loading" ? (
-            <svg className="animate-spin h-10 w-10 text-white/80" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            <div className="flex flex-col items-center gap-3">
+              <svg className="animate-spin h-10 w-10 text-white/80" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {/* A HEIC that isn't "cheap" (no rendition yet — see canPreloadNeighbor)
+                  is being downloaded + converted server-side, which takes seconds,
+                  not frames. Say so instead of showing an anonymous spinner. */}
+              {isHeic(current.name) && !preloadable(current.name) && (
+                <p className="text-sm text-white/75">Converting iPhone photo…</p>
+              )}
+            </div>
           ) : (
             // "unsupported" (HEIC/TIFF) or "error"
             <div className="text-center text-white/80 px-6 py-10 max-w-sm">

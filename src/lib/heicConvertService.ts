@@ -16,6 +16,12 @@ const HEIC_CONVERT_URL = process.env.NEXT_PUBLIC_HEIC_CONVERT_URL || "";
 // back to the download-only experience.
 export const MAX_HEIC_CONVERT_BYTES = 15 * 1024 * 1024;
 
+// Abort a hung converter call after this long. Conversion of a typical phone
+// HEIC takes a few seconds; a Function that never answers would otherwise
+// leave the lightbox spinning forever instead of falling back to the regular
+// "couldn't load" + download path.
+export const HEIC_CONVERT_TIMEOUT_MS = 30_000;
+
 /** Whether backend HEIC conversion is configured. */
 export function isHeicConvertEnabled(): boolean {
   return Boolean(HEIC_CONVERT_URL);
@@ -32,7 +38,8 @@ export function isConvertibleSize(bytes: number | undefined): boolean {
 /**
  * Convert a HEIC blob to a JPEG blob via the converter function.
  * Returns null if conversion is not configured, the file is over the size cap,
- * or the call fails (caller falls back to a download-only experience).
+ * or the call fails or times out (caller falls back to a download-only
+ * experience).
  */
 export async function convertHeicToJpeg(heic: Blob): Promise<Blob | null> {
   if (!HEIC_CONVERT_URL) return null;
@@ -45,6 +52,7 @@ export async function convertHeicToJpeg(heic: Blob): Promise<Blob | null> {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: heic,
+      signal: AbortSignal.timeout(HEIC_CONVERT_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error("[convertHeicToJpeg] converter returned", res.status);
