@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { creatableModules } from "@/shared/formModules";
 import type { UserPermissions } from "@/types/rbac";
@@ -21,7 +21,58 @@ const TRIGGER_CLASS =
  */
 export default function NewFormMenu({ permissions }: NewFormMenuProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const modules = creatableModules(permissions);
+
+  // Move focus into the menu when it opens so arrow keys work immediately
+  // (for mouse users too — hover still works, and Escape returns focus below).
+  useEffect(() => {
+    if (open) {
+      menuRef.current
+        ?.querySelector<HTMLElement>('[role="menuitem"]')
+        ?.focus();
+    }
+  }, [open]);
+
+  // Keyboard handling for the whole widget (trigger + menu, via bubbling):
+  // Escape closes and restores focus to the trigger, ArrowDown/ArrowUp move
+  // through the items (wrapping), Enter activates the focused link natively.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      // ArrowDown on the closed trigger opens the menu (focus follows via the effect).
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []
+      );
+      if (items.length === 0) return;
+      const idx = items.indexOf(document.activeElement as HTMLElement);
+      const delta = e.key === "ArrowDown" ? 1 : -1;
+      // From outside the list (e.g. focus still on the trigger), land on an end.
+      const next = idx === -1
+        ? (delta === 1 ? 0 : items.length - 1)
+        : (idx + delta + items.length) % items.length;
+      items[next]?.focus();
+      return;
+    }
+    if (e.key === "Tab") {
+      // Let focus move on naturally, but don't leave a stranded open menu.
+      setOpen(false);
+    }
+  };
 
   // Behavior-preserving: one module → a plain link, identical to the old "+ New".
   if (modules.length <= 1) {
@@ -34,8 +85,9 @@ export default function NewFormMenu({ permissions }: NewFormMenuProps) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={handleKeyDown}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
@@ -49,6 +101,7 @@ export default function NewFormMenu({ permissions }: NewFormMenuProps) {
           {/* Click-outside backdrop */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
           <div
+            ref={menuRef}
             role="menu"
             className="absolute left-0 mt-1 z-20 min-w-[12rem] bg-bg-card border border-border rounded-lg shadow-lg py-1"
           >
