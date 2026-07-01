@@ -105,3 +105,19 @@ export function allTicketDetailActions(): FormModuleTicketDetailAction[] {
 export function modulePublicRoutePrefixes(): string[] {
   return FORM_MODULES.flatMap((m) => m.publicRoutePrefixes ?? []);
 }
+
+// The built-in ticket approval landing (predates the module system).
+const BUILT_IN_PUBLIC_ROUTE_PREFIXES = ["/approve"];
+
+// True when the pathname is one of the public, token-authorized action pages —
+// the built-in ticket /approve plus every module-contributed prefix. Matching is
+// anchored (prefix must be the whole path or be followed by "/") so "/approve"
+// can't match a future "/approvals" and "/cdw/approve" can't match
+// "/cdw/approvexyz"; the segment form also covers the trailing slash the static
+// export serves ("/cdw/approve/?token=..."). Auth bootstrapping (layout.tsx) and
+// permission fetching (RBACContext) are both skipped on these routes.
+export function isPublicModuleRoute(pathname: string): boolean {
+  return [...BUILT_IN_PUBLIC_ROUTE_PREFIXES, ...modulePublicRoutePrefixes()].some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  );
+}
