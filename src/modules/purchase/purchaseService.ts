@@ -5,8 +5,8 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
+import { fetchAllListItems } from "@/shared/listItems";
 import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
-import { SharePointListResponse } from "@/shared/spTypes";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
@@ -54,9 +54,11 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
 
 export async function listPurchases(client: Client): Promise<PurchaseRequest[]> {
   if (!PURCHASE_LIST_ID) return [];
+  // Paged (fetchAllListItems follows @odata.nextLink): the migration runner builds
+  // its idempotency set from this, so a truncated read would duplicate records.
   const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items?$expand=fields&$top=1000&$orderby=createdDateTime desc`;
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  return (response.value || []).map(mapToPurchase);
+  const items = await fetchAllListItems(client, endpoint);
+  return items.map(mapToPurchase);
 }
 
 export async function getPurchase(client: Client, id: string): Promise<PurchaseRequest> {

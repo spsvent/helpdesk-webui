@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import type { Client } from "@microsoft/microsoft-graph-client";
 import { mapToPurchase, parsePurchaseLineItems } from "./types";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
+import { fetchAllListItems } from "@/shared/listItems";
 import type { SharePointListItem } from "@/shared/spTypes";
 
 function ticketItem(fields: Record<string, unknown>, id = "42"): SharePointListItem {
@@ -31,6 +33,34 @@ describe("parsePurchaseLineItems (dual-read)", () => {
   });
   it("returns [] when there is nothing", () => {
     expect(parsePurchaseLineItems({})).toEqual([]);
+  });
+});
+
+describe("fetchAllListItems (paged list reads)", () => {
+  // Graph pages list reads (~200 items) behind @odata.nextLink; a single-GET read
+  // truncates, which broke the migration's "already migrated" idempotency set.
+  it("follows @odata.nextLink until exhausted and returns every item", async () => {
+    const page = (ids: string[], nextLink?: string) => ({
+      value: ids.map((id) => ticketItem({}, id)),
+      ...(nextLink ? { "@odata.nextLink": nextLink } : {}),
+    });
+    const pages: Record<string, unknown> = {
+      "/items?page=1": page(["1", "2"], "/items?page=2"),
+      "/items?page=2": page(["3"]),
+    };
+    const requested: string[] = [];
+    const client = {
+      api: (url: string) => ({
+        get: async () => {
+          requested.push(url);
+          return pages[url];
+        },
+      }),
+    } as unknown as Client;
+
+    const items = await fetchAllListItems(client, "/items?page=1");
+    expect(requested).toEqual(["/items?page=1", "/items?page=2"]);
+    expect(items.map((i) => i.id)).toEqual(["1", "2", "3"]);
   });
 });
 

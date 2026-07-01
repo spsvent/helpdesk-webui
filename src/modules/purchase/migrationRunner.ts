@@ -5,7 +5,8 @@
 // tickets already copied (a PR carrying their sourceTicketId) are skipped.
 
 import { Client } from "@microsoft/microsoft-graph-client";
-import { SharePointListItem, SharePointListResponse } from "@/shared/spTypes";
+import { SharePointListItem } from "@/shared/spTypes";
+import { fetchAllListItems } from "@/shared/listItems";
 import { createPurchase, listPurchases } from "./purchaseService";
 import { mapTicketItemToPurchase } from "./migration";
 
@@ -31,16 +32,11 @@ export interface MigrationReport {
 
 async function fetchPurchaseTickets(client: Client): Promise<SharePointListItem[]> {
   // IsPurchaseRequest isn't indexed; fetch and filter client-side (mirrors
-  // getPendingApprovalsCount). Paginate to be safe on large lists.
-  const items: SharePointListItem[] = [];
-  let url = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=2000`;
-  for (;;) {
-    const res: SharePointListResponse = await client.api(url).get();
-    items.push(...(res.value || []));
-    const next = res["@odata.nextLink"];
-    if (!next) break;
-    url = next;
-  }
+  // getPendingApprovalsCount). Paginated to be safe on large lists.
+  const items = await fetchAllListItems(
+    client,
+    `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=2000`
+  );
   return items.filter((i) => (i.fields as Record<string, unknown>).IsPurchaseRequest === true);
 }
 
