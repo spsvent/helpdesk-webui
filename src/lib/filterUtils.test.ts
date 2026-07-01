@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { filterTickets, filtersMatchDefault } from "./filterUtils";
-import { DEFAULT_FILTERS, TicketFilters } from "@/types/filters";
+import {
+  filterTickets,
+  filtersMatchDefault,
+  getActiveFilterCount,
+  getActiveFilterSummary,
+  isShowingResolvedClosed,
+  isStatusFilterActive,
+  toggleResolvedClosedStatuses,
+} from "./filterUtils";
+import { DEFAULT_FILTERS, EMPTY_FILTERS, TicketFilters } from "@/types/filters";
 import { Ticket } from "@/types/ticket";
 
 // Minimal Ticket factory — only the fields the filter logic reads need realistic values.
@@ -110,6 +118,103 @@ describe("filterTickets — quick chips combine (AND)", () => {
       viewer
     );
     expect(result.map((t) => t.id)).toEqual(["a"]);
+  });
+});
+
+describe("show resolved & closed — checkbox state", () => {
+  it("is checked for an empty status set (show-all includes resolved & closed)", () => {
+    expect(isShowingResolvedClosed([])).toBe(true);
+  });
+
+  it("is unchecked for the default active-status set", () => {
+    expect(isShowingResolvedClosed(DEFAULT_FILTERS.status)).toBe(false);
+  });
+
+  it("is checked when Resolved or Closed is explicitly selected", () => {
+    expect(isShowingResolvedClosed(["Resolved"])).toBe(true);
+    expect(isShowingResolvedClosed(["New", "Closed"])).toBe(true);
+  });
+});
+
+describe("show resolved & closed — the four toggle transitions", () => {
+  it("unchecking from the empty set falls back to the default active statuses", () => {
+    expect(toggleResolvedClosedStatuses([])).toEqual(DEFAULT_FILTERS.status);
+  });
+
+  it("checking from the default set adds Resolved and Closed (preserving the rest)", () => {
+    const next = toggleResolvedClosedStatuses(DEFAULT_FILTERS.status);
+    expect(next).toEqual(
+      expect.arrayContaining([...DEFAULT_FILTERS.status, "Resolved", "Closed"])
+    );
+    expect(next).toHaveLength(5);
+    expect(isShowingResolvedClosed(next)).toBe(true);
+  });
+
+  it("unchecking from an explicit selection drops only Resolved and Closed", () => {
+    expect(toggleResolvedClosedStatuses(["New", "Resolved", "Closed"])).toEqual(["New"]);
+  });
+
+  it("unchecking when ONLY Resolved/Closed are selected falls back to the defaults", () => {
+    expect(toggleResolvedClosedStatuses(["Resolved", "Closed"])).toEqual(DEFAULT_FILTERS.status);
+  });
+
+  it("checking from a partial active selection preserves it", () => {
+    const next = toggleResolvedClosedStatuses(["New"]);
+    expect(next).toEqual(expect.arrayContaining(["New", "Resolved", "Closed"]));
+    expect(next).toHaveLength(3);
+  });
+
+  it("every transition lands in a state where the checkbox reads truthfully", () => {
+    // From each of the four canonical states, toggling flips the checkbox.
+    const states: Ticket["status"][][] = [
+      [],
+      DEFAULT_FILTERS.status,
+      ["Resolved", "Closed"],
+      ["New", "In Progress", "On Hold", "Resolved", "Closed"],
+    ];
+    for (const status of states) {
+      const before = isShowingResolvedClosed(status);
+      const after = isShowingResolvedClosed(toggleResolvedClosedStatuses(status));
+      expect(after).toBe(!before);
+    }
+  });
+});
+
+describe("getActiveFilterCount / summary — default status is not an active filter", () => {
+  it("counts zero active filters for the out-of-the-box default view", () => {
+    expect(getActiveFilterCount({ ...DEFAULT_FILTERS })).toBe(0);
+  });
+
+  it("counts zero for the empty (show-all) view", () => {
+    expect(getActiveFilterCount({ ...EMPTY_FILTERS })).toBe(0);
+  });
+
+  it("ignores status order when comparing against the default set", () => {
+    const reordered: TicketFilters = {
+      ...DEFAULT_FILTERS,
+      status: ["On Hold", "New", "In Progress"],
+    };
+    expect(getActiveFilterCount(reordered)).toBe(0);
+    expect(getActiveFilterSummary(reordered)).toEqual([]);
+  });
+
+  it("still counts a genuinely narrowed status set", () => {
+    expect(isStatusFilterActive(["New"])).toBe(true);
+    expect(getActiveFilterCount({ ...DEFAULT_FILTERS, status: ["New"] })).toBe(1);
+  });
+
+  it("renders no Status pill for the default view but does for a narrowed one", () => {
+    expect(getActiveFilterSummary({ ...DEFAULT_FILTERS })).toEqual([]);
+    expect(getActiveFilterSummary({ ...DEFAULT_FILTERS, status: ["Resolved"] })).toEqual([
+      "Status: Resolved",
+    ]);
+  });
+
+  it("still counts the other filters unchanged", () => {
+    expect(getActiveFilterCount({ ...DEFAULT_FILTERS, priority: ["Urgent"] })).toBe(1);
+    expect(
+      getActiveFilterCount({ ...DEFAULT_FILTERS, problemType: "Tech", dateRange: "week" })
+    ).toBe(2);
   });
 });
 
