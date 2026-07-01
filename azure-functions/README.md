@@ -38,6 +38,18 @@ Timer-triggered function that checks for tickets needing escalation (runs hourly
 
 **Manual Trigger:** `POST /api/runEscalationCheck`
 
+### 4. ConvertHeic
+Stateless HEIC → JPEG converter. The SPA POSTs the raw HEIC bytes and gets JPEG
+bytes back so it can preview iPhone photos inline (Chrome/Firefox can't decode
+HEIC). This function has **no** SharePoint/Graph access — the SPA stores the
+returned JPEG as a sibling attachment using the caller's own token — so it needs
+no app settings or extra permissions, just the `heic-convert` dependency
+(installed by `npm install`).
+
+**Endpoint:** `POST /api/convertheic` — request body: raw HEIC bytes
+(`Content-Type: application/octet-stream`). Response: `image/jpeg` bytes (or a
+JSON error). Rejects empty bodies and payloads over 30 MB.
+
 ## Deployment
 
 ### Prerequisites
@@ -97,6 +109,7 @@ After deploying, update the web app's environment variables in Azure Static Web 
 - `NEXT_PUBLIC_EMAIL_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/SendEmail?code=<function-key>`
 - `NEXT_PUBLIC_TEAMS_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/SendTeamsNotification?code=<function-key>`
 - `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/runEscalationCheck?code=<function-key>`
+- `NEXT_PUBLIC_HEIC_CONVERT_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/convertheic` (anonymous; converts only the bytes it's handed, so no function key needed)
 
 Get the function keys from Azure Portal → Function App → Functions → [Function Name] → Function Keys
 

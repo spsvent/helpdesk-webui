@@ -2,13 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Attachment } from "@/types/ticket";
-import { isBrowserPreviewable } from "@/lib/attachmentComments";
 import { getFileIcon } from "./fileTypeIcon";
 
 interface AttachmentThumbnailProps {
   attachment: Attachment;
   /** Downloads (once, cached by the parent) and returns an object URL for the file. */
   getPreviewUrl: (name: string) => Promise<string | null>;
+  /**
+   * Whether this tile can render inline cheaply (natively-previewable, or a HEIC
+   * with an existing rendition). When false the tile shows a file-icon
+   * placeholder without downloading — but stays clickable to open the lightbox,
+   * which can convert on demand.
+   */
+  previewable?: boolean;
   /** Open the full-size lightbox for this image. */
   onOpen?: () => void;
   /** Tailwind size classes for the tile (default 64×64). */
@@ -18,17 +24,17 @@ interface AttachmentThumbnailProps {
 type LoadState = "idle" | "loading" | "ready" | "error" | "unsupported";
 
 // A small clickable image tile shown inline in the conversation for uploaded
-// image attachments. Browser-previewable images are lazily downloaded once they
-// scroll into view (SharePoint list attachments have no thumbnail endpoint, so
-// this fetches the full file, cached by the parent). HEIC/TIFF and other formats
-// the browser can't decode show a placeholder tile instead of downloading.
+// image attachments. Previewable images are lazily downloaded once they scroll
+// into view (SharePoint list attachments have no thumbnail endpoint, so this
+// fetches the full file, cached by the parent). Non-previewable formats (HEIC
+// without a rendition, TIFF, etc.) show a placeholder tile instead of downloading.
 export default function AttachmentThumbnail({
   attachment,
   getPreviewUrl,
+  previewable = true,
   onOpen,
   sizeClass = "w-16 h-16",
 }: AttachmentThumbnailProps) {
-  const previewable = isBrowserPreviewable(attachment.name);
   const [state, setState] = useState<LoadState>(previewable ? "idle" : "unsupported");
   const [url, setUrl] = useState<string | null>(null);
   const tileRef = useRef<HTMLButtonElement>(null);
@@ -39,6 +45,9 @@ export default function AttachmentThumbnail({
       setState("unsupported");
       return;
     }
+    // If a rendition just became available, drop the placeholder and show the
+    // loading state right away rather than flashing the icon until the fetch runs.
+    setState((s) => (s === "unsupported" || s === "error" ? "idle" : s));
     const el = tileRef.current;
     if (!el) return;
 

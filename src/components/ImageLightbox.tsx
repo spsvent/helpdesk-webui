@@ -11,6 +11,14 @@ interface ImageLightboxProps {
   /** Index of the image currently shown. */
   index: number;
   getPreviewUrl: (name: string) => Promise<string | null>;
+  /** Whether an image can be shown inline (HEIC may convert on demand). */
+  canPreview?: (name: string) => boolean;
+  /**
+   * Whether a neighbor is cheap enough to prefetch (native format, or a HEIC
+   * that already has a rendition). Used to avoid triggering on-demand conversion
+   * of images the user hasn't actually opened. Defaults to `canPreview`.
+   */
+  canPreloadNeighbor?: (name: string) => boolean;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: (name: string) => void;
@@ -19,15 +27,22 @@ interface ImageLightboxProps {
 type LoadState = "loading" | "ready" | "error" | "unsupported";
 
 // Full-screen image viewer with prev/next paging, keyboard controls (←/→/Esc),
-// and a download fallback for formats the browser can't render (HEIC/TIFF).
+// and a download fallback for formats that can't be shown inline (e.g. HEIC when
+// backend conversion isn't available).
 export default function ImageLightbox({
   images,
   index,
   getPreviewUrl,
+  canPreview,
+  canPreloadNeighbor,
   onClose,
   onNavigate,
   onDownload,
 }: ImageLightboxProps) {
+  // Default to the native check when the parent doesn't supply a resolver.
+  const previewable = canPreview ?? isBrowserPreviewable;
+  // Neighbors are only prefetched when cheap (no on-demand conversion).
+  const preloadable = canPreloadNeighbor ?? previewable;
   const current = images[index];
   const count = images.length;
 
@@ -52,7 +67,7 @@ export default function ImageLightbox({
   // Load the current image (and warm the neighbors' cache for snappy paging).
   useEffect(() => {
     if (!currentName) return;
-    if (!isBrowserPreviewable(currentName)) {
+    if (!previewable(currentName)) {
       setUrl(null);
       setState("unsupported");
       return;
@@ -75,14 +90,15 @@ export default function ImageLightbox({
       });
 
     // Warm neighbors so Next/Prev is instant. Fire-and-forget, cache-deduped.
+    // Only cheap neighbors (no on-demand conversion) are prefetched.
     [nextName, prevName].forEach((n) => {
-      if (n && isBrowserPreviewable(n)) getPreviewUrl(n).catch(() => {});
+      if (n && preloadable(n)) getPreviewUrl(n).catch(() => {});
     });
 
     return () => {
       cancelled = true;
     };
-  }, [currentName, nextName, prevName, getPreviewUrl]);
+  }, [currentName, nextName, prevName, previewable, preloadable, getPreviewUrl]);
 
   // On open: lock background scroll and move focus into the dialog; restore both
   // (scroll + the previously-focused element) when it closes.
