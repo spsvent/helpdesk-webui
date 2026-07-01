@@ -8,10 +8,18 @@ import { getGraphClient, getTicket, updateTicket, addComment } from "@/lib/graph
 import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { PurchaseLineItem } from "../types";
+import { PurchaseLineItem, PurchaseRequest } from "../types";
 import { validateLineItem } from "../lineItems";
-import { canCreatePurchase } from "../access";
-import { createPurchase, isPurchaseConfigured, triggerPurchaseApprovalRequest } from "../purchaseService";
+import { canCreatePurchase, canEditPurchase, isPurchaseEditable } from "../access";
+import {
+  createPurchase,
+  getPurchase,
+  isPurchaseConfigured,
+  submitForApproval,
+  triggerPurchaseApprovalRequest,
+  updateLineItems,
+  updatePurchase,
+} from "../purchaseService";
 import LineItemsField from "./LineItemsField";
 
 const DRAFT_KEY = "purchase-new";
@@ -31,25 +39,32 @@ interface DraftShape {
   lineItems: PurchaseLineItem[];
 }
 
-export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string } = {}) {
+// Without purchaseId this is the "new request" form (optionally prefilled from a
+// ticket via fromTicketId); with one it edits an existing request (Fix for the
+// "Changes Requested" dead end — edit, then resubmit for approval).
+export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketId?: string; purchaseId?: string } = {}) {
   const router = useRouter();
   const { instance, accounts } = useMsal();
   const { permissions, loading: rbacLoading } = useRBAC();
   const account = accounts[0];
   const isConvert = !!fromTicketId;
+  const isEdit = !!purchaseId;
 
   const [title, setTitle] = useState("");
   const [justification, setJustification] = useState("");
   const [project, setProject] = useState("");
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<null | "save" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
   const [sourceTicket, setSourceTicket] = useState<SourceTicket | null>(null);
-  const [loadingTicket, setLoadingTicket] = useState(isConvert);
+  const [loadingTicket, setLoadingTicket] = useState(isConvert || isEdit);
+  // The request being edited, for the ownership/status authorization checks.
+  const [editTarget, setEditTarget] = useState<PurchaseRequest | null>(null);
 
-  // Restore a draft (new mode only — conversions prefill from the ticket instead).
+  // Restore a draft (new mode only — conversions prefill from the ticket, edits
+  // hydrate from the existing request instead).
   useEffect(() => {
-    if (isConvert) return;
+    if (isConvert || isEdit) return;
     const d = loadDraft<DraftShape>(DRAFT_KEY);
     if (d) {
       setTitle(d.title || "");
@@ -57,11 +72,32 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       setProject(d.project || "");
       if (d.lineItems?.length) setLineItems(d.lineItems);
     }
-  }, [isConvert]);
+  }, [isConvert, isEdit]);
 
   useEffect(() => {
-    if (!isConvert) saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
-  }, [isConvert, title, justification, project, lineItems]);
+    if (!isConvert && !isEdit) saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
+  }, [isConvert, isEdit, title, justification, project, lineItems]);
+
+  // Edit mode: hydrate from the existing request.
+  useEffect(() => {
+    if (!purchaseId || !account) return;
+    (async () => {
+      try {
+        const client = getGraphClient(instance, account);
+        const pr = await getPurchase(client, purchaseId);
+        setEditTarget(pr);
+        setTitle(pr.title);
+        setJustification(pr.justification || "");
+        setProject(pr.project || "");
+        setLineItems(pr.lineItems.length ? pr.lineItems : [{ qty: 1, cost: 0 }]);
+      } catch (e) {
+        console.error("[PurchaseForm] load for edit failed:", e);
+        setError("Could not load this request for editing.");
+      } finally {
+        setLoadingTicket(false);
+      }
+    })();
+  }, [purchaseId, account, instance]);
 
   // Convert mode: load the source ticket and prefill from it.
   useEffect(() => {
@@ -94,15 +130,35 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
     return null;
   }
 
-  async function handleSubmit() {
+  // resubmit=false (edit mode only) saves the changes without re-entering the
+  // approval queue — the owner can keep revising and resubmit from the detail page.
+  async function handleSubmit(resubmit = true) {
     const v = validate();
     if (v) return setError(v);
     if (!account) return setError("You must be signed in.");
     setError(null);
-    setSubmitting(true);
+    setSubmitting(resubmit ? "submit" : "save");
     try {
       const client = getGraphClient(instance, account);
       const items = lineItems.filter((i) => i.name?.trim() || i.url?.trim());
+
+      // Edit mode: save field + line-item changes onto the existing record, then
+      // optionally resubmit (submitForApproval flips it back to Pending and
+      // re-triggers the approver email).
+      if (isEdit) {
+        await updatePurchase(client, purchaseId!, {
+          title: title.trim(),
+          justification: justification.trim(),
+          project: project.trim() || undefined,
+        });
+        await updateLineItems(client, purchaseId!, items);
+        if (resubmit) {
+          await submitForApproval(client, purchaseId!, editTarget?.requesterName || account.name || account.username || "");
+        }
+        router.push(`/purchase/?id=${purchaseId}`);
+        return;
+      }
+
       const pr = await createPurchase(client, {
         title: title.trim(),
         justification: justification.trim(),
@@ -135,8 +191,8 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       router.push(`/purchase/?id=${pr.id}`);
     } catch (e) {
       console.error("[PurchaseForm] submit failed:", e);
-      setError("Could not submit the purchase request. Please try again.");
-      setSubmitting(false);
+      setError(isEdit ? "Could not save the purchase request. Please try again." : "Could not submit the purchase request. Please try again.");
+      setSubmitting(null);
     }
   }
 
@@ -149,8 +205,21 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       </div>
     );
   }
-  if (!canCreatePurchase(permissions)) {
+  if (!isEdit && !canCreatePurchase(permissions)) {
     return <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">You don’t have permission to create purchase requests.</div>;
+  }
+
+  // Editing requires ownership AND an editable status (Pending/Approved/Denied
+  // requests are immutable — see isPurchaseEditable).
+  if (isEdit && editTarget && (!canEditPurchase(editTarget, permissions) || !isPurchaseEditable(editTarget))) {
+    return (
+      <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">
+        {canEditPurchase(editTarget, permissions)
+          ? "This request can’t be edited in its current status."
+          : "You can only edit your own purchase requests."}
+        <Link href={`/purchase/?id=${purchaseId}`} className="mt-3 block text-brand-primary underline">Back</Link>
+      </div>
+    );
   }
 
   const inputClass = "w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary";
@@ -158,10 +227,12 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-semibold text-text-primary">
-        {isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
+        {isEdit ? "Edit Purchase Request" : isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
       </h1>
       <p className="mt-1 text-sm text-text-secondary">
-        {isConvert && sourceTicket?.number != null
+        {isEdit
+          ? "Update the request, then resubmit it for approval (or save your changes and resubmit later from the request page)."
+          : isConvert && sourceTicket?.number != null
           ? `From ticket #${sourceTicket.number}. Add the items needed and submit — the original ticket will be resolved and linked to this request.`
           : "Add the items you need and submit for approval. Once a General Manager approves it, the purchasing team can order it."}
       </p>
@@ -189,14 +260,28 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
-        >
-          {submitting ? "Submitting…" : "Submit for Approval"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => handleSubmit(true)}
+            disabled={submitting !== null}
+            className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
+          >
+            {submitting === "submit"
+              ? isEdit ? "Resubmitting…" : "Submitting…"
+              : isEdit ? "Save & Resubmit for Approval" : "Submit for Approval"}
+          </button>
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => handleSubmit(false)}
+              disabled={submitting !== null}
+              className="px-4 py-2 bg-bg-subtle text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40 transition-colors disabled:opacity-50"
+            >
+              {submitting === "save" ? "Saving…" : "Save without Resubmitting"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

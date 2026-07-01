@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { mapToPurchase, parsePurchaseLineItems } from "./types";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
+import { canEditPurchase, isPurchaseEditable } from "./access";
 import { fetchAllListItems } from "@/shared/listItems";
 import type { SharePointListItem } from "@/shared/spTypes";
+import type { UserPermissions } from "@/types/rbac";
 
 function ticketItem(fields: Record<string, unknown>, id = "42"): SharePointListItem {
   return {
@@ -33,6 +35,47 @@ describe("parsePurchaseLineItems (dual-read)", () => {
   });
   it("returns [] when there is nothing", () => {
     expect(parsePurchaseLineItems({})).toEqual([]);
+  });
+});
+
+function perms(p: Partial<UserPermissions>): UserPermissions {
+  return {
+    role: "user",
+    email: "",
+    displayName: "",
+    groupMemberships: [],
+    editableDepartments: [],
+    subtypeRestrictions: [],
+    canDelete: false,
+    canEditAllFields: false,
+    canSeeAllTickets: false,
+    canEditOtherDepartment: false,
+    isPurchaser: false,
+    isInventory: false,
+    visibilityKeywordMatch: false,
+    ...p,
+  };
+}
+
+describe("canEditPurchase / isPurchaseEditable (edit + resubmit gate)", () => {
+  const owned = { createdByEmail: "buyer@x.com", requesterEmail: "buyer@x.com" };
+
+  it("owner (creator/requester) or admin only", () => {
+    expect(canEditPurchase(owned, perms({ email: "buyer@x.com" }))).toBe(true);
+    expect(canEditPurchase(owned, perms({ email: "other@x.com" }))).toBe(false);
+    expect(canEditPurchase(owned, perms({ role: "admin", email: "gm@x.com" }))).toBe(true);
+    expect(canEditPurchase(owned, null)).toBe(false);
+  });
+
+  it("editable only for Changes Requested or a never-submitted record", () => {
+    expect(isPurchaseEditable({ approvalStatus: "Changes Requested", purchaseStatus: "Pending Approval" })).toBe(true);
+    expect(isPurchaseEditable({ approvalStatus: "None", purchaseStatus: "Pending Approval" })).toBe(true);
+    // In (or past) the approval gate → immutable.
+    expect(isPurchaseEditable({ approvalStatus: "Pending", purchaseStatus: "Pending Approval" })).toBe(false);
+    expect(isPurchaseEditable({ approvalStatus: "Approved", purchaseStatus: "Approved" })).toBe(false);
+    expect(isPurchaseEditable({ approvalStatus: "Denied", purchaseStatus: "Denied" })).toBe(false);
+    // A migrated record that already moved through fulfillment isn't editable.
+    expect(isPurchaseEditable({ approvalStatus: "None", purchaseStatus: "Received" })).toBe(false);
   });
 });
 
