@@ -24,6 +24,8 @@ export { visibleCdw };
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const CDW_LIST_ID = process.env.NEXT_PUBLIC_CDW_LIST_ID || "";
+// The Azure Function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_CDW_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL || "";
 
 // Display name used when bootstrapping the list (ensureCdwList).
@@ -216,6 +218,10 @@ const CDW_COLUMNS: SharePointColumnDef[] = [
   TEXT("ApprovedByEmail"),
   DATE("ApprovalDate"),
   MEMO("ApprovalNotes"),
+  // Server-written by the sendCdwApprovalRequest Azure Function: last time the
+  // approval-request email went out (its re-send cooldown stamp). Never written
+  // by the SPA. Lists created before this column tolerate its absence.
+  { name: "ApprovalRequestSentAt", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
 // Idempotently create the CDW list + columns. Returns the list id — put it in

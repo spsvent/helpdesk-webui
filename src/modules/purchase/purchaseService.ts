@@ -20,6 +20,8 @@ import {
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const PURCHASE_LIST_ID = process.env.NEXT_PUBLIC_PURCHASE_LIST_ID || "";
+// The Azure Function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_PURCHASE_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL || "";
 
 export const PURCHASE_LIST_NAME = "PurchaseRequests";
@@ -287,6 +289,10 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   MEMO("ParticipantEmails"),
   NUM("SourceTicketNumber"),
   TEXT("SourceTicketId"),
+  // Server-written by the sendPurchaseApprovalRequest Azure Function: last time
+  // the approval-request email went out (its re-send cooldown stamp). Never
+  // written by the SPA. Lists created before this column tolerate its absence.
+  { name: "ApprovalRequestSentAt", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
 export async function ensurePurchaseList(client: Client): Promise<string> {
