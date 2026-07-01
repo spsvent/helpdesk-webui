@@ -29,6 +29,7 @@ import { shouldClearApprovalOnConversion, isProblemConversionBlocked } from "@/l
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
+import ConvertToPurchaseButton from "@/modules/purchase/components/ConvertToPurchaseButton";
 import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
@@ -583,6 +584,14 @@ export default function DetailsPanel({
           {/* Approval History */}
           <ApprovalHistory ticket={ticket} />
 
+          <hr className="border-border" />
+        </>
+      )}
+
+      {/* Convert to Purchase Request — additive bridge from the purchase module. */}
+      {!ticket.isPurchaseRequest && ticket.status !== "Closed" && (
+        <>
+          <ConvertToPurchaseButton ticketId={ticket.id} />
           <hr className="border-border" />
         </>
       )}
