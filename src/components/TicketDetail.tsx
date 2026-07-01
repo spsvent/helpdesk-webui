@@ -193,24 +193,41 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       if (inflight) return inflight;
       if (!accounts[0]) return null;
 
-      const promise = (async () => {
+      const tid = ticket.id;
+      // `let` + self-reference: the finally block runs only after the async
+      // body has awaited at least once, so `promise` is assigned by then.
+      let promise: Promise<string | null> | undefined;
+      promise = (async () => {
         try {
           const blob = await fetchPreviewBlob(name);
           if (!blob) return null;
           const url = URL.createObjectURL(blob);
+          // The cache/inflight maps are keyed by name only and outlive ticket
+          // switches (the cleanup effect below revokes+clears them per ticket).
+          // If the user switched tickets while this download was in flight,
+          // caching now would poison the NEW ticket's cache with this ticket's
+          // bytes — and leak an object URL nobody would revoke. Drop it instead.
+          if (ticketIdRef.current !== tid) {
+            URL.revokeObjectURL(url);
+            return null;
+          }
           previewCache.current.set(name, url);
           return url;
         } catch (e) {
           console.error("Failed to load attachment preview:", e);
           return null;
         } finally {
-          previewInflight.current.delete(name);
+          // Only remove our own entry: after a ticket switch clears the map,
+          // the new ticket may have an in-flight download under the same name.
+          if (previewInflight.current.get(name) === promise) {
+            previewInflight.current.delete(name);
+          }
         }
       })();
       previewInflight.current.set(name, promise);
       return promise;
     },
-    [accounts, fetchPreviewBlob]
+    [accounts, fetchPreviewBlob, ticket.id]
   );
 
   // Revoke cached object URLs and close the lightbox when the ticket changes.
@@ -378,8 +395,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id, accounts, instance]);
 
-  // Fetch attachments when ticket changes
+  // Fetch attachments when ticket changes. The cancelled flag prevents a slow
+  // fetch from landing another ticket's attachment list (or clobbering the new
+  // ticket's loading state) if the user switches tickets before it resolves.
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAttachments = async () => {
       if (!accounts[0]) return;
 
@@ -387,15 +408,19 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       try {
         const client = getGraphClient(instance, accounts[0]);
         const ticketAttachments = await getAttachments(client, ticket.id, instance, accounts[0]);
-        setAttachments(ticketAttachments);
+        if (!cancelled) setAttachments(ticketAttachments);
       } catch (e) {
-        console.error("Failed to fetch attachments:", e);
+        if (!cancelled) console.error("Failed to fetch attachments:", e);
       } finally {
-        setAttachmentsLoading(false);
+        if (!cancelled) setAttachmentsLoading(false);
       }
     };
 
     fetchAttachments();
+
+    return () => {
+      cancelled = true;
+    };
   }, [ticket.id, accounts, instance]);
 
   // Handle adding a new comment
