@@ -6,6 +6,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
 import { fetchAllListItems } from "@/shared/listItems";
+import { guardedDecisionPatch, type DecisionReadResult } from "@/shared/decisionConflict";
 import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
 import type { Attachment } from "@/types/ticket";
 import {
@@ -81,24 +82,50 @@ export async function updateCdw(client: Client, id: string, patch: CdwWritable):
   return getCdw(client, id);
 }
 
+// Result of a submit/resubmit: the saved brief plus whether the approver email
+// actually went out — callers surface a non-fatal warning when it didn't.
+export interface SubmitForApprovalResult {
+  brief: CDWBrief;
+  emailSent: boolean;
+}
+
 // Move a brief into the approval queue and ask the server to email the GM group
 // the signed one-click approve/deny/changes links.
 export async function submitForApproval(
   client: Client,
   id: string,
   requesterName: string
-): Promise<CDWBrief> {
+): Promise<SubmitForApprovalResult> {
   const updated = await updateCdw(client, id, {
     status: "Pending Approval",
     // Date-only to match the dateOnly SharePoint column (avoids a TZ off-by-one).
     approvalRequestedDate: new Date().toISOString().slice(0, 10),
   });
-  await triggerCdwApprovalRequest(id, requesterName);
-  return updated;
+  const emailSent = await triggerCdwApprovalRequest(id, requesterName);
+  return { brief: updated, emailSent };
+}
+
+// Fresh read of the brief's status + ETag for the concurrency-guarded decision
+// write (mirror of getCdwFields in the cdwApprovalAction Function).
+async function readDecisionState(client: Client, id: string): Promise<DecisionReadResult> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${CDW_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  const brief = mapToCdw(item);
+  return {
+    status: brief.status,
+    decidedBy: brief.approvedByName,
+    etag: (item["@odata.etag"] as string) || "*",
+  };
 }
 
 // Record an in-app approver decision (the email path is handled by the Azure
 // Function). On "Approved" the brief becomes public.
+//
+// Concurrency: mirrors the emailed-link Function — a fresh read + pending-only gate
+// + an If-Match–conditioned PATCH (guardedDecisionPatch). If the brief was already
+// decided by email or another GM, this throws DecisionConflictError instead of
+// silently overwriting that decision from a stale tab.
 export async function recordDecision(
   client: Client,
   id: string,
@@ -107,6 +134,7 @@ export async function recordDecision(
   approverEmail: string,
   notes?: string
 ): Promise<CDWBrief> {
+  if (!CDW_LIST_ID) throw new Error("CDW list is not configured (NEXT_PUBLIC_CDW_LIST_ID)");
   const patch: CdwWritable = {
     status: decisionToStatus(decision),
     approvedByName: approverName,
@@ -115,7 +143,14 @@ export async function recordDecision(
     approvalDate: new Date().toISOString().slice(0, 10),
   };
   if (notes) patch.approvalNotes = notes;
-  return updateCdw(client, id, patch);
+
+  const endpoint = `/sites/${SITE_ID}/lists/${CDW_LIST_ID}/items/${id}`;
+  await guardedDecisionPatch({
+    read: () => readDecisionState(client, id),
+    patch: (etag) => client.api(endpoint).header("If-Match", etag).patch({ fields: toFields(patch) }),
+    pendingStatus: "Pending Approval",
+  });
+  return getCdw(client, id);
 }
 
 // POST to the Azure Function that mints signed tokens + emails the GM approvers.
