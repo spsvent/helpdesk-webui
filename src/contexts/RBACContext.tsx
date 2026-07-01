@@ -26,6 +26,7 @@ import {
   canMarkReceived as canMarkReceivedService,
 } from "@/lib/rbacService";
 import { UserPermissions, DEFAULT_PERMISSIONS } from "@/types/rbac";
+import { isPublicModuleRoute } from "@/shared/formModules";
 import { Ticket } from "@/types/ticket";
 import {
   getActiveKeywords,
@@ -92,6 +93,17 @@ export function RBACProvider({ children }: RBACProviderProps) {
   // Fetch permissions when authenticated
   useEffect(() => {
     async function fetchPermissions() {
+      // Public, token-authorized pages (e.g. /cdw/approve) must not fetch
+      // permissions: a cached MSAL account there would trigger Graph calls and
+      // possibly an interactive-redirect escalation that drops the ?token= from
+      // the URL. Leave permissions at their defaults — the page authorizes via
+      // its token, not RBAC. (Guard window like layout.tsx; this only runs
+      // client-side, but the file must stay SSR-safe.)
+      if (typeof window !== "undefined" && isPublicModuleRoute(window.location.pathname)) {
+        setLoading(false);
+        return;
+      }
+
       if (!isAuthenticated || !accounts[0] || inProgress !== InteractionStatus.None) {
         setLoading(inProgress !== InteractionStatus.None);
         return;

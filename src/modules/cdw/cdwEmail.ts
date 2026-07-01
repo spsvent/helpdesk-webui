@@ -3,7 +3,7 @@
 // from the Azure Function, so a given decision notifies exactly once.)
 
 import { Client } from "@microsoft/microsoft-graph-client";
-import { sendEmail } from "@/lib/graphClient";
+import { sendEmail } from "@/shared/graph";
 import { CDWBrief, CdwDecision } from "./types";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc51e.1.azurestaticapps.net";

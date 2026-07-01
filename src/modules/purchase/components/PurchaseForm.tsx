@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient, getTicket, updateTicket, addComment } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
+// Ticket-specific helpers for the convert-from-ticket bridge (?fromTicket=…) —
+// deliberately NOT part of the @/shared/graph facade (they're Tickets-list
+// bound). This is the one sanctioned deep import from a module into the ticket
+// client; everything else must go through the facade.
+import { getTicket, updateTicket, addComment } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import LoadingSpinner from "@/components/LoadingSpinner";

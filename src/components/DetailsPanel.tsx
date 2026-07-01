@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Attachment, PurchaseLineItem, Comment } from "@/types/ticket";
 import { collectParticipants } from "@/lib/participants";
@@ -29,7 +30,6 @@ import { shouldClearApprovalOnConversion, isProblemConversionBlocked } from "@/l
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
-import ConvertToPurchaseButton from "@/modules/purchase/components/ConvertToPurchaseButton";
 import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
@@ -46,6 +46,16 @@ import {
   sendPriorityEscalationTeamsNotification,
 } from "@/lib/teamsService";
 import { syncTicketUpdated, syncTicketRecategorized } from "@/lib/vikunjaSyncService";
+import { allTicketDetailActions } from "@/shared/formModules";
+
+// Module-contributed ticket-detail actions (e.g. the purchase module's "Convert to
+// Purchase Request" button), lazy-loaded via the form-module manifest so core keeps
+// no static import from any module (removability contract). Built once at module
+// scope because next/dynamic components must not be created per render.
+const TICKET_DETAIL_ACTIONS = allTicketDetailActions().map((action) => ({
+  ...action,
+  Component: dynamic(action.load, { loading: () => null }),
+}));
 
 interface DetailsPanelProps {
   ticket: Ticket;
@@ -596,13 +606,16 @@ export default function DetailsPanel({
         </>
       )}
 
-      {/* Convert to Purchase Request — additive bridge from the purchase module. */}
-      {!ticket.isPurchaseRequest && ticket.status !== "Closed" && (
-        <>
-          <ConvertToPurchaseButton ticketId={ticket.id} />
+      {/* Module-contributed ticket actions (e.g. purchase's "Convert to Purchase
+          Request" bridge). Visibility comes from each action's manifest gate. */}
+      {TICKET_DETAIL_ACTIONS.filter(
+        (a) => !a.visibleWhen || a.visibleWhen(ticket, permissions)
+      ).map(({ id, Component }) => (
+        <Fragment key={id}>
+          <Component ticket={ticket} />
           <hr className="border-border" />
-        </>
-      )}
+        </Fragment>
+      ))}
 
       {/* Merge Ticket */}
       {canEdit && onMergeComplete && (

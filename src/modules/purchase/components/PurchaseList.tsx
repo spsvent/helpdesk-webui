@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PurchaseRequest } from "../types";
@@ -11,7 +11,6 @@ import { canCreatePurchase } from "../access";
 import { ensurePurchaseList, isPurchaseConfigured, listPurchases, visiblePurchase } from "../purchaseService";
 import { computeEstimatedTotal } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
-import MigrationPanel from "./MigrationPanel";
 
 export default function PurchaseList() {
   const { instance, accounts } = useMsal();
@@ -83,8 +82,6 @@ export default function PurchaseList() {
           )}
         </div>
       )}
-
-      {permissions?.role === "admin" && isPurchaseConfigured() && <MigrationPanel />}
 
       {loading ? (
         <div className="p-8"><LoadingSpinner /></div>

@@ -8,7 +8,7 @@ import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
 import { fetchAllListItems } from "@/shared/listItems";
 import { guardedDecisionPatch, type DecisionReadResult } from "@/shared/decisionConflict";
 import { serializeParticipantEmails } from "@/lib/participants";
-import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
+import { getAttachments, uploadAttachment, deleteAttachment } from "@/shared/graph";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {

@@ -7,7 +7,7 @@ import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser"
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
 import { fetchAllListItems } from "@/shared/listItems";
 import { guardedDecisionPatch, type DecisionReadResult } from "@/shared/decisionConflict";
-import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
+import { getAttachments, uploadAttachment, deleteAttachment } from "@/shared/graph";
 import type { Attachment } from "@/types/ticket";
 import {
   CDWBrief,

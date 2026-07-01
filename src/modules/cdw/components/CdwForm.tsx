@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import UserSearchDropdown from "@/components/UserSearchDropdown";

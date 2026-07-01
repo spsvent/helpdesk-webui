@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { DecisionConflictError, decisionConflictMessage } from "@/shared/decisionConflict";
 import { CDWBrief, CdwDecision } from "../types";
 import { recordDecision } from "../cdwService";
