@@ -6,7 +6,7 @@ import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { CDWBrief } from "../types";
+import { CDWBrief, isEditableCdwStatus } from "../types";
 import { CDW_FIELDS } from "../fields";
 import { validateBrief } from "../validation";
 import { getCdw, submitForApproval, visibleCdw } from "../cdwService";
@@ -94,7 +94,9 @@ export default function CdwDetail({ id }: { id: string }) {
   const me = permissions?.email?.toLowerCase();
   const isOwner =
     !!me && [brief.createdByEmail, brief.requesterEmail].some((e) => e && e.toLowerCase() === me);
-  const canSubmit = isOwner && (brief.status === "Draft" || brief.status === "Changes Requested");
+  // Edit/submit only while the brief is still in the requester's hands (Draft /
+  // Changes Requested) — the same rule CdwForm enforces on the edit route.
+  const canSubmit = isOwner && isEditableCdwStatus(brief.status);
   const showApproval = canApprove() && brief.status === "Pending Approval";
 
   return (

@@ -11,7 +11,7 @@ import UserSearchDropdown from "@/components/UserSearchDropdown";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { CDW_FIELDS } from "../fields";
-import { CdwWritable } from "../types";
+import { CdwStatus, CdwWritable, isEditableCdwStatus } from "../types";
 import { validateCdw, briefToFormState } from "../validation";
 import { canCreateCdw, canEditCdw } from "../access";
 import { createCdw, getCdw, updateCdw, submitForApproval, uploadCdwAttachment, isCdwConfigured } from "../cdwService";
@@ -39,8 +39,13 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
   const [saving, setSaving] = useState<null | "draft" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingBrief, setLoadingBrief] = useState(isEdit);
-  // Owner identity of the brief being edited, for the edit authorization check.
-  const [briefOwner, setBriefOwner] = useState<{ createdByEmail: string; requesterEmail: string } | null>(null);
+  // Owner identity + status of the brief being edited, for the edit authorization
+  // and editable-status checks.
+  const [briefOwner, setBriefOwner] = useState<{
+    createdByEmail: string;
+    requesterEmail: string;
+    status: CdwStatus;
+  } | null>(null);
 
   // Edit mode: hydrate from the existing brief. New mode: one-shot draft restore.
   useEffect(() => {
@@ -50,7 +55,11 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
         try {
           const client = getGraphClient(instance, account);
           const brief = await getCdw(client, briefId!);
-          setBriefOwner({ createdByEmail: brief.createdByEmail, requesterEmail: brief.requesterEmail });
+          setBriefOwner({
+            createdByEmail: brief.createdByEmail,
+            requesterEmail: brief.requesterEmail,
+            status: brief.status,
+          });
           const { values: v, persons: p } = briefToFormState(brief);
           setValues(v);
           setPersons(p);
@@ -181,6 +190,25 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
         </p>
         <Link href="/cdw" className="mt-3 inline-block text-sm text-brand-primary underline">
           Back to briefs
+        </Link>
+      </div>
+    );
+  }
+
+  // Status gate: content is frozen once a brief enters (or finishes) approval, even
+  // for its owner — otherwise every field could be rewritten under an intact
+  // "Pending Approval"/"Approved" status and approver attribution. Only Draft and
+  // Changes Requested briefs are editable (CdwDetail offers Edit for exactly those).
+  if (isEdit && briefOwner && !isEditableCdwStatus(briefOwner.status)) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <p className="text-sm text-text-secondary">
+          {briefOwner.status === "Pending Approval"
+            ? "This brief is awaiting review and can’t be edited — ask the approver to request changes first."
+            : "This brief has been decided and can no longer be edited."}
+        </p>
+        <Link href={`/cdw/?id=${briefId}`} className="mt-3 inline-block text-sm text-brand-primary underline">
+          Back to the brief
         </Link>
       </div>
     );

@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { visibleCdw, mapToCdw, CDWBrief } from "./types";
+import { visibleCdw, mapToCdw, isEditableCdwStatus, CDWBrief, CDW_STATUSES } from "./types";
 import { validateCdw, validateBrief, briefToFormState } from "./validation";
 import { canCreateCdw, canEditCdw } from "./access";
 import type { UserPermissions } from "@/types/rbac";
@@ -57,6 +57,22 @@ describe("visibleCdw", () => {
   });
   it("an unrelated user cannot see a non-public brief", () => {
     expect(visibleCdw(brief({ status: "Pending Approval" }), perms({ email: "someone@x.com" }))).toBe(false);
+  });
+});
+
+describe("isEditableCdwStatus", () => {
+  it("only Draft and Changes Requested briefs are editable", () => {
+    expect(isEditableCdwStatus("Draft")).toBe(true);
+    expect(isEditableCdwStatus("Changes Requested")).toBe(true);
+  });
+  it("a brief in (or past) approval is frozen — status and attribution can't ride on rewritten content", () => {
+    expect(isEditableCdwStatus("Pending Approval")).toBe(false);
+    expect(isEditableCdwStatus("Approved")).toBe(false);
+    expect(isEditableCdwStatus("Denied")).toBe(false);
+  });
+  it("covers every status (a new status must be classified here explicitly)", () => {
+    const editable = CDW_STATUSES.filter(isEditableCdwStatus);
+    expect(editable).toEqual(["Draft", "Changes Requested"]);
   });
 });
 
