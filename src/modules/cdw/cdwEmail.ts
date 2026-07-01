@@ -4,38 +4,11 @@
 
 import { Client } from "@microsoft/microsoft-graph-client";
 import { sendEmail } from "@/shared/graph";
+import { APP_URL, escapeHtml, emailShell } from "@/shared/emailHtml";
 import { CDWBrief, CdwDecision } from "./types";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc51e.1.azurestaticapps.net";
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  };
-  return text.replace(/[&<>"']/g, (c) => map[c]);
-}
-
 function shell(headline: string, bodyHtml: string): string {
-  return `<!DOCTYPE html><html><head><style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #1e3a5f; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-    .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
-    .info { background: white; padding: 16px; border-radius: 8px; margin: 16px 0; border: 1px solid #e5e7eb; }
-    .label { font-weight: 600; color: #374151; }
-    .btn { display: inline-block; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; background: #1e3a5f; color: white; }
-    .actions { text-align: center; margin: 24px 0; }
-    .footer { text-align: center; padding: 16px; color: #6b7280; font-size: 14px; border-top: 1px solid #e5e7eb; }
-  </style></head><body><div class="container">
-    <div class="header"><h1 style="margin:0;font-size:24px;">${headline}</h1>
-      <p style="margin:8px 0 0 0;opacity:0.9;">SkyPark Help Desk — Creative Brief</p></div>
-    <div class="content">${bodyHtml}</div>
-    <div class="footer"><p>This is an automated message from SkyPark Help Desk.</p></div>
-  </div></body></html>`;
+  return emailShell(headline, bodyHtml, "SkyPark Help Desk — Creative Brief");
 }
 
 function briefInfo(brief: CDWBrief, extra = ""): string {
