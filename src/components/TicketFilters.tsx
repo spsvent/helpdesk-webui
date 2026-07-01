@@ -13,6 +13,7 @@ import {
 import { Ticket } from "@/types/ticket";
 import { UserPermissions } from "@/types/rbac";
 import {
+  clearApprovalFilter,
   getActiveFilterCount,
   filtersMatchDefault,
   getActiveFilterSummary,
@@ -82,6 +83,7 @@ export default function TicketFiltersComponent({
   }, [filters.search]);
 
   const activeFilterCount = getActiveFilterCount(filters);
+  const hasApprovalFilter = (filters.approvalStatus?.length ?? 0) > 0;
 
   // "Show resolved & closed" is ON when either status is explicitly selected —
   // or when the status set is empty ("show all tickets"), since that view
@@ -414,12 +416,16 @@ export default function TicketFiltersComponent({
         </div>
       </div>
 
-      {/* Active filter summary pills (when panel collapsed) */}
-      {!showFilters && activeFilterCount > 0 && (
-        <div className="px-3 pb-2 flex gap-1 overflow-hidden">
-          {filters.approvalStatus && filters.approvalStatus.length > 0 && (
+      {/* Active filter summary pills. The removable "Awaiting Approval" chip is
+          the ONLY control for the approval filter (tier 2 has no approval
+          section), so it stays visible even while the panel is expanded;
+          the read-only summary pills only show when the panel is collapsed.
+          flex-wrap keeps extra pills from clipping mid-pill on narrow screens. */}
+      {(hasApprovalFilter || (!showFilters && activeFilterCount > 0)) && (
+        <div className="px-3 pb-2 flex flex-wrap gap-1">
+          {hasApprovalFilter && (
             <button
-              onClick={() => onFiltersChange({ ...filters, approvalStatus: undefined })}
+              onClick={() => onFiltersChange(clearApprovalFilter(filters))}
               className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] bg-yellow-100 text-yellow-800 rounded-full whitespace-nowrap hover:bg-yellow-200"
               title="Clear approval filter"
             >
@@ -427,14 +433,15 @@ export default function TicketFiltersComponent({
               <span aria-hidden>×</span>
             </button>
           )}
-          {getActiveFilterSummary(filters).map((label) => (
-            <span
-              key={label}
-              className="inline-block px-2 py-0.5 text-[10px] bg-blue-50 text-blue-700 rounded-full whitespace-nowrap"
-            >
-              {label}
-            </span>
-          ))}
+          {!showFilters &&
+            getActiveFilterSummary(filters).map((label) => (
+              <span
+                key={label}
+                className="inline-block px-2 py-0.5 text-[10px] bg-blue-50 text-blue-700 rounded-full whitespace-nowrap"
+              >
+                {label}
+              </span>
+            ))}
         </div>
       )}
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Attachment } from "@/types/ticket";
 import { isBrowserPreviewable } from "@/lib/attachmentComments";
+import { isHeic } from "@/lib/heicRenditions";
 import { formatFileSize } from "./fileTypeIcon";
 
 interface ImageLightboxProps {
@@ -11,6 +12,12 @@ interface ImageLightboxProps {
   /** Index of the image currently shown. */
   index: number;
   getPreviewUrl: (name: string) => Promise<string | null>;
+  /**
+   * Synchronous peek into the parent's preview cache. When it returns a URL,
+   * the image is shown immediately — no spinner frame on returning to an
+   * already-fetched image.
+   */
+  peekPreviewUrl?: (name: string) => string | null;
   /** Whether an image can be shown inline (HEIC may convert on demand). */
   canPreview?: (name: string) => boolean;
   /**
@@ -29,10 +36,19 @@ type LoadState = "loading" | "ready" | "error" | "unsupported";
 // Full-screen image viewer with prev/next paging, keyboard controls (←/→/Esc),
 // and a download fallback for formats that can't be shown inline (e.g. HEIC when
 // backend conversion isn't available).
+// Everything the stage needs to render one image, keyed by its name so
+// navigation can reset it synchronously (see the render-phase check below).
+interface ImageView {
+  name: string;
+  state: LoadState;
+  url: string | null;
+}
+
 export default function ImageLightbox({
   images,
   index,
   getPreviewUrl,
+  peekPreviewUrl,
   canPreview,
   canPreloadNeighbor,
   onClose,
@@ -46,8 +62,19 @@ export default function ImageLightbox({
   const current = images[index];
   const count = images.length;
 
-  const [state, setState] = useState<LoadState>("loading");
-  const [url, setUrl] = useState<string | null>(null);
+  const initialViewFor = useCallback(
+    (name: string | undefined): ImageView => {
+      if (!name) return { name: "", state: "loading", url: null };
+      if (!previewable(name)) return { name, state: "unsupported", url: null };
+      const cached = peekPreviewUrl?.(name) ?? null;
+      return cached
+        ? { name, state: "ready", url: cached }
+        : { name, state: "loading", url: null };
+    },
+    [previewable, peekPreviewUrl]
+  );
+
+  const [view, setView] = useState<ImageView>(() => initialViewFor(images[index]?.name));
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const goPrev = useCallback(() => {
@@ -64,30 +91,35 @@ export default function ImageLightbox({
   const nextName = count > 1 ? images[(index + 1) % count]?.name : undefined;
   const prevName = count > 1 ? images[(index - 1 + count) % count]?.name : undefined;
 
+  // Reset the view synchronously when navigating (React's supported
+  // "adjust state during render" pattern): the replacement render happens
+  // before paint, so a cached image never flashes the spinner — and a
+  // non-cached one never flashes the previous image.
+  if (view.name !== (currentName ?? "")) {
+    setView(initialViewFor(currentName));
+  }
+
   // Load the current image (and warm the neighbors' cache for snappy paging).
   useEffect(() => {
     if (!currentName) return;
-    if (!previewable(currentName)) {
-      setUrl(null);
-      setState("unsupported");
-      return;
-    }
     let cancelled = false;
-    setState("loading");
-    setUrl(null);
-    getPreviewUrl(currentName)
-      .then((u) => {
-        if (cancelled) return;
-        if (u) {
-          setUrl(u);
-          setState("ready");
-        } else {
-          setState("error");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setState("error");
-      });
+
+    // Fetch unless unsupported or already served synchronously from the cache.
+    if (previewable(currentName) && !peekPreviewUrl?.(currentName)) {
+      getPreviewUrl(currentName)
+        .then((u) => {
+          if (cancelled) return;
+          setView((v) => {
+            if (v.name !== currentName) return v; // stale: user navigated away
+            return u ? { name: currentName, state: "ready", url: u } : { ...v, state: "error" };
+          });
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setView((v) => (v.name === currentName ? { ...v, state: "error" } : v));
+          }
+        });
+    }
 
     // Warm neighbors so Next/Prev is instant. Fire-and-forget, cache-deduped.
     // Only cheap neighbors (no on-demand conversion) are prefetched.
@@ -98,7 +130,7 @@ export default function ImageLightbox({
     return () => {
       cancelled = true;
     };
-  }, [currentName, nextName, prevName, previewable, preloadable, getPreviewUrl]);
+  }, [currentName, nextName, prevName, previewable, preloadable, getPreviewUrl, peekPreviewUrl]);
 
   // On open: lock background scroll and move focus into the dialog; restore both
   // (scroll + the previously-focused element) when it closes.
@@ -116,9 +148,11 @@ export default function ImageLightbox({
   // Keyboard: Esc closes, ←/→ page, Tab is trapped within the dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowLeft") { goPrev(); return; }
-      if (e.key === "ArrowRight") { goNext(); return; }
+      // preventDefault so the keys act only on the lightbox (no background
+      // scroll of focused containers, no other Escape handlers).
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); return; }
+      if (e.key === "ArrowRight") { e.preventDefault(); goNext(); return; }
       if (e.key === "Tab") {
         const dialog = dialogRef.current;
         if (!dialog) return;
@@ -218,18 +252,26 @@ export default function ImageLightbox({
           className="max-w-full max-h-full flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
-          {state === "ready" && url ? (
+          {view.state === "ready" && view.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={url}
+              src={view.url}
               alt={current.name}
               className="max-w-full max-h-[calc(100vh-8rem)] object-contain rounded-lg shadow-2xl"
             />
-          ) : state === "loading" ? (
-            <svg className="animate-spin h-10 w-10 text-white/80" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+          ) : view.state === "loading" ? (
+            <div className="flex flex-col items-center gap-3">
+              <svg className="animate-spin h-10 w-10 text-white/80" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {/* A HEIC that isn't "cheap" (no rendition yet — see canPreloadNeighbor)
+                  is being downloaded + converted server-side, which takes seconds,
+                  not frames. Say so instead of showing an anonymous spinner. */}
+              {isHeic(current.name) && !preloadable(current.name) && (
+                <p className="text-sm text-white/75">Converting iPhone photo…</p>
+              )}
+            </div>
           ) : (
             // "unsupported" (HEIC/TIFF) or "error"
             <div className="text-center text-white/80 px-6 py-10 max-w-sm">
@@ -237,7 +279,7 @@ export default function ImageLightbox({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <p className="text-sm mb-4">
-                {state === "unsupported"
+                {view.state === "unsupported"
                   ? "This file type can't be previewed in the browser."
                   : "Couldn't load this image."}
               </p>

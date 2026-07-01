@@ -99,8 +99,16 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const previewInflight = useRef<Map<string, Promise<string | null>>>(new Map());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [highlightAttachments, setHighlightAttachments] = useState(false);
+  // Name of the single attachment row to highlight after a "jump to file" link
+  // (null → highlight the whole section instead).
+  const [highlightedAttachment, setHighlightedAttachment] = useState<string | null>(null);
   const attachmentsSectionRef = useRef<HTMLDivElement>(null);
-  const pendingScrollRef = useRef(false);
+  // Deferred mobile scroll: holds the target of a scroll requested while the
+  // Details tab wasn't mounted yet ({} → the section, { name } → that file's row).
+  const pendingScrollRef = useRef<{ name?: string } | null>(null);
+  // Highlight-clearing timer — kept in a ref so a second jump restarts the
+  // window instead of a stale timeout cutting the new highlight short.
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   const heicConvertEnabled = isHeicConvertEnabled();
 
@@ -245,6 +253,13 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     [accounts, fetchPreviewBlob, ticket.id]
   );
 
+  // Synchronous cache peek so the lightbox can show an already-fetched image
+  // on its very first frame (no spinner flash when paging back to it).
+  const peekPreviewUrl = useCallback(
+    (name: string): string | null => previewCache.current.get(name) ?? null,
+    []
+  );
+
   // Revoke cached object URLs and close the lightbox when the ticket changes.
   useEffect(() => {
     const cache = previewCache.current;
@@ -265,30 +280,48 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     [imageAttachments]
   );
 
-  const doScrollToAttachments = useCallback(() => {
-    const el = attachmentsSectionRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    setHighlightAttachments(true);
-    window.setTimeout(() => setHighlightAttachments(false), 1600);
+  // Scroll to the Attachments section — or, when a filename is given and its
+  // row is rendered, to that specific row (with a row-level highlight). Falls
+  // back to the section-level highlight when the name isn't in the list.
+  const doScrollToAttachments = useCallback((name?: string) => {
+    const section = attachmentsSectionRef.current;
+    if (!section) return;
+    const row = name
+      ? section.querySelector<HTMLElement>(`[data-attachment-name="${CSS.escape(name)}"]`)
+      : null;
+    (row ?? section).scrollIntoView({ behavior: "smooth", block: row ? "center" : "start" });
+    setHighlightAttachments(!row);
+    setHighlightedAttachment(row && name ? name : null);
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightAttachments(false);
+      setHighlightedAttachment(null);
+      highlightTimeoutRef.current = null;
+    }, 1600);
   }, []);
 
-  const scrollToAttachments = useCallback(() => {
-    // On mobile the Attachments live in the "Details" tab — switch to it first,
-    // then scroll once the panel has mounted (handled by the effect below).
-    if (isMobile && mobileDetailView !== "details") {
-      pendingScrollRef.current = true;
-      setMobileDetailView("details");
-      return;
-    }
-    doScrollToAttachments();
-  }, [isMobile, mobileDetailView, doScrollToAttachments]);
+  const scrollToAttachments = useCallback(
+    (name?: string) => {
+      // On mobile the Attachments live in the "Details" tab — switch to it first,
+      // then scroll once the panel has mounted (handled by the effect below).
+      if (isMobile && mobileDetailView !== "details") {
+        pendingScrollRef.current = { name };
+        setMobileDetailView("details");
+        return;
+      }
+      doScrollToAttachments(name);
+    },
+    [isMobile, mobileDetailView, doScrollToAttachments]
+  );
 
   // Perform a deferred scroll after the mobile Details panel becomes visible.
   useEffect(() => {
     if (mobileDetailView === "details" && pendingScrollRef.current) {
-      pendingScrollRef.current = false;
-      const id = window.setTimeout(() => doScrollToAttachments(), 60);
+      const { name } = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+      const id = window.setTimeout(() => doScrollToAttachments(name), 60);
       return () => window.clearTimeout(id);
     }
   }, [mobileDetailView, doScrollToAttachments]);
@@ -1119,6 +1152,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onPreviewImage={openLightbox}
               attachmentsSectionRef={attachmentsSectionRef}
               highlightAttachments={highlightAttachments}
+              highlightAttachmentName={highlightedAttachment}
               onMergeComplete={handleMergeComplete}
               saveRef={detailsPanelSaveRef}
             />
@@ -1132,6 +1166,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           images={imageAttachments}
           index={lightboxIndex}
           getPreviewUrl={getPreviewUrl}
+          peekPreviewUrl={peekPreviewUrl}
           canPreview={canPreview}
           canPreloadNeighbor={canThumbnail}
           onClose={() => setLightboxIndex(null)}
