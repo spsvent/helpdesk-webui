@@ -3,8 +3,8 @@
 // A "form module" is a self-contained kind of thing a user can create (a Ticket, a
 // CDW creative brief, …). Each module owns its own route(s) and — for add-on modules
 // — its own SharePoint list + service + components. The app shell never branches on
-// module type: the header "+ New" menu and (optionally) the settings tabs are driven
-// entirely by FORM_MODULES.
+// module type: the header "+ New" menu, the module-contributed Settings tabs, and
+// the module-contributed ticket-detail actions are driven entirely by FORM_MODULES.
 //
 // Adding a form type = add one entry here (importing its manifest from the module's
 // own index). Removing one = delete that entry (and the module folder). The built-in

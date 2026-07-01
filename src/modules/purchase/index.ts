@@ -6,11 +6,13 @@
 // the purchase Azure Functions, this entry in src/shared/formModules.ts, the help
 // section, and the NEXT_PUBLIC_PURCHASE_* env vars; archive the PurchaseRequests list.
 // Nothing else in core references this module — the ticket-detail "Convert to
-// Purchase Request" button is contributed through this manifest
-// (ticketDetailActions), not hard-imported by core.
+// Purchase Request" button and the Settings "Purchase Migration" tab are
+// contributed through this manifest (ticketDetailActions / settingsTabs), not
+// hard-imported by core.
 
 import type { FormModule } from "@/shared/formModules";
 import { canCreatePurchase } from "./access";
+import { isPurchaseConfigured } from "./purchaseService";
 
 export const purchaseModule: FormModule = {
   id: "purchase",
@@ -20,6 +22,16 @@ export const purchaseModule: FormModule = {
   newHref: "/purchase/new",
   visibleWhen: canCreatePurchase,
   publicRoutePrefixes: ["/purchase/approve"],
+  settingsTabs: [
+    {
+      id: "purchase-migration",
+      label: "Purchase Migration",
+      // Copy-only ticket→PurchaseRequests migration runner (moved here from the
+      // purchase list page). Same gate it had there: admin + module configured.
+      load: () => import("./components/MigrationPanel"),
+      visibleWhen: (perms) => perms?.role === "admin" && isPurchaseConfigured(),
+    },
+  ],
   ticketDetailActions: [
     {
       id: "convert-to-purchase",
