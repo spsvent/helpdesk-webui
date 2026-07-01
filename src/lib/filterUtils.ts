@@ -221,12 +221,55 @@ export function isDateInRange(dateString: string, range: DateRange): boolean {
 }
 
 /**
+ * Is the ticket list currently showing Resolved & Closed tickets?
+ * True when either status is explicitly selected — or when the status filter
+ * is empty, because an empty set means "show all statuses" (which includes
+ * Resolved and Closed). Drives the "Show resolved & closed" checkbox.
+ */
+export function isShowingResolvedClosed(status: Ticket["status"][]): boolean {
+  return (
+    status.length === 0 ||
+    status.includes("Resolved") ||
+    status.includes("Closed")
+  );
+}
+
+/**
+ * Toggle "Show resolved & closed" — returns the next status filter set.
+ *
+ * - Currently showing (checked) → hide both: drop Resolved/Closed from the
+ *   selection. If that would leave the set empty (which means "show all",
+ *   i.e. they'd come right back), fall back to the default active statuses.
+ * - Currently hidden (unchecked) → show both, preserving whatever statuses
+ *   are already selected.
+ */
+export function toggleResolvedClosedStatuses(
+  status: Ticket["status"][]
+): Ticket["status"][] {
+  if (isShowingResolvedClosed(status)) {
+    const remaining = status.filter((s) => s !== "Resolved" && s !== "Closed");
+    return remaining.length > 0 ? remaining : [...DEFAULT_FILTERS.status];
+  }
+  return Array.from(new Set<Ticket["status"]>([...status, "Resolved", "Closed"]));
+}
+
+/**
+ * Is the status filter meaningfully narrowed by the user? The default status
+ * set (active tickets only) is the baseline view, not an "active filter", so
+ * it shouldn't badge the More-filters button or render a summary pill.
+ * An empty set means "all statuses" — also not a narrowing.
+ */
+export function isStatusFilterActive(status: Ticket["status"][]): boolean {
+  return status.length > 0 && !arraysEqual(status, DEFAULT_FILTERS.status);
+}
+
+/**
  * Count active filters (excluding search and sort)
  */
 export function getActiveFilterCount(filters: TicketFilters): number {
   let count = 0;
 
-  if (filters.status.length > 0) count++;
+  if (isStatusFilterActive(filters.status)) count++;
   if (filters.priority.length > 0) count++;
   if (filters.problemType) count++;
   if (filters.problemTypeSub) count++;
@@ -295,7 +338,7 @@ export function filtersMatchDefault(filters: TicketFilters): boolean {
 export function getActiveFilterSummary(filters: TicketFilters): string[] {
   const labels: string[] = [];
 
-  if (filters.status.length > 0) {
+  if (isStatusFilterActive(filters.status)) {
     labels.push(`Status: ${filters.status.join(", ")}`);
   }
   if (filters.priority.length > 0) {

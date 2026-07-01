@@ -12,7 +12,13 @@ import {
 } from "@/types/filters";
 import { Ticket } from "@/types/ticket";
 import { UserPermissions } from "@/types/rbac";
-import { getActiveFilterCount, filtersMatchDefault, getActiveFilterSummary } from "@/lib/filterUtils";
+import {
+  getActiveFilterCount,
+  filtersMatchDefault,
+  getActiveFilterSummary,
+  isShowingResolvedClosed,
+  toggleResolvedClosedStatuses,
+} from "@/lib/filterUtils";
 import { getProblemTypes, getProblemTypeSubs, getProblemTypeSub2s } from "@/lib/categoryConfig";
 
 interface TicketFiltersProps {
@@ -47,42 +53,49 @@ export default function TicketFiltersComponent({
     filtersRef.current = filters;
   }, [filters]);
 
+  // The last search value THIS component pushed via onFiltersChange. Lets the
+  // external-sync effect below tell our own debounced echo apart from a
+  // genuinely external change (preset buttons replacing the whole filter set).
+  const lastEmittedSearchRef = useRef(filters.search);
+
   // Debounce search input — only re-fires when user types, not on any filter change
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchInput !== filtersRef.current.search) {
+        lastEmittedSearchRef.current = searchInput;
         onFiltersChange({ ...filtersRef.current, search: searchInput });
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput, onFiltersChange]);
 
+  // Sync the input when filters.search changes externally (e.g. the Purchase
+  // Queue / Incoming Orders / Awaiting Approval presets reset filters in the
+  // parent). Skipping our own echo means this never fights in-progress typing:
+  // mid-debounce keystrokes leave filters.search untouched, so this effect
+  // doesn't run at all until something external actually changes it.
+  useEffect(() => {
+    if (filters.search !== lastEmittedSearchRef.current) {
+      lastEmittedSearchRef.current = filters.search;
+      setSearchInput(filters.search);
+    }
+  }, [filters.search]);
+
   const activeFilterCount = getActiveFilterCount(filters);
 
-  // "Show resolved & closed" is ON when either Resolved or Closed is in the
-  // status set. Toggling it adds/removes BOTH so it matches its label, and the
-  // default view (which lists neither) starts with it OFF.
-  const isShowingResolvedClosed =
-    filters.status.includes("Resolved") || filters.status.includes("Closed");
+  // "Show resolved & closed" is ON when either status is explicitly selected —
+  // or when the status set is empty ("show all tickets"), since that view
+  // includes them too. Toggling adds/removes BOTH so it matches its label;
+  // the default view (which lists neither) starts with it OFF, and unchecking
+  // from the empty set falls back to the default active statuses.
+  const showingResolvedClosed = isShowingResolvedClosed(filters.status);
 
   const toggleShowResolvedClosed = useCallback(() => {
-    if (isShowingResolvedClosed) {
-      // Hide both. If that would leave an empty list ("show everything"), fall
-      // back to the active statuses instead.
-      const remaining = filters.status.filter(
-        (s) => s !== "Resolved" && s !== "Closed"
-      );
-      const baseStatuses: Ticket["status"][] =
-        remaining.length > 0 ? remaining : ["New", "In Progress", "On Hold"];
-      onFiltersChange({ ...filters, status: baseStatuses });
-      return;
-    }
-    // Show both, preserving whatever statuses are already selected.
-    const withResolvedClosed = Array.from(
-      new Set<Ticket["status"]>([...filters.status, "Resolved", "Closed"])
-    );
-    onFiltersChange({ ...filters, status: withResolvedClosed });
-  }, [filters, isShowingResolvedClosed, onFiltersChange]);
+    onFiltersChange({
+      ...filters,
+      status: toggleResolvedClosedStatuses(filters.status),
+    });
+  }, [filters, onFiltersChange]);
 
   // Toggle a boolean quick filter (combinable; AND together)
   const toggleQuickFilter = useCallback(
@@ -341,7 +354,7 @@ export default function TicketFiltersComponent({
         <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none w-fit">
           <input
             type="checkbox"
-            checked={isShowingResolvedClosed}
+            checked={showingResolvedClosed}
             onChange={toggleShowResolvedClosed}
             className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-2 focus:ring-brand-primary cursor-pointer"
           />
