@@ -6,12 +6,15 @@ import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { PurchaseRequest } from "../types";
-import { getPurchase, visiblePurchase } from "../purchaseService";
-import { canApprovePurchase } from "../access";
+import { PurchaseLineItem, PurchaseRequest } from "../types";
+import { getPurchase, updateLineItems, visiblePurchase } from "../purchaseService";
+import { canApprovePurchase, canPurchase, canReceive } from "../access";
+import { allItemsOrdered, allItemsReceived } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 import LineItemsTable from "./LineItemsTable";
 import PurchaseApprovalPanel from "./PurchaseApprovalPanel";
+import PurchaseActionPanel from "./PurchaseActionPanel";
+import ReceiveActionPanel from "./ReceiveActionPanel";
 
 export default function PurchaseDetail({ id }: { id: string }) {
   const { instance, accounts } = useMsal();
@@ -36,6 +39,19 @@ export default function PurchaseDetail({ id }: { id: string }) {
   }, [account, instance, id]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleMarkPurchased(orderItems: PurchaseLineItem[], notes?: string) {
+    if (!account || !pr) return;
+    const client = getGraphClient(instance, account);
+    const status = allItemsOrdered(orderItems) ? "Ordered" : pr.purchaseStatus;
+    setPr(await updateLineItems(client, pr.id, orderItems, { purchaseStatus: status, notes }));
+  }
+  async function handleMarkReceived(receivedItems: PurchaseLineItem[], notes?: string) {
+    if (!account || !pr) return;
+    const client = getGraphClient(instance, account);
+    const status = allItemsReceived(receivedItems) ? "Received" : pr.purchaseStatus;
+    setPr(await updateLineItems(client, pr.id, receivedItems, { purchaseStatus: status, notes }));
+  }
 
   if (loading) return <div className="p-8"><LoadingSpinner /></div>;
   if (error) return <p className="p-8 text-sm text-red-600">{error}</p>;
@@ -95,12 +111,11 @@ export default function PurchaseDetail({ id }: { id: string }) {
         )}
       </dl>
 
-      {(permissions?.isPurchaser || permissions?.isInventory) && (
-        <p className="mt-6 text-xs text-text-secondary">
-          Order and receive items from the{" "}
-          <Link href="/orders" className="text-brand-primary underline">order</Link> and{" "}
-          <Link href="/receiving" className="text-brand-primary underline">receiving</Link> queues.
-        </p>
+      {canPurchase(pr, permissions) && (
+        <div className="mt-6"><PurchaseActionPanel pr={pr} onMarkPurchased={handleMarkPurchased} /></div>
+      )}
+      {canReceive(pr, permissions) && (
+        <div className="mt-4"><ReceiveActionPanel pr={pr} onMarkReceived={handleMarkReceived} /></div>
       )}
     </div>
   );
