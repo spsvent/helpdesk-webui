@@ -145,8 +145,10 @@ app.http("purchaseApprovalAction", {
 
       return { status: 200, headers: corsHeaders, jsonBody: { ok: true, decision, title: verify.Title } };
     } catch (error) {
+      // Log the detail server-side only — this endpoint is anonymous, and
+      // error.message can leak Graph/config internals.
       context.error("purchaseApprovalAction failed:", error);
-      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error", details: error.message } };
+      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error" } };
     }
   },
 });
