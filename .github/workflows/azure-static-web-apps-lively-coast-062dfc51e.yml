@@ -62,6 +62,8 @@ jobs:
           NEXT_PUBLIC_PURCHASE_LIST_ID: "510ef7d1-2c9d-480b-9aa8-e9a8b1ddf82c"
           NEXT_PUBLIC_PURCHASE_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/purchaseapprovalaction"
           NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendpurchaseapprovalrequest"
+          # HEIC → JPEG converter: enables inline preview of iPhone HEIC photos. Blank = download-only fallback.
+          NEXT_PUBLIC_HEIC_CONVERT_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/convertheic"
           NEXT_PUBLIC_ESCALATION_FUNCTION_URL: ${{ secrets.NEXT_PUBLIC_ESCALATION_FUNCTION_URL }}
           NEXT_PUBLIC_TEAMS_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendteamsnotification"
           # Teams Notifications

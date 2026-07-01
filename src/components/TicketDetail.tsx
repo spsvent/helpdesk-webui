@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
-import { isImageAttachment } from "@/lib/attachmentComments";
+import { isImageAttachment, isBrowserPreviewable } from "@/lib/attachmentComments";
+import { buildRenditionView, isHeic, renditionName } from "@/lib/heicRenditions";
+import { convertHeicToJpeg, isHeicConvertEnabled } from "@/lib/heicConvertService";
 import {
   getGraphClient,
   getComments,
@@ -100,12 +102,89 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const attachmentsSectionRef = useRef<HTMLDivElement>(null);
   const pendingScrollRef = useRef(false);
 
-  const imageAttachments = useMemo(
-    () => attachments.filter((a) => isImageAttachment(a.name)),
+  const heicConvertEnabled = isHeicConvertEnabled();
+
+  // Hide generated HEIC→JPEG renditions from the list and map each back to its
+  // HEIC original so previews can use the rendition as the image source.
+  const { visible: displayAttachments, renditionByOriginal } = useMemo(
+    () => buildRenditionView(attachments),
     [attachments]
   );
 
-  // Download (once, cached) an attachment and return an object URL for preview.
+  // Read the latest rendition map + ticket id from refs inside otherwise-stable
+  // callbacks: adding a rendition rebuilds the map, but we don't want that to
+  // churn getPreviewUrl/canThumbnail identities and re-run child effects; and
+  // in-flight async work needs to tell whether the user has since switched tickets.
+  const renditionRef = useRef(renditionByOriginal);
+  renditionRef.current = renditionByOriginal;
+  const ticketIdRef = useRef(ticket.id);
+  ticketIdRef.current = ticket.id;
+
+  const imageAttachments = useMemo(
+    () => displayAttachments.filter((a) => isImageAttachment(a.name)),
+    [displayAttachments]
+  );
+
+  // Can a thumbnail render inline without triggering a (potentially slow)
+  // conversion? Natively-previewable formats, or a HEIC that already has a
+  // rendition. HEIC without a rendition stays an icon until opened in the lightbox.
+  const canThumbnail = useCallback(
+    (name: string) =>
+      isBrowserPreviewable(name) || (isHeic(name) && renditionRef.current.has(name)),
+    []
+  );
+
+  // Can the lightbox show this inline (converting a HEIC on demand if needed)?
+  const canPreview = useCallback(
+    (name: string) =>
+      isBrowserPreviewable(name) ||
+      (isHeic(name) && (renditionRef.current.has(name) || heicConvertEnabled)),
+    [heicConvertEnabled]
+  );
+
+  // Resolve an attachment name to a displayable image blob, converting HEIC via
+  // the backend (and persisting the rendition) the first time it's needed.
+  const fetchPreviewBlob = useCallback(
+    async (name: string): Promise<Blob | null> => {
+      if (!accounts[0]) return null;
+      const client = getGraphClient(instance, accounts[0]);
+      const tid = ticket.id;
+
+      if (!isHeic(name)) {
+        return downloadAttachment(client, tid, name, instance, accounts[0]);
+      }
+
+      // HEIC: prefer an existing rendition; otherwise convert on demand.
+      const existing = renditionRef.current.get(name);
+      if (existing) {
+        return downloadAttachment(client, tid, existing.name, instance, accounts[0]);
+      }
+      if (!heicConvertEnabled) return null;
+
+      const heicBlob = await downloadAttachment(client, tid, name, instance, accounts[0]);
+      if (!heicBlob) return null;
+      const jpeg = await convertHeicToJpeg(heicBlob);
+      if (!jpeg) return null;
+
+      // Persist the rendition so future previews (and thumbnails) skip conversion.
+      // Only fold it into state if we're still on the ticket it belongs to.
+      const rn = renditionName(name);
+      const file = new File([jpeg], rn, { type: "image/jpeg" });
+      uploadAttachment(client, tid, file, instance, accounts[0])
+        .then((att) => {
+          if (att && ticketIdRef.current === tid) {
+            setAttachments((prev) => (prev.some((p) => p.name === att.name) ? prev : [...prev, att]));
+          }
+        })
+        .catch((e) => console.error("Failed to store HEIC rendition:", e));
+
+      return jpeg;
+    },
+    [instance, accounts, ticket.id, heicConvertEnabled]
+  );
+
+  // Download (once, cached) a preview and return an object URL, keyed by the
+  // original attachment name so callers don't need to know about renditions.
   const getPreviewUrl = useCallback(
     async (name: string): Promise<string | null> => {
       const cached = previewCache.current.get(name);
@@ -116,8 +195,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
       const promise = (async () => {
         try {
-          const client = getGraphClient(instance, accounts[0]);
-          const blob = await downloadAttachment(client, ticket.id, name, instance, accounts[0]);
+          const blob = await fetchPreviewBlob(name);
           if (!blob) return null;
           const url = URL.createObjectURL(blob);
           previewCache.current.set(name, url);
@@ -132,7 +210,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       previewInflight.current.set(name, promise);
       return promise;
     },
-    [instance, accounts, ticket.id]
+    [accounts, fetchPreviewBlob]
   );
 
   // Revoke cached object URLs and close the lightbox when the ticket changes.
@@ -448,9 +526,21 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const success = await deleteAttachment(client, ticket.id, filename, instance, accounts[0]);
+      const tid = ticket.id;
+      const success = await deleteAttachment(client, tid, filename, instance, accounts[0]);
       if (success) {
         setAttachments((prev) => prev.filter((a) => a.name !== filename));
+        // Also remove any generated HEIC→JPEG rendition so it isn't orphaned.
+        const rendition = renditionRef.current.get(filename);
+        if (rendition) {
+          deleteAttachment(client, tid, rendition.name, instance, accounts[0])
+            .then((ok) => {
+              if (ok && ticketIdRef.current === tid) {
+                setAttachments((prev) => prev.filter((a) => a.name !== rendition.name));
+              }
+            })
+            .catch((e) => console.error("Failed to delete HEIC rendition:", e));
+        }
       }
     } catch (e) {
       console.error("Failed to delete attachment:", e);
@@ -930,8 +1020,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 ticket={ticket}
                 comments={comments}
                 loading={loading}
-                attachments={attachments}
+                attachments={displayAttachments}
                 getPreviewUrl={getPreviewUrl}
+                canThumbnail={canThumbnail}
                 onOpenImage={openLightbox}
                 onScrollToAttachments={scrollToAttachments}
               />
@@ -980,7 +1071,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onRequestApproval={handleRequestApproval}
               onMarkPurchased={handleMarkPurchased}
               onMarkReceived={handleMarkReceived}
-              attachments={attachments}
+              attachments={displayAttachments}
               attachmentsLoading={attachmentsLoading}
               onUploadAttachment={handleUploadAttachment}
               onDeleteAttachment={handleDeleteAttachment}
@@ -1001,6 +1092,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           images={imageAttachments}
           index={lightboxIndex}
           getPreviewUrl={getPreviewUrl}
+          canPreview={canPreview}
+          canPreloadNeighbor={canThumbnail}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
           onDownload={handleDownloadAttachment}

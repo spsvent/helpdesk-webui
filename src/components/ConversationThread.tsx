@@ -17,6 +17,8 @@ interface ConversationThreadProps {
   /** Ticket attachments, used to enrich "[System] attachment uploaded" comments. */
   attachments?: Attachment[];
   getPreviewUrl?: (name: string) => Promise<string | null>;
+  /** Whether a thumbnail can render inline cheaply (native format, or HEIC with a rendition). */
+  canThumbnail?: (name: string) => boolean;
   /** Open the full-size lightbox for an image attachment. */
   onOpenImage?: (name: string) => void;
   /** Scroll the details pane to the Attachments section. */
@@ -50,6 +52,7 @@ function formatTimestamp(dateString: string): string {
 interface AttachmentEnrichment {
   attachments?: Attachment[];
   getPreviewUrl?: (name: string) => Promise<string | null>;
+  canThumbnail?: (name: string) => boolean;
   onOpenImage?: (name: string) => void;
   onScrollToAttachments?: () => void;
 }
@@ -62,6 +65,7 @@ function AttachmentCommentBody({
   body,
   attachments = [],
   getPreviewUrl,
+  canThumbnail,
   onOpenImage,
   onScrollToAttachments,
 }: { info: AttachmentCommentInfo; body: string } & AttachmentEnrichment) {
@@ -120,6 +124,7 @@ function AttachmentCommentBody({
               key={a.name}
               attachment={a}
               getPreviewUrl={getPreviewUrl}
+              previewable={canThumbnail ? canThumbnail(a.name) : undefined}
               onOpen={() => onOpenImage(a.name)}
             />
           ))}
@@ -225,12 +230,14 @@ export default function ConversationThread({
   loading,
   attachments,
   getPreviewUrl,
+  canThumbnail,
   onOpenImage,
   onScrollToAttachments,
 }: ConversationThreadProps) {
   const enrichment: AttachmentEnrichment = {
     attachments,
     getPreviewUrl,
+    canThumbnail,
     onOpenImage,
     onScrollToAttachments,
   };
