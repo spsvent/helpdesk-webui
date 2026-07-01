@@ -19,6 +19,24 @@
   When a request is marked as a purchase request, add a button to add additional products to the same request, and hide/remove some of the normal request fields. Plan needed.
 - [ ] **Integrate preexisting SharePoint purchase request system** — _2026-05-06_
   Integrate the preexisting purchase request SharePoint systems with our new Help Desk integrated purchase request system. Ask user for more details when ready to start.
+- [ ] **HEIC image preview support (or convert to JPG)** — _2026-07-01_
+  Browsers can't decode HEIC/HEIF (the default iPhone photo format — the most common attachment on
+  field tickets) or TIFF, so the attachment thumbnails + lightbox fall back to a download-only tile
+  for these (see `isBrowserPreviewable` in `src/lib/attachmentComments.ts`, `AttachmentThumbnail.tsx`,
+  `ImageLightbox.tsx`). Make these previewable, in rough order of preference:
+  1. **Backend conversion to JPG on upload** — generate a web-viewable `.jpg` rendition (and/or a
+     small thumbnail) server-side when a HEIC/HEIF/TIFF is attached (e.g. an Azure Function using
+     `libheif`/`sharp`/ImageMagick), store it alongside the original, and point the preview at the
+     rendition while keeping the untouched original for download. Cleanest UX; needs server compute
+     + storage and a place to hang the conversion (the SPA is a static export, so this is a Function).
+  2. **Client-side decode** — render previews in-browser with a library such as `heic2any` /
+     `libheif-js` (WASM). No backend, but adds bundle weight and can be slow/janky on large photos;
+     evaluate perf before committing.
+  3. **Fallback if neither is feasible — warn at upload time.** In `AttachmentUpload.tsx` (and the
+     staged-file flow in `src/app/new/page.tsx` / `StagedAttachmentList.tsx`), detect `.heic`/`.heif`
+     on selection and show a non-blocking flag: "HEIC images can't be previewed in the browser —
+     convert to JPG first if you want an inline preview." Still allow the upload; this is purely an
+     expectation-setting nudge. Cheap; ship this regardless if 1 or 2 slips.
 
 ## Low Priority
 - [ ] **Per-item approval state** — _2026-04-28_

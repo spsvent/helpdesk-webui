@@ -61,6 +61,11 @@ interface DetailsPanelProps {
   onUploadAttachment?: (file: File) => Promise<boolean>;
   onDeleteAttachment?: (filename: string) => Promise<void>;
   onDownloadAttachment?: (filename: string) => Promise<void>;
+  onPreviewImage?: (filename: string) => void;
+  // Ref to the Attachments section so comment links can scroll to it
+  attachmentsSectionRef?: React.RefObject<HTMLDivElement>;
+  // Briefly highlight the Attachments section after a scroll-to
+  highlightAttachments?: boolean;
   // Merge
   onMergeComplete?: () => void;
   // Expose save functionality to parent (for Post Comment to also save)
@@ -90,6 +95,9 @@ export default function DetailsPanel({
   onUploadAttachment,
   onDeleteAttachment,
   onDownloadAttachment,
+  onPreviewImage,
+  attachmentsSectionRef,
+  highlightAttachments = false,
   onMergeComplete,
   saveRef,
 }: DetailsPanelProps) {
@@ -882,7 +890,13 @@ export default function DetailsPanel({
       <hr className="border-border" />
 
       {/* Attachments */}
-      <div>
+      <div
+        ref={attachmentsSectionRef}
+        id="ticket-attachments"
+        className={`scroll-mt-4 rounded-lg p-2 -mx-2 transition-shadow ${
+          highlightAttachments ? "ring-2 ring-brand-blue ring-offset-2" : ""
+        }`}
+      >
         <label className="block text-xs text-text-secondary mb-2 uppercase tracking-wide font-semibold">
           Attachments
         </label>
@@ -891,6 +905,7 @@ export default function DetailsPanel({
           attachments={attachments}
           onDelete={canEdit ? onDeleteAttachment : undefined}
           onDownload={onDownloadAttachment}
+          onPreview={onPreviewImage}
           canDelete={canEdit}
           loading={attachmentsLoading}
         />
