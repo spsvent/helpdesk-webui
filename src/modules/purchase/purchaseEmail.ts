@@ -2,7 +2,7 @@
 // the Azure Function). Composed from the shared sendEmail primitive.
 
 import { Client } from "@microsoft/microsoft-graph-client";
-import { sendEmail } from "@/lib/graphClient";
+import { sendEmail } from "@/shared/graph";
 import { PurchaseRequest } from "./types";
 import { PurchaseDecision } from "./purchaseService";
 

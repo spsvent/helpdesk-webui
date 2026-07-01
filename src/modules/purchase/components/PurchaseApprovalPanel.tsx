@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { PurchaseRequest } from "../types";
 import { PurchaseDecision, recordDecision } from "../purchaseService";
 import { notifyPurchaseDecision } from "../purchaseEmail";
