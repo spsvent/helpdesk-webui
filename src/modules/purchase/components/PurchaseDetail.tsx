@@ -6,8 +6,15 @@ import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import ResendApprovalButton from "@/components/ResendApprovalButton";
 import { PurchaseLineItem, PurchaseRequest } from "../types";
-import { getPurchase, submitForApproval, updateLineItems, visiblePurchase } from "../purchaseService";
+import {
+  getPurchase,
+  submitForApproval,
+  triggerPurchaseApprovalRequest,
+  updateLineItems,
+  visiblePurchase,
+} from "../purchaseService";
 import { canApprovePurchase, canEditPurchase, canPurchase, canReceive, isPurchaseEditable } from "../access";
 import { allItemsOrdered, allItemsReceived } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
@@ -25,6 +32,10 @@ export default function PurchaseDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Non-fatal: the resubmit saved but the approver email didn't go out.
+  const [emailWarning, setEmailWarning] = useState(false);
+  // The approval panel hit a concurrent decision (email link / another GM).
+  const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!account) return;
@@ -64,10 +75,13 @@ export default function PurchaseDetail({ id }: { id: string }) {
       return;
     }
     setError(null);
+    setEmailWarning(false);
     setSubmitting(true);
     try {
       const client = getGraphClient(instance, account);
-      setPr(await submitForApproval(client, pr.id, pr.requesterName));
+      const { purchase, emailSent } = await submitForApproval(client, pr.id, pr.requesterName);
+      setPr(purchase);
+      setEmailWarning(!emailSent);
     } catch (e) {
       console.error("[PurchaseDetail] resubmit failed:", e);
       setError("Could not submit for approval. Please try again.");
@@ -107,8 +121,38 @@ export default function PurchaseDetail({ id }: { id: string }) {
         {pr.sourceTicketNumber ? ` · migrated from ticket #${pr.sourceTicketNumber}` : ""}
       </p>
 
+      {conflictNotice && (
+        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-800">{conflictNotice}</p>
+        </div>
+      )}
+
       {canApprovePurchase(permissions) && pr.approvalStatus === "Pending" && (
-        <div className="mt-4"><PurchaseApprovalPanel pr={pr} onDecided={setPr} /></div>
+        <div className="mt-4">
+          <PurchaseApprovalPanel
+            pr={pr}
+            onDecided={setPr}
+            onConflict={(msg) => {
+              // Show what happened, then reload so the stale panel is replaced by
+              // the real (decided) state.
+              setConflictNotice(msg);
+              load();
+            }}
+          />
+        </div>
+      )}
+
+      {pr.approvalStatus === "Pending" && (
+        <div className="mt-4">
+          {emailWarning && (
+            <p className="mb-2 text-sm text-amber-600">
+              Submitted — but the approval email could not be sent. Use “Re-send approval request” below.
+            </p>
+          )}
+          <ResendApprovalButton
+            onSend={() => triggerPurchaseApprovalRequest(pr.id, pr.requesterName || pr.createdByName)}
+          />
+        </div>
       )}
 
       {canEdit && (

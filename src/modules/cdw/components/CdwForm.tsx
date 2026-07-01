@@ -38,6 +38,9 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState<null | "draft" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-fatal: the brief saved/submitted but the approver email didn't go out.
+  // Holds the saved brief's id so the warning can link to its detail page.
+  const [emailWarningId, setEmailWarningId] = useState<string | null>(null);
   const [loadingBrief, setLoadingBrief] = useState(isEdit);
   // Owner identity + status of the brief being edited, for the edit authorization
   // and editable-status checks.
@@ -120,6 +123,7 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
       return;
     }
     setError(null);
+    setEmailWarningId(null);
     setSaving(forSubmit ? "submit" : "draft");
     try {
       const client = getGraphClient(instance, account);
@@ -145,7 +149,16 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
       }
 
       if (forSubmit) {
-        await submitForApproval(client, id!, account.name || account.username || "");
+        const { emailSent } = await submitForApproval(client, id!, account.name || account.username || "");
+        if (!emailSent) {
+          // The brief saved and entered the approval queue; only the approver email
+          // failed. Stay here so the warning is seen (navigating would drop it) and
+          // point at the detail page's re-send affordance.
+          if (!isEdit) clearDraft(DRAFT_KEY);
+          setEmailWarningId(id!);
+          setSaving(null);
+          return;
+        }
       }
       if (!isEdit) clearDraft(DRAFT_KEY);
       router.push(`/cdw/?id=${id}`);
@@ -294,6 +307,18 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
+
+        {emailWarningId && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            <p>
+              Submitted — but the approval email could not be sent. Use “Re-send approval request” on
+              the brief page.
+            </p>
+            <Link href={`/cdw/?id=${emailWarningId}`} className="mt-1 inline-block font-medium underline">
+              Go to the brief
+            </Link>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 pt-2">
           <button

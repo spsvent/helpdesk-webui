@@ -56,6 +56,9 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
   const [submitting, setSubmitting] = useState<null | "save" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-fatal: the request saved/submitted but the approver email didn't go out.
+  // Holds the saved request's id so the warning can link to its detail page.
+  const [emailWarningId, setEmailWarningId] = useState<string | null>(null);
   const [sourceTicket, setSourceTicket] = useState<SourceTicket | null>(null);
   const [loadingTicket, setLoadingTicket] = useState(isConvert || isEdit);
   // The request being edited, for the ownership/status authorization checks.
@@ -137,6 +140,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
     if (v) return setError(v);
     if (!account) return setError("You must be signed in.");
     setError(null);
+    setEmailWarningId(null);
     setSubmitting(resubmit ? "submit" : "save");
     try {
       const client = getGraphClient(instance, account);
@@ -153,7 +157,19 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         });
         await updateLineItems(client, purchaseId!, items);
         if (resubmit) {
-          await submitForApproval(client, purchaseId!, editTarget?.requesterName || account.name || account.username || "");
+          const { emailSent } = await submitForApproval(
+            client,
+            purchaseId!,
+            editTarget?.requesterName || account.name || account.username || ""
+          );
+          if (!emailSent) {
+            // The save + resubmit landed; only the approver email failed. Stay here
+            // so the warning is seen (navigating would drop it) and point at the
+            // detail page's re-send affordance.
+            setEmailWarningId(purchaseId!);
+            setSubmitting(null);
+            return;
+          }
         }
         router.push(`/purchase/?id=${purchaseId}`);
         return;
@@ -171,7 +187,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         sourceTicketNumber: sourceTicket?.number,
         lineItems: items,
       });
-      await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
+      const emailSent = await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
 
       // Convert: resolve the source ticket and link it to the new PR (best-effort).
       // Comments are keyed by the ticket's item id (getComments is called with
@@ -188,6 +204,13 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
       }
 
       clearDraft(DRAFT_KEY);
+      if (!emailSent) {
+        // The request was created; only the approver email failed. Stay here so the
+        // warning is seen and point at the detail page's re-send affordance.
+        setEmailWarningId(pr.id);
+        setSubmitting(null);
+        return;
+      }
       router.push(`/purchase/?id=${pr.id}`);
     } catch (e) {
       console.error("[PurchaseForm] submit failed:", e);
@@ -259,6 +282,18 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
+
+        {emailWarningId && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            <p>
+              Submitted — but the approval email could not be sent. Use “Re-send approval request” on
+              the request page.
+            </p>
+            <Link href={`/purchase/?id=${emailWarningId}`} className="mt-1 inline-block font-medium underline">
+              Go to the request
+            </Link>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <button
