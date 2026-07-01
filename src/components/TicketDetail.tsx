@@ -5,7 +5,7 @@ import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
 import { isImageAttachment, isBrowserPreviewable } from "@/lib/attachmentComments";
 import { buildRenditionView, isHeic, renditionName } from "@/lib/heicRenditions";
-import { convertHeicToJpeg, isHeicConvertEnabled } from "@/lib/heicConvertService";
+import { convertHeicToJpeg, isConvertibleSize, isHeicConvertEnabled } from "@/lib/heicConvertService";
 import {
   getGraphClient,
   getComments,
@@ -120,6 +120,15 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const ticketIdRef = useRef(ticket.id);
   ticketIdRef.current = ticket.id;
 
+  // Attachment sizes by name, so the HEIC-conversion paths can skip files the
+  // converter would reject (over its size cap) without downloading them first.
+  const attachmentSizes = useMemo(
+    () => new Map(attachments.map((a) => [a.name, a.size])),
+    [attachments]
+  );
+  const attachmentSizeRef = useRef(attachmentSizes);
+  attachmentSizeRef.current = attachmentSizes;
+
   const imageAttachments = useMemo(
     () => displayAttachments.filter((a) => isImageAttachment(a.name)),
     [displayAttachments]
@@ -135,10 +144,13 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   );
 
   // Can the lightbox show this inline (converting a HEIC on demand if needed)?
+  // Oversized HEICs (beyond the converter's cap) get the download fallback.
   const canPreview = useCallback(
     (name: string) =>
       isBrowserPreviewable(name) ||
-      (isHeic(name) && (renditionRef.current.has(name) || heicConvertEnabled)),
+      (isHeic(name) &&
+        (renditionRef.current.has(name) ||
+          (heicConvertEnabled && isConvertibleSize(attachmentSizeRef.current.get(name))))),
     [heicConvertEnabled]
   );
 
@@ -160,6 +172,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         return downloadAttachment(client, tid, existing.name, instance, accounts[0]);
       }
       if (!heicConvertEnabled) return null;
+      // The converter caps its input size — skip the download + round trip for
+      // oversized files so they fall back to the download-only path immediately.
+      if (!isConvertibleSize(attachmentSizeRef.current.get(name))) return null;
 
       const heicBlob = await downloadAttachment(client, tid, name, instance, accounts[0]);
       if (!heicBlob) return null;
