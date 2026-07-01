@@ -21,8 +21,11 @@ interface ConversationThreadProps {
   canThumbnail?: (name: string) => boolean;
   /** Open the full-size lightbox for an image attachment. */
   onOpenImage?: (name: string) => void;
-  /** Scroll the details pane to the Attachments section. */
-  onScrollToAttachments?: () => void;
+  /**
+   * Scroll the details pane to the Attachments section — or, when a filename
+   * is given, to that specific file's row in the list.
+   */
+  onScrollToAttachments?: (name?: string) => void;
 }
 
 function formatTimestamp(dateString: string): string {
@@ -54,7 +57,7 @@ interface AttachmentEnrichment {
   getPreviewUrl?: (name: string) => Promise<string | null>;
   canThumbnail?: (name: string) => boolean;
   onOpenImage?: (name: string) => void;
-  onScrollToAttachments?: () => void;
+  onScrollToAttachments?: (name?: string) => void;
 }
 
 // Renders the body of a recognized "[System]" attachment comment: a summary
@@ -95,7 +98,7 @@ function AttachmentCommentBody({
         {onScrollToAttachments && (
           <button
             type="button"
-            onClick={onScrollToAttachments}
+            onClick={() => onScrollToAttachments()}
             className="text-brand-primary hover:underline"
           >
             View attachments
@@ -137,7 +140,7 @@ function AttachmentCommentBody({
           <li key={a.name} className="min-w-0">
             <button
               type="button"
-              onClick={onScrollToAttachments}
+              onClick={() => onScrollToAttachments?.(a.name)}
               className="inline-flex items-center gap-1.5 text-sm text-brand-primary hover:underline max-w-full"
               title="Jump to this file in the Attachments list"
               aria-label={`Jump to ${a.name} in the attachments list`}

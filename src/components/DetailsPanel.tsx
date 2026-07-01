@@ -77,6 +77,8 @@ interface DetailsPanelProps {
   attachmentsSectionRef?: React.RefObject<HTMLDivElement>;
   // Briefly highlight the Attachments section after a scroll-to
   highlightAttachments?: boolean;
+  // Briefly highlight one specific attachment row (jump-to-file links)
+  highlightAttachmentName?: string | null;
   // Merge
   onMergeComplete?: () => void;
   // Expose save functionality to parent (for Post Comment to also save)
@@ -109,6 +111,7 @@ export default function DetailsPanel({
   onPreviewImage,
   attachmentsSectionRef,
   highlightAttachments = false,
+  highlightAttachmentName = null,
   onMergeComplete,
   saveRef,
 }: DetailsPanelProps) {
@@ -930,6 +933,7 @@ export default function DetailsPanel({
           onPreview={onPreviewImage}
           canDelete={canEdit}
           loading={attachmentsLoading}
+          highlightName={highlightAttachmentName}
         />
 
         {canEdit && onUploadAttachment && (
