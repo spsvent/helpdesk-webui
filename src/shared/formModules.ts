@@ -56,8 +56,9 @@ const ticketModule: FormModule = {
 // Add-on modules are imported from their own folders and listed below. Deleting a
 // module = remove its import + the one array entry here (plus its folder/list).
 import { cdwModule } from "@/modules/cdw";
+import { purchaseModule } from "@/modules/purchase";
 
-export const FORM_MODULES: FormModule[] = [ticketModule, cdwModule];
+export const FORM_MODULES: FormModule[] = [ticketModule, cdwModule, purchaseModule];
 
 // Modules the given user can create, in menu order.
 export function creatableModules(perms: UserPermissions | null): FormModule[] {

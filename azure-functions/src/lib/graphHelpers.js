@@ -9,6 +9,7 @@ const config = {
   siteId: process.env.SHAREPOINT_SITE_ID,
   ticketsListId: process.env.TICKETS_LIST_ID,
   cdwListId: process.env.CDW_LIST_ID,
+  purchaseListId: process.env.PURCHASE_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
