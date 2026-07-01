@@ -12,6 +12,7 @@
 
 import type { ComponentType } from "react";
 import type { UserPermissions } from "@/types/rbac";
+import type { Ticket } from "@/types/ticket";
 
 // An optional admin panel a module can contribute to the Settings page.
 export interface FormModuleSettingsTab {
@@ -20,6 +21,24 @@ export interface FormModuleSettingsTab {
   // Lazy loader so the settings page can code-split the panel.
   load: () => Promise<{ default: ComponentType }>;
   visibleWhen?: (perms: UserPermissions | null) => boolean;
+}
+
+// Props every module-contributed ticket-detail action component receives.
+export interface TicketDetailActionProps {
+  ticket: Ticket;
+}
+
+// An optional action a module can contribute to the ticket details panel (e.g.
+// the purchase module's "Convert to Purchase Request" button). Lazy-loaded like
+// FormModuleSettingsTab so the manifest stays plain data — no component imports
+// at module-eval time, and core keeps no static dependency on the module.
+export interface FormModuleTicketDetailAction {
+  id: string;
+  load: () => Promise<{ default: ComponentType<TicketDetailActionProps> }>;
+  // Ticket-level render gate evaluated by the details panel. Permission-level
+  // gating can also live inside the component itself (returning null), which is
+  // how ConvertToPurchaseButton behaves.
+  visibleWhen?: (ticket: Ticket, perms: UserPermissions | null) => boolean;
 }
 
 export interface FormModule {
@@ -36,6 +55,8 @@ export interface FormModule {
   visibleWhen: (perms: UserPermissions | null) => boolean;
   // Optional admin tabs contributed to Settings.
   settingsTabs?: FormModuleSettingsTab[];
+  // Optional actions contributed to the ticket details panel.
+  ticketDetailActions?: FormModuleTicketDetailAction[];
   // Route prefixes that are public + token-authorized (auth bootstrap is skipped for
   // them in the app layout), e.g. an email-approval landing page.
   publicRoutePrefixes?: string[];
@@ -70,6 +91,13 @@ export function moduleSettingsTabs(perms: UserPermissions | null): FormModuleSet
   return FORM_MODULES.filter((m) => m.visibleWhen(perms)).flatMap((m) =>
     (m.settingsTabs ?? []).filter((t) => !t.visibleWhen || t.visibleWhen(perms))
   );
+}
+
+// All ticket-detail actions contributed by modules. Static (FORM_MODULES is fixed
+// at build time) so the details panel can wrap each `load` in next/dynamic once at
+// module scope; per-ticket visibility is filtered at render time via `visibleWhen`.
+export function allTicketDetailActions(): FormModuleTicketDetailAction[] {
+  return FORM_MODULES.flatMap((m) => m.ticketDetailActions ?? []);
 }
 
 // Public (token-authorized) route prefixes contributed by modules. The app layout
