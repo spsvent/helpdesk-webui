@@ -4,7 +4,9 @@
 //
 // To remove the purchase module: delete src/modules/purchase/ + src/app/purchase/,
 // the purchase Azure Functions, this entry in src/shared/formModules.ts, the help
-// section, and the NEXT_PUBLIC_PURCHASE_* env vars; archive the PurchaseRequests list.
+// section (id "purchase-requests-module" in src/app/help/page.tsx, plus the
+// two-flows pointer in the legacy "purchase-requests" section), and the
+// NEXT_PUBLIC_PURCHASE_* env vars; archive the PurchaseRequests list.
 // Nothing else in core references this module — the ticket-detail "Convert to
 // Purchase Request" button and the Settings "Purchase Migration" tab are
 // contributed through this manifest (ticketDetailActions / settingsTabs), not
