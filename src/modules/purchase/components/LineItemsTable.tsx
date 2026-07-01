@@ -2,7 +2,7 @@
 "use client";
 
 import { PurchaseLineItem } from "../types";
-import { computeEstimatedTotal, computeActualTotal } from "../lineItems";
+import { computeEstimatedTotal, computeActualTotal, isSafeItemUrl } from "../lineItems";
 
 interface LineItemsTableProps {
   items: PurchaseLineItem[];
@@ -56,7 +56,10 @@ export default function LineItemsTable({
               <td className={padding}>
                 {item.name ? <strong>{item.name}</strong> : null}
                 {item.name && item.url ? <span className="text-text-secondary"> · </span> : null}
-                {item.url ? (
+                {/* Belt-and-braces: validation rejects non-http(s) URLs at entry, but
+                    items saved before that check (or hand-edited in SharePoint) could
+                    still carry e.g. javascript: — never render those as an href. */}
+                {item.url && isSafeItemUrl(item.url) ? (
                   <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
                     link
                   </a>
