@@ -253,6 +253,13 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     [accounts, fetchPreviewBlob, ticket.id]
   );
 
+  // Synchronous cache peek so the lightbox can show an already-fetched image
+  // on its very first frame (no spinner flash when paging back to it).
+  const peekPreviewUrl = useCallback(
+    (name: string): string | null => previewCache.current.get(name) ?? null,
+    []
+  );
+
   // Revoke cached object URLs and close the lightbox when the ticket changes.
   useEffect(() => {
     const cache = previewCache.current;
@@ -1159,6 +1166,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           images={imageAttachments}
           index={lightboxIndex}
           getPreviewUrl={getPreviewUrl}
+          peekPreviewUrl={peekPreviewUrl}
           canPreview={canPreview}
           canPreloadNeighbor={canThumbnail}
           onClose={() => setLightboxIndex(null)}
