@@ -20,7 +20,9 @@ export const purchaseModule: FormModule = {
   newLabel: "New Purchase Request",
   creatable: true,
   newHref: "/purchase/new",
-  visibleWhen: canCreatePurchase,
+  // Hidden until the PurchaseRequests list is configured
+  // (NEXT_PUBLIC_PURCHASE_LIST_ID); then any signed-in user can create.
+  visibleWhen: (perms) => isPurchaseConfigured() && canCreatePurchase(perms),
   publicRoutePrefixes: ["/purchase/approve"],
   settingsTabs: [
     {
