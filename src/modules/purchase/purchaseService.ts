@@ -71,6 +71,15 @@ export async function getPurchase(client: Client, id: string): Promise<PurchaseR
   return mapToPurchase(item);
 }
 
+// Raw column values for one purchase item — the migration's verify step compares
+// these against the source ticket (verifyMigration wants columns, not the model).
+export async function getPurchaseFields(client: Client, id: string): Promise<Record<string, unknown>> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  return item.fields as Record<string, unknown>;
+}
+
 // A purchase request is visible to admins, purchasers, inventory (the fulfillment
 // roles), and its creator/requester. Everyone else can't see it.
 export function visiblePurchase(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
