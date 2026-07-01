@@ -20,7 +20,9 @@ export type CdwStatus = (typeof CDW_STATUSES)[number];
 export const CDW_PUBLIC_STATUS: CdwStatus = "Approved";
 
 // The three terminal/active approval decisions. These deliberately share their
-// names with the matching CdwStatus values, so a decision IS a status.
+// names with the matching CdwStatus values, so a decision IS a status — writers
+// assign a CdwDecision straight to `status` (the subtype relation is checked by
+// the compiler; no mapping function needed).
 export type CdwDecision = "Approved" | "Denied" | "Changes Requested";
 
 // Statuses in which a brief's CONTENT may still be edited — i.e. while it's in the
@@ -33,10 +35,6 @@ export const CDW_EDITABLE_STATUSES: readonly CdwStatus[] = ["Draft", "Changes Re
 
 export function isEditableCdwStatus(status: CdwStatus): boolean {
   return CDW_EDITABLE_STATUSES.includes(status);
-}
-
-export function decisionToStatus(decision: CdwDecision): CdwStatus {
-  return decision;
 }
 
 export interface CDWBrief {

@@ -15,7 +15,6 @@ import {
   CdwWritable,
   CDW_COLUMN_MAP,
   CDW_STATUSES,
-  decisionToStatus,
   mapToCdw,
   visibleCdw,
 } from "./types";
@@ -138,7 +137,8 @@ export async function recordDecision(
 ): Promise<CDWBrief> {
   if (!CDW_LIST_ID) throw new Error("CDW list is not configured (NEXT_PUBLIC_CDW_LIST_ID)");
   const patch: CdwWritable = {
-    status: decisionToStatus(decision),
+    // CdwDecision is a subtype of CdwStatus (a decision IS a status).
+    status: decision,
     approvedByName: approverName,
     approvedByEmail: approverEmail,
     // Date-only to match the dateOnly SharePoint column (avoids a TZ off-by-one).
