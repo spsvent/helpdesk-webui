@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
+import { isImageAttachment } from "@/lib/attachmentComments";
 import {
   getGraphClient,
   getComments,
@@ -33,6 +34,7 @@ import { syncCommentAdded } from "@/lib/vikunjaSyncService";
 import { allItemsOrdered, allItemsReceived } from "@/lib/lineItemHelpers";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
+import ImageLightbox from "./ImageLightbox";
 import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
 import NudgeApprovalButton from "./NudgeApprovalButton";
@@ -87,6 +89,99 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Image preview (thumbnails + lightbox) state.
+  // SharePoint list attachments have no thumbnail endpoint, so previews download
+  // the full file once and cache the object URL, shared by thumbnails + lightbox.
+  const previewCache = useRef<Map<string, string>>(new Map());
+  const previewInflight = useRef<Map<string, Promise<string | null>>>(new Map());
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [highlightAttachments, setHighlightAttachments] = useState(false);
+  const attachmentsSectionRef = useRef<HTMLDivElement>(null);
+  const pendingScrollRef = useRef(false);
+
+  const imageAttachments = useMemo(
+    () => attachments.filter((a) => isImageAttachment(a.name)),
+    [attachments]
+  );
+
+  // Download (once, cached) an attachment and return an object URL for preview.
+  const getPreviewUrl = useCallback(
+    async (name: string): Promise<string | null> => {
+      const cached = previewCache.current.get(name);
+      if (cached) return cached;
+      const inflight = previewInflight.current.get(name);
+      if (inflight) return inflight;
+      if (!accounts[0]) return null;
+
+      const promise = (async () => {
+        try {
+          const client = getGraphClient(instance, accounts[0]);
+          const blob = await downloadAttachment(client, ticket.id, name, instance, accounts[0]);
+          if (!blob) return null;
+          const url = URL.createObjectURL(blob);
+          previewCache.current.set(name, url);
+          return url;
+        } catch (e) {
+          console.error("Failed to load attachment preview:", e);
+          return null;
+        } finally {
+          previewInflight.current.delete(name);
+        }
+      })();
+      previewInflight.current.set(name, promise);
+      return promise;
+    },
+    [instance, accounts, ticket.id]
+  );
+
+  // Revoke cached object URLs and close the lightbox when the ticket changes.
+  useEffect(() => {
+    const cache = previewCache.current;
+    const inflight = previewInflight.current;
+    setLightboxIndex(null);
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+      inflight.clear();
+    };
+  }, [ticket.id]);
+
+  const openLightbox = useCallback(
+    (name: string) => {
+      const idx = imageAttachments.findIndex((a) => a.name === name);
+      if (idx >= 0) setLightboxIndex(idx);
+    },
+    [imageAttachments]
+  );
+
+  const doScrollToAttachments = useCallback(() => {
+    const el = attachmentsSectionRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightAttachments(true);
+    window.setTimeout(() => setHighlightAttachments(false), 1600);
+  }, []);
+
+  const scrollToAttachments = useCallback(() => {
+    // On mobile the Attachments live in the "Details" tab — switch to it first,
+    // then scroll once the panel has mounted (handled by the effect below).
+    if (isMobile && mobileDetailView !== "details") {
+      pendingScrollRef.current = true;
+      setMobileDetailView("details");
+      return;
+    }
+    doScrollToAttachments();
+  }, [isMobile, mobileDetailView, doScrollToAttachments]);
+
+  // Perform a deferred scroll after the mobile Details panel becomes visible.
+  useEffect(() => {
+    if (mobileDetailView === "details" && pendingScrollRef.current) {
+      pendingScrollRef.current = false;
+      const id = window.setTimeout(() => doScrollToAttachments(), 60);
+      return () => window.clearTimeout(id);
+    }
+  }, [mobileDetailView, doScrollToAttachments]);
 
   const handleCopyTicketLink = async () => {
     const base =
@@ -835,6 +930,10 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 ticket={ticket}
                 comments={comments}
                 loading={loading}
+                attachments={attachments}
+                getPreviewUrl={getPreviewUrl}
+                onOpenImage={openLightbox}
+                onScrollToAttachments={scrollToAttachments}
               />
             </div>
 
@@ -886,12 +985,27 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUploadAttachment={handleUploadAttachment}
               onDeleteAttachment={handleDeleteAttachment}
               onDownloadAttachment={handleDownloadAttachment}
+              onPreviewImage={openLightbox}
+              attachmentsSectionRef={attachmentsSectionRef}
+              highlightAttachments={highlightAttachments}
               onMergeComplete={handleMergeComplete}
               saveRef={detailsPanelSaveRef}
             />
           </aside>
         )}
       </div>
+
+      {/* Full-size image preview lightbox (paged across all image attachments) */}
+      {lightboxIndex !== null && imageAttachments[lightboxIndex] && (
+        <ImageLightbox
+          images={imageAttachments}
+          index={lightboxIndex}
+          getPreviewUrl={getPreviewUrl}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+          onDownload={handleDownloadAttachment}
+        />
+      )}
     </div>
   );
 }

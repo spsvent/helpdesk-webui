@@ -2,76 +2,24 @@
 
 import { useState } from "react";
 import { Attachment } from "@/types/ticket";
+import { getFileIcon, formatFileSize } from "./fileTypeIcon";
+import { isImageAttachment } from "@/lib/attachmentComments";
 
 interface AttachmentListProps {
   attachments: Attachment[];
   onDelete?: (filename: string) => Promise<void>;
   onDownload?: (filename: string) => Promise<void>;
+  /** Open the full-size lightbox for an image attachment. */
+  onPreview?: (filename: string) => void;
   canDelete?: boolean;
   loading?: boolean;
-}
-
-// Format file size in human-readable format
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-// Get icon based on file type
-function getFileIcon(contentType: string, filename: string): JSX.Element {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
-
-  // Image files
-  if (contentType.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
-    return (
-      <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    );
-  }
-
-  // PDF files
-  if (contentType === "application/pdf" || ext === "pdf") {
-    return (
-      <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-      </svg>
-    );
-  }
-
-  // Document files
-  if (["doc", "docx", "odt", "rtf"].includes(ext) || contentType.includes("word")) {
-    return (
-      <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    );
-  }
-
-  // Spreadsheet files
-  if (["xls", "xlsx", "csv", "ods"].includes(ext) || contentType.includes("spreadsheet") || contentType.includes("excel")) {
-    return (
-      <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-      </svg>
-    );
-  }
-
-  // Default file icon
-  return (
-    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  );
 }
 
 export default function AttachmentList({
   attachments,
   onDelete,
   onDownload,
+  onPreview,
   canDelete = false,
   loading = false,
 }: AttachmentListProps) {
@@ -139,6 +87,20 @@ export default function AttachmentList({
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Preview button (images only) */}
+            {onPreview && isImageAttachment(attachment.name) && (
+              <button
+                onClick={() => onPreview(attachment.name)}
+                className="p-1.5 text-text-secondary hover:text-brand-primary hover:bg-white rounded transition-colors"
+                title="Preview"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            )}
+
             {/* Download button */}
             <button
               onClick={() => handleDownload(attachment.name)}
