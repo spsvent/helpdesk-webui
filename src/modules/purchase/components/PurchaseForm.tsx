@@ -118,14 +118,16 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
 
       // Convert: resolve the source ticket and link it to the new PR (best-effort).
+      // Comments are keyed by the ticket's item id (getComments is called with
+      // parseInt(ticket.id)), NOT TicketNumber — so key the linking comment the same
+      // way, or it won't show on the ticket (and would be skipped entirely for tickets
+      // that have no TicketNumber).
       if (sourceTicket) {
         try {
           await updateTicket(client, sourceTicket.id, { Status: "Resolved" });
-          if (sourceTicket.number != null) {
-            await addComment(client, sourceTicket.number, `🛒 Converted to a Purchase Request — ${APP_URL}/purchase?id=${pr.id}`, false);
-          }
+          await addComment(client, parseInt(sourceTicket.id, 10), `🛒 Converted to a Purchase Request — ${APP_URL}/purchase?id=${pr.id}`, false);
         } catch (e) {
-          console.error("[PurchaseForm] resolving source ticket failed (non-blocking):", e);
+          console.error("[PurchaseForm] resolving/commenting source ticket failed (non-blocking):", e);
         }
       }
 
