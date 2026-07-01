@@ -3,10 +3,15 @@
 
 import type { Ticket, PurchaseLineItem } from "@/types/ticket";
 
-// One row of the flat queue. Carries the parent ticket context plus the
+// One row of the flat queue. Carries the parent record context plus the
 // item itself (and its index within the parent's lineItems array, so a
 // bulk write can target the correct slot).
 export interface QueueRow {
+  // Row provenance: a legacy purchase ticket (Tickets list) or a request from
+  // the purchase module (PurchaseRequests list — see src/modules/purchase/
+  // queueRows.ts). The queue pages route write-backs to the matching service
+  // by this field; item ids are NOT unique across the two lists.
+  source: "ticket" | "purchase";
   ticketId: string;
   ticketNumber: number | undefined;
   ticketTitle: string;
@@ -61,6 +66,7 @@ export function inferVendorFromUrl(url: string | undefined): string {
 function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow {
   const explicit = item.vendor?.trim();
   return {
+    source: "ticket",
     ticketId: ticket.id,
     ticketNumber: ticket.ticketNumber,
     ticketTitle: ticket.title,

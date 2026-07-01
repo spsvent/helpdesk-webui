@@ -16,8 +16,10 @@ interface LineItemQueueProps {
   loading?: boolean;
 }
 
+// Keyed on provenance too: ticket and purchase-module ids come from different
+// SharePoint lists, so the bare item id can collide across sources.
 function rowKey(r: QueueRow): string {
-  return `${r.ticketId}-${r.itemIndex}`;
+  return `${r.source}-${r.ticketId}-${r.itemIndex}`;
 }
 
 // Friendly fallback for the Item column when the requester didn't fill in a
@@ -198,12 +200,22 @@ export default function LineItemQueue({
           </td>
         )}
         <td className="px-3 py-2 text-xs">
-          <Link
-            href={`/?ticket=${r.ticketId}`}
-            className="text-brand-primary hover:underline"
-          >
-            #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
-          </Link>
+          {r.source === "purchase" ? (
+            <Link
+              href={`/purchase/?id=${r.ticketId}`}
+              className="text-brand-primary hover:underline"
+              title={r.ticketTitle}
+            >
+              PR {r.ticketNumber != null ? `#${r.ticketNumber}` : r.ticketId}
+            </Link>
+          ) : (
+            <Link
+              href={`/?ticket=${r.ticketId}`}
+              className="text-brand-primary hover:underline"
+            >
+              #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
+            </Link>
+          )}
         </td>
         <td className="px-3 py-2">
           {r.item.url ? (

@@ -3,6 +3,8 @@ import type { Client } from "@microsoft/microsoft-graph-client";
 import { mapToPurchase, parsePurchaseLineItems } from "./types";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
 import { canEditPurchase, isPurchaseEditable } from "./access";
+import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
+import type { PurchaseRequest } from "./types";
 import { fetchAllListItems } from "@/shared/listItems";
 import type { SharePointListItem } from "@/shared/spTypes";
 import type { UserPermissions } from "@/types/rbac";
@@ -76,6 +78,47 @@ describe("canEditPurchase / isPurchaseEditable (edit + resubmit gate)", () => {
     expect(isPurchaseEditable({ approvalStatus: "Denied", purchaseStatus: "Denied" })).toBe(false);
     // A migrated record that already moved through fulfillment isn't editable.
     expect(isPurchaseEditable({ approvalStatus: "None", purchaseStatus: "Received" })).toBe(false);
+  });
+});
+
+describe("queueRows (purchase-module rows for the order/receive queues)", () => {
+  const pr = (overrides: Partial<PurchaseRequest> = {}): PurchaseRequest => ({
+    id: "7",
+    title: "Buy cables",
+    purchaseStatus: "Approved",
+    lineItems: [{ name: "HDMI", qty: 4, cost: 8 }],
+    approvalStatus: "Approved",
+    requesterName: "Buyer",
+    requesterEmail: "buyer@x.com",
+    created: "2026-06-01T00:00:00Z",
+    modified: "2026-06-02T00:00:00Z",
+    createdByEmail: "buyer@x.com",
+    createdByName: "Buyer",
+    ...overrides,
+  });
+
+  it("awaiting order: approved + not yet ordered, tagged source:purchase", () => {
+    const rows = purchaseUnorderedRows([pr()]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe("purchase");
+    expect(rows[0].ticketId).toBe("7");
+    expect(rows[0].itemIndex).toBe(0);
+  });
+
+  it("awaiting order: skips unapproved, denied, and already-ordered items", () => {
+    expect(purchaseUnorderedRows([pr({ approvalStatus: "Pending", purchaseStatus: "Pending Approval" })])).toEqual([]);
+    expect(purchaseUnorderedRows([pr({ approvalStatus: "Denied", purchaseStatus: "Denied" })])).toEqual([]);
+    expect(purchaseUnorderedRows([pr({ lineItems: [{ name: "HDMI", qty: 4, cost: 8, vendor: "Acme", orderNum: "PO-1" }] })])).toEqual([]);
+  });
+
+  it("awaiting receipt: ordered but not (fully) received", () => {
+    const ordered = { name: "HDMI", qty: 4, cost: 8, vendor: "Acme", orderNum: "PO-1" };
+    expect(purchaseUnreceivedRows([pr({ purchaseStatus: "Ordered", lineItems: [ordered] })])).toHaveLength(1);
+    // Partial receipt still shows; full receipt drops out.
+    expect(purchaseUnreceivedRows([pr({ purchaseStatus: "Ordered", lineItems: [{ ...ordered, receivedDate: "2026-06-20", receivedQty: 2 }] })])).toHaveLength(1);
+    expect(purchaseUnreceivedRows([pr({ purchaseStatus: "Received", lineItems: [{ ...ordered, receivedDate: "2026-06-20", receivedQty: 4 }] })])).toEqual([]);
+    // Never-ordered items belong to the order queue, not this one.
+    expect(purchaseUnreceivedRows([pr()])).toEqual([]);
   });
 });
 

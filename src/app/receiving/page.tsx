@@ -18,6 +18,16 @@ import {
   flattenRecentlyReceived,
   QueueRow,
 } from "@/lib/lineItemQueue";
+// Purchase-module requests (PurchaseRequests list) share this queue but write
+// back through the module's own service, never the ticket update path.
+import {
+  listPurchases,
+  bulkUpdateLineItems as bulkUpdatePurchaseItems,
+  BulkLineItemUpdate as PurchaseBulkUpdate,
+} from "@/modules/purchase/purchaseService";
+import { allItemsReceived as allPurchaseItemsReceived } from "@/modules/purchase/lineItems";
+import { purchaseUnreceivedRows, purchaseRecentlyReceivedRows } from "@/modules/purchase/queueRows";
+import type { PurchaseRequest } from "@/modules/purchase/types";
 import { useRBAC } from "@/contexts/RBACContext";
 import LineItemQueue from "@/components/LineItemQueue";
 import BulkReceiveDialog, { BulkReceiveSubmission } from "@/components/BulkReceiveDialog";
@@ -31,6 +41,7 @@ export default function ReceivingPage() {
   const { permissions, loading: rbacLoading } = useRBAC();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogRows, setDialogRows] = useState<QueueRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +51,9 @@ export default function ReceivingPage() {
     setLoading(true);
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const list = await getTickets(client);
+      const [list, prs] = await Promise.all([getTickets(client), listPurchases(client)]);
       setTickets(list);
+      setPurchases(prs);
     } catch (e) {
       console.error("Failed to load tickets for receiving queue:", e);
       setError("Failed to load tickets.");
@@ -66,12 +78,17 @@ export default function ReceivingPage() {
     const receiverEmail = accounts[0].username;
     const receiverName = accounts[0].name || accounts[0].username;
 
+    // Ticket rows and purchase-module rows are grouped separately — each writes
+    // back to its own list — but rowOrder keeps the OVERALL index so
+    // submission.perRow lines up across both.
     const byTicket = new Map<string, { rows: QueueRow[]; rowOrder: number[] }>();
+    const byPurchase = new Map<string, { rows: QueueRow[]; rowOrder: number[] }>();
     rows.forEach((r, i) => {
-      const entry = byTicket.get(r.ticketId) ?? { rows: [], rowOrder: [] };
+      const map = r.source === "purchase" ? byPurchase : byTicket;
+      const entry = map.get(r.ticketId) ?? { rows: [], rowOrder: [] };
       entry.rows.push(r);
       entry.rowOrder.push(i);
-      byTicket.set(r.ticketId, entry);
+      map.set(r.ticketId, entry);
     });
 
     const updates: BulkLineItemUpdate[] = [];
@@ -98,9 +115,36 @@ export default function ReceivingPage() {
       });
     });
 
-    const results = await bulkUpdateLineItems(client, updates);
+    // Purchase-module rows: same mutation, written to the PurchaseRequests list.
+    const prUpdates: PurchaseBulkUpdate[] = [];
+    Array.from(byPurchase.entries()).forEach(([prId, entry]) => {
+      const pr = purchases.find((p) => p.id === prId);
+      if (!pr) return;
+      const newItems = pr.lineItems.map((it) => ({ ...it }));
+      entry.rows.forEach((r: QueueRow, i: number) => {
+        const overall = entry.rowOrder[i];
+        const perRow = submission.perRow[overall];
+        newItems[r.itemIndex] = {
+          ...newItems[r.itemIndex],
+          receivedQty: perRow?.receivedQty,
+          receivedDate: perRow?.receivedDate,
+        };
+      });
+      prUpdates.push({
+        id: prId,
+        lineItems: newItems,
+        purchaseStatus: allPurchaseItemsReceived(newItems) ? "Received" : pr.purchaseStatus,
+        notes: submission.notes,
+      });
+    });
+
+    const [results, prResults] = await Promise.all([
+      bulkUpdateLineItems(client, updates),
+      bulkUpdatePurchaseItems(client, prUpdates),
+    ]);
     const succeeded = results.filter((r) => r.success);
     const failed = results.filter((r) => !r.success);
+    const prFailed = prResults.filter((r) => !r.ok);
 
     for (const result of succeeded) {
       const ticketId = result.ticketId;
@@ -125,10 +169,13 @@ export default function ReceivingPage() {
 
     invalidateTicketsCache();
 
-    if (failed.length > 0) {
-      const msg = `Saved ${succeeded.length} of ${results.length} tickets. ${failed.length} failed: ${failed
-        .map((f) => `#${f.ticketId} (${f.error})`)
-        .join(", ")}`;
+    if (failed.length > 0 || prFailed.length > 0) {
+      const failures = [
+        ...failed.map((f) => `#${f.ticketId} (${f.error})`),
+        ...prFailed.map((f) => `PR ${f.id} (${f.error})`),
+      ];
+      const savedCount = succeeded.length + prResults.filter((r) => r.ok).length;
+      const msg = `Saved ${savedCount} of ${results.length + prResults.length} requests. ${failures.length} failed: ${failures.join(", ")}`;
       throw new Error(msg);
     }
 
@@ -152,8 +199,8 @@ export default function ReceivingPage() {
     );
   }
 
-  const awaitingRows = flattenUnreceivedItems(tickets);
-  const recentRows = flattenRecentlyReceived(tickets, 30);
+  const awaitingRows = [...flattenUnreceivedItems(tickets), ...purchaseUnreceivedRows(purchases)];
+  const recentRows = [...flattenRecentlyReceived(tickets, 30), ...purchaseRecentlyReceivedRows(purchases, 30)];
 
   return (
     <div className="min-h-screen flex flex-col">
