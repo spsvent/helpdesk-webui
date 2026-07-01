@@ -1,6 +1,6 @@
 const { app } = require("@azure/functions");
 const { verifyToken } = require("../lib/approvalToken");
-const { actionToDecision, buildDecisionFields, isTerminalStatus } = require("../lib/decisionFields");
+const { actionToDecision, buildDecisionFields, isTerminalStatus, decisionConflict } = require("../lib/decisionFields");
 const { resolveDecisionRecipients } = require("../lib/approvalRecipients");
 const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
 const { decisionEmail, purchaseApprovedEmail } = require("../lib/emailTemplates");
@@ -143,27 +143,31 @@ app.http("approvalAction", {
       if (action === "changes" && !note) {
         return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "note_required" } };
       }
-      if (isTerminalStatus(fields.ApprovalStatus)) {
-        return {
-          status: 409,
-          headers: corsHeaders,
-          jsonBody: { ok: false, reason: "already_decided", decidedBy: fields.ApprovedByName, decidedDate: fields.ApprovalDate },
-        };
+      // Pending-only gate (mirror of sendApprovalRequest's mint-side check): decided
+      // tickets report already_decided; anything else non-pending ("Changes
+      // Requested", "None") reports not_pending — a stale emailed Approve link must
+      // not decide a ticket that was pulled back for revision. Re-requesting
+      // approval sets ApprovalStatus back to "Pending" and mints fresh links.
+      const conflict = decisionConflict(fields.ApprovalStatus, "Pending", fields);
+      if (conflict) {
+        return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...conflict } };
       }
 
       const nowIso = new Date().toISOString();
       const patch = buildDecisionFields(decision, approverName, approverEmail, note || undefined, isPurchase, nowIso);
 
       // Optimistic concurrency: condition the write on the ETag we just read so two
-      // near-simultaneous clicks can't both pass the terminal-status check above and
-      // both write (the TOCTOU race). PATCH the item endpoint (not /fields) because
+      // near-simultaneous clicks can't both pass the pending gate above and both
+      // write (the TOCTOU race). PATCH the item endpoint (not /fields) because
       // If-Match applies at the item level; this mirrors processApprovalDecision's
       // `client.api(itemEndpoint).patch({ fields })` shape.
       //
-      // On 412 (lost the race): if a TERMINAL decision won, report already_decided.
-      // If a NON-terminal change won (e.g. someone clicked "Request Changes" — those
-      // links stay live), re-read the fresh ETag and retry ONCE, since this Approve/
-      // Deny is still valid. Persistent contention returns a clean retryable conflict,
+      // On 412 (lost the race): re-run the pending gate on the fresh item. If a
+      // concurrent write decided the ticket, report already_decided; if it pulled
+      // the ticket out of Pending (e.g. a "Request Changes" click), report
+      // not_pending — this Approve/Deny is no longer valid. Only if the ticket is
+      // STILL pending (an unrelated field changed under us) retry ONCE against the
+      // fresh ETag. Persistent contention returns a clean retryable conflict,
       // never a 500.
       let etag = fields.__etag;
       for (let attempt = 0; ; attempt++) {
@@ -176,17 +180,14 @@ app.http("approvalAction", {
         } catch (e) {
           if (e.statusCode !== 412) throw e;
           const fresh = await getTicketFields(client, tid);
-          if (isTerminalStatus(fresh.ApprovalStatus)) {
-            return {
-              status: 409,
-              headers: corsHeaders,
-              jsonBody: { ok: false, reason: "already_decided", decidedBy: fresh.ApprovedByName, decidedDate: fresh.ApprovalDate },
-            };
+          const freshConflict = decisionConflict(fresh.ApprovalStatus, "Pending", fresh);
+          if (freshConflict) {
+            return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...freshConflict } };
           }
           if (attempt >= 1) {
             return { status: 409, headers: corsHeaders, jsonBody: { ok: false, reason: "conflict_retry" } };
           }
-          etag = fresh.__etag; // retry once against the fresh, non-terminal ETag
+          etag = fresh.__etag; // retry once against the fresh, still-pending ETag
         }
       }
 

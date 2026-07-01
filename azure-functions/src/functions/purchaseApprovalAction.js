@@ -1,6 +1,6 @@
 const { app } = require("@azure/functions");
 const { verifyToken } = require("../lib/approvalToken");
-const { actionToDecision, isTerminalStatus } = require("../lib/decisionFields");
+const { actionToDecision, isTerminalStatus, decisionConflict } = require("../lib/decisionFields");
 const { buildPurchaseDecisionFields, purchaseDecisionRecipients } = require("../lib/purchaseDecisionFields");
 const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
 const { purchaseDecisionEmail, purchaseApprovedForPurchaserEmail } = require("../lib/purchaseEmailTemplates");
@@ -84,17 +84,20 @@ app.http("purchaseApprovalAction", {
       if (action === "changes" && !note) {
         return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "note_required" } };
       }
-      if (isTerminalStatus(fields.ApprovalStatus)) {
-        return {
-          status: 409,
-          headers: corsHeaders,
-          jsonBody: { ok: false, reason: "already_decided", decidedBy: fields.ApprovedByName, decidedDate: fields.ApprovalDate },
-        };
+      // Pending-only gate (mirror of sendPurchaseApprovalRequest's mint-side check):
+      // decided requests report already_decided; anything else non-pending (e.g.
+      // Changes Requested — pulled back for revision) reports not_pending, so a
+      // stale emailed Approve link can't approve a half-revised request.
+      const conflict = decisionConflict(fields.ApprovalStatus, "Pending", fields);
+      if (conflict) {
+        return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...conflict } };
       }
 
       const nowIso = new Date().toISOString();
       const patch = buildPurchaseDecisionFields(decision, approverName, approverEmail, note || undefined, nowIso);
 
+      // On 412: re-run the gate on the fresh item — if a concurrent write decided or
+      // un-pended the request, report that; if it's still pending, retry once.
       let etag = fields.__etag;
       for (let attempt = 0; ; attempt++) {
         try {
@@ -106,12 +109,9 @@ app.http("purchaseApprovalAction", {
         } catch (e) {
           if (e.statusCode !== 412) throw e;
           const fresh = await getPurchaseFields(client, tid);
-          if (isTerminalStatus(fresh.ApprovalStatus)) {
-            return {
-              status: 409,
-              headers: corsHeaders,
-              jsonBody: { ok: false, reason: "already_decided", decidedBy: fresh.ApprovedByName, decidedDate: fresh.ApprovalDate },
-            };
+          const freshConflict = decisionConflict(fresh.ApprovalStatus, "Pending", fresh);
+          if (freshConflict) {
+            return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...freshConflict } };
           }
           if (attempt >= 1) {
             return { status: 409, headers: corsHeaders, jsonBody: { ok: false, reason: "conflict_retry" } };
