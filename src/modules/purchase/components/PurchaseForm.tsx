@@ -158,7 +158,9 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         await updatePurchase(client, purchaseId!, {
           title: title.trim(),
           justification: justification.trim(),
-          project: project.trim() || undefined,
+          // null (not undefined) so blanking the optional Project field on edit
+          // actually clears the stored column instead of keeping the old value.
+          project: project.trim() || null,
         });
         await updateLineItems(client, purchaseId!, items);
         if (resubmit) {

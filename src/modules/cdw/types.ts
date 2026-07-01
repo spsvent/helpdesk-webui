@@ -77,9 +77,12 @@ export interface CDWBrief {
 }
 
 // Writable subset used when creating/updating (maps to SharePoint columns).
-export type CdwWritable = Partial<
-  Pick<
-    CDWBrief,
+// A value of null clears the stored column (the same null-to-clear convention
+// graphClient.ts uses for ticket columns) — the edit form relies on this so a
+// blanked field or removed person doesn't silently keep its old value. Omitted
+// (undefined) keys are left untouched.
+export type CdwWritable = {
+  [K in
     | "title"
     | "status"
     | "deadline"
@@ -104,9 +107,8 @@ export type CdwWritable = Partial<
     | "approvedByName"
     | "approvedByEmail"
     | "approvalDate"
-    | "approvalNotes"
-  >
->;
+    | "approvalNotes"]?: CDWBrief[K] | null;
+};
 
 // CDWBrief field <-> SharePoint column name. Single source of truth for read
 // (mapToCdw) and write (toFields in cdwService).

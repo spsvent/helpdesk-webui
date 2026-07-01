@@ -11,8 +11,8 @@ import UserSearchDropdown from "@/components/UserSearchDropdown";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { CDW_FIELDS } from "../fields";
-import { CdwStatus, CdwWritable, isEditableCdwStatus } from "../types";
-import { validateCdw, briefToFormState } from "../validation";
+import { CdwStatus, isEditableCdwStatus } from "../types";
+import { validateCdw, briefToFormState, buildCdwPayload } from "../validation";
 import { canCreateCdw, canEditCdw } from "../access";
 import { createCdw, getCdw, updateCdw, submitForApproval, uploadCdwAttachment, isCdwConfigured } from "../cdwService";
 
@@ -91,27 +91,6 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
   const setValue = (key: string, v: string) => setValues((prev) => ({ ...prev, [key]: v }));
   const setPerson = (key: string, p: Person) => setPersons((prev) => ({ ...prev, [key]: p }));
 
-  // Field payload only (no requester — that's set once at creation, never overwritten on edit).
-  function buildPayload(): CdwWritable {
-    const payload: CdwWritable = {};
-    for (const f of CDW_FIELDS) {
-      if (f.type === "person") continue;
-      const v = values[f.key]?.trim();
-      if (v) (payload as Record<string, unknown>)[f.key] = v;
-    }
-    const pm = persons.projectManager;
-    if (pm) {
-      payload.projectManagerName = pm.displayName;
-      payload.projectManagerEmail = pm.email;
-    }
-    const fr = persons.finalRecipient;
-    if (fr) {
-      payload.finalRecipientName = fr.displayName;
-      payload.finalRecipientEmail = fr.email;
-    }
-    return payload;
-  }
-
   async function handleSave(forSubmit: boolean) {
     const validationError = validateCdw(values, persons, forSubmit);
     if (validationError) {
@@ -127,7 +106,9 @@ export default function CdwForm({ briefId }: { briefId?: string }) {
     setSaving(forSubmit ? "submit" : "draft");
     try {
       const client = getGraphClient(instance, account);
-      const payload = buildPayload();
+      // Edit mode writes null for emptied fields/removed persons so they clear
+      // (see buildCdwPayload); create mode omits them.
+      const payload = buildCdwPayload(values, persons, isEdit);
 
       let id = briefId;
       if (isEdit) {

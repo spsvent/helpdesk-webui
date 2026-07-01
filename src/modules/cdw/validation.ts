@@ -2,10 +2,51 @@
 // can be unit-tested.
 
 import { CDW_FIELDS } from "./fields";
-import type { CDWBrief } from "./types";
+import type { CDWBrief, CdwWritable } from "./types";
 
 export type CdwFormValues = Record<string, string>;
 export type CdwFormPersons = Record<string, { displayName: string; email: string } | null>;
+
+/**
+ * Build the SharePoint write payload from the form state (field payload only — no
+ * requester: that's set once at creation, never overwritten on edit).
+ * - Create (isEdit=false): empty fields are omitted, so a new item only writes what
+ *   was filled in.
+ * - Edit (isEdit=true): emptied fields (and removed persons) are written as null so
+ *   the stored column actually clears — omitting them would silently keep the old
+ *   SharePoint value. (null-to-clear matches the graphClient.ts convention.)
+ */
+export function buildCdwPayload(
+  values: CdwFormValues,
+  persons: CdwFormPersons,
+  isEdit: boolean
+): CdwWritable {
+  const payload: CdwWritable = {};
+  const record = payload as Record<string, unknown>;
+  for (const f of CDW_FIELDS) {
+    if (f.type === "person") continue;
+    const v = values[f.key]?.trim();
+    if (v) record[f.key] = v;
+    else if (isEdit) record[f.key] = null;
+  }
+  const pm = persons.projectManager;
+  if (pm) {
+    payload.projectManagerName = pm.displayName;
+    payload.projectManagerEmail = pm.email;
+  } else if (isEdit) {
+    payload.projectManagerName = null;
+    payload.projectManagerEmail = null;
+  }
+  const fr = persons.finalRecipient;
+  if (fr) {
+    payload.finalRecipientName = fr.displayName;
+    payload.finalRecipientEmail = fr.email;
+  } else if (isEdit) {
+    payload.finalRecipientName = null;
+    payload.finalRecipientEmail = null;
+  }
+  return payload;
+}
 
 // Hydrate the editable form state from an existing brief (for the edit path).
 export function briefToFormState(brief: Partial<CDWBrief>): {
