@@ -74,6 +74,7 @@ describe("mapTicketItemToPurchase (migration mapper)", () => {
     ApprovalStatus: "Approved",
     ApprovedByEmail: "gm@x.com",
     Requester: { Email: "buyer@x.com", LookupValue: "Buyer" },
+    ParticipantEmails: "watcher@x.com; other@x.com",
   });
 
   it("maps ticket fields + preserves source ticket #/id", () => {
@@ -87,6 +88,12 @@ describe("mapTicketItemToPurchase (migration mapper)", () => {
     expect(input.requesterName).toBe("Buyer");
     expect(input.sourceTicketNumber).toBe(137);
     expect(input.sourceTicketId).toBe("42");
+  });
+
+  it("carries ticket participants over (the notification audience)", () => {
+    expect(mapTicketItemToPurchase(item).participantEmails).toEqual(["watcher@x.com", "other@x.com"]);
+    // No participants → omitted entirely, not written as an empty column.
+    expect(mapTicketItemToPurchase(ticketItem({ Title: "x" })).participantEmails).toBeUndefined();
   });
 
   it("falls back to the creator when there is no Requester person field", () => {
@@ -105,12 +112,14 @@ describe("mapTicketItemToPurchase (migration mapper)", () => {
       SourceTicketId: input.sourceTicketId,
       SourceTicketNumber: input.sourceTicketNumber,
       RequesterEmail: input.requesterEmail,
+      ParticipantEmails: (input.participantEmails || []).join("; "),
     };
     expect(verifyMigration(input, migratedFields)).toEqual([]);
     const pr = mapToPurchase(ticketItem(migratedFields, "900"));
     expect(pr.title).toBe("Buy cables");
     expect(pr.lineItems).toEqual([{ name: "HDMI", qty: 4, cost: 8 }]);
     expect(pr.sourceTicketNumber).toBe(137);
+    expect(pr.participantEmails).toEqual(["watcher@x.com", "other@x.com"]);
   });
 
   it("verifyMigration flags a mismatch", () => {

@@ -74,6 +74,8 @@ export interface PurchaseRequest {
 
 // Writable subset used on create/update (maps to SharePoint columns). Line items
 // are written as JSON via a dedicated helper, so they're excluded here.
+// participantEmails is string[] in the model; toFields serializes it to the
+// ";"-delimited ParticipantEmails text column.
 export type PurchaseWritable = Partial<
   Pick<
     PurchaseRequest,
@@ -95,6 +97,7 @@ export type PurchaseWritable = Partial<
     | "approvalNotes"
     | "requesterName"
     | "requesterEmail"
+    | "participantEmails"
     | "sourceTicketNumber"
     | "sourceTicketId"
   >
@@ -119,6 +122,7 @@ export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   approvalNotes: "ApprovalNotes",
   requesterName: "RequesterName",
   requesterEmail: "RequesterEmail",
+  participantEmails: "ParticipantEmails",
   sourceTicketNumber: "SourceTicketNumber",
   sourceTicketId: "SourceTicketId",
 };

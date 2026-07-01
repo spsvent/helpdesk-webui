@@ -6,6 +6,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
 import { fetchAllListItems } from "@/shared/listItems";
+import { serializeParticipantEmails } from "@/lib/participants";
 import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
@@ -45,7 +46,9 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   (Object.keys(w) as (keyof PurchaseWritable)[]).forEach((k) => {
     const value = w[k];
-    if (value !== undefined) fields[PURCHASE_COLUMN_MAP[k]] = value;
+    if (value === undefined) return;
+    // participantEmails is string[] in the model but a ";"-delimited text column.
+    fields[PURCHASE_COLUMN_MAP[k]] = Array.isArray(value) ? serializeParticipantEmails(value) : value;
   });
   return fields;
 }
