@@ -29,9 +29,10 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Vendor is required to mark an item ordered; Order # is optional.
   const isValid =
     orderItems.length > 0 &&
-    orderItems.every((item) => Boolean(item.vendor?.trim() && item.orderNum?.trim()));
+    orderItems.every((item) => Boolean(item.vendor?.trim()));
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -93,7 +94,7 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
             />
             <input
               type="text"
-              placeholder="Order # *"
+              placeholder="Order # (optional)"
               value={item.orderNum ?? ""}
               onChange={(e) => {
                 const updated = [...orderItems];

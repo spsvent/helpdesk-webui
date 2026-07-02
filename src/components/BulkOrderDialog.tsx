@@ -35,7 +35,8 @@ export default function BulkOrderDialog({ rows, onCancel, onConfirm }: BulkOrder
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isValid = vendor.trim().length > 0 && orderNum.trim().length > 0;
+  // Vendor is required to mark items ordered; Order # is optional.
+  const isValid = vendor.trim().length > 0;
 
   const handleConfirm = async () => {
     if (!isValid) return;
@@ -105,7 +106,7 @@ export default function BulkOrderDialog({ rows, onCancel, onConfirm }: BulkOrder
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Order # <span className="text-red-500">*</span>
+                Order # <span className="text-text-secondary">(optional)</span>
               </label>
               <input
                 type="text"

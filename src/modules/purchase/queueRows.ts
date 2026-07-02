@@ -22,6 +22,8 @@ function buildRow(pr: PurchaseRequest, item: PurchaseLineItem, idx: number): Que
     itemIndex: idx,
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
+    // Order-date proxy for the Awaiting Receipt sort (no per-item ordered timestamp exists).
+    orderedAt: pr.purchasedDate || pr.modified,
     // Request context for the queue's Requester + Approval columns. Purchase
     // requests have no department (a ticket-only concept), so it's left blank.
     requester: pr.requesterName || pr.createdByName,
@@ -40,9 +42,7 @@ export function purchaseUnorderedRows(prs: PurchaseRequest[]): QueueRow[] {
     // Skip requests fully done (Received) or denied
     if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
     pr.lineItems.forEach((item, idx) => {
-      const hasVendor = Boolean(item.vendor?.trim());
-      const hasOrderNum = Boolean(item.orderNum?.trim());
-      if (hasVendor && hasOrderNum) return; // already ordered
+      if (item.vendor?.trim()) return; // already ordered (vendor present; order # optional)
       rows.push(buildRow(pr, item, idx));
     });
   }
@@ -55,7 +55,7 @@ export function purchaseUnreceivedRows(prs: PurchaseRequest[]): QueueRow[] {
   for (const pr of prs) {
     if (pr.purchaseStatus === "Pending Approval" || pr.purchaseStatus === "Denied") continue;
     pr.lineItems.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
       if (fullyReceived) return;
@@ -71,7 +71,7 @@ export function purchaseRecentlyOrderedRows(prs: PurchaseRequest[], daysBack = 3
   const rows: QueueRow[] = [];
   for (const pr of prs) {
     pr.lineItems.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       const when = pr.modified ? new Date(pr.modified).getTime() : 0;
       if (when < cutoff) return;

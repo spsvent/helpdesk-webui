@@ -57,9 +57,11 @@ describe("validateLineItem / isSafeItemUrl (URL must be http(s) — it renders a
     expect(validateLineItem({ name: "Cable", url: "not a url", qty: 1, cost: 0 })).toMatch(/http/);
   });
 
-  it("still allows an empty/absent URL when a name is present", () => {
-    expect(validateLineItem({ name: "Cable", qty: 1, cost: 0 })).toBeNull();
-    expect(validateLineItem({ name: "Cable", url: "  ", qty: 1, cost: 0 })).toBeNull();
+  it("requires a product link (URL) on every item", () => {
+    // Name alone is no longer enough — a link is required.
+    expect(validateLineItem({ name: "Cable", qty: 1, cost: 0 })).toMatch(/link|URL/i);
+    expect(validateLineItem({ name: "Cable", url: "  ", qty: 1, cost: 0 })).toMatch(/link|URL/i);
+    // A valid http(s) link passes.
     expect(validateLineItem({ url: "https://vendor.example/item", qty: 1, cost: 0 })).toBeNull();
   });
 });

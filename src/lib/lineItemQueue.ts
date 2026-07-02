@@ -21,6 +21,8 @@ export interface QueueRow {
   // Display vendor: explicit item.vendor if present, otherwise inferred from URL.
   // Used for grouping and the visible "Vendor" column.
   displayVendor: string;
+  // Order-date proxy (record purchased/modified date) for the Awaiting Receipt sort.
+  orderedAt?: string;
   // Parent-request context, shown in the queue's Requester + Approval columns so
   // the purchaser can see who asked and that it was approved. Optional because
   // producers supply what they have — module purchase requests carry no
@@ -88,6 +90,7 @@ function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow
     itemIndex: idx,
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
+    orderedAt: ticket.purchasedDate || ticket.modified,
     requester,
     department: ticket.problemType,
     requestedDate: ticket.created,
@@ -110,9 +113,7 @@ export function flattenUnorderedItems(tickets: Ticket[]): QueueRow[] {
     if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const hasVendor = Boolean(item.vendor?.trim());
-      const hasOrderNum = Boolean(item.orderNum?.trim());
-      if (hasVendor && hasOrderNum) return; // already ordered
+      if (item.vendor?.trim()) return; // already ordered (vendor present; order # optional)
       rows.push(buildRow(ticket, item, idx));
     });
   }
@@ -128,7 +129,7 @@ export function flattenUnreceivedItems(tickets: Ticket[]): QueueRow[] {
     if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
       if (fullyReceived) return;
@@ -147,7 +148,7 @@ export function flattenRecentlyOrdered(tickets: Ticket[], daysBack = 30): QueueR
     if (!ticket.isPurchaseRequest) continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       // Use ticket modified date as a proxy — line items don't carry their
       // own ordered-on timestamp.
