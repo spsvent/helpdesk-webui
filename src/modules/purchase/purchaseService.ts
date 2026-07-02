@@ -5,8 +5,9 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
+import { fetchAllListItems } from "@/shared/listItems";
+import { serializeParticipantEmails } from "@/lib/participants";
 import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
-import { SharePointListResponse } from "@/shared/spTypes";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
@@ -45,7 +46,9 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   (Object.keys(w) as (keyof PurchaseWritable)[]).forEach((k) => {
     const value = w[k];
-    if (value !== undefined) fields[PURCHASE_COLUMN_MAP[k]] = value;
+    if (value === undefined) return;
+    // participantEmails is string[] in the model but a ";"-delimited text column.
+    fields[PURCHASE_COLUMN_MAP[k]] = Array.isArray(value) ? serializeParticipantEmails(value) : value;
   });
   return fields;
 }
@@ -54,9 +57,11 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
 
 export async function listPurchases(client: Client): Promise<PurchaseRequest[]> {
   if (!PURCHASE_LIST_ID) return [];
+  // Paged (fetchAllListItems follows @odata.nextLink): the migration runner builds
+  // its idempotency set from this, so a truncated read would duplicate records.
   const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items?$expand=fields&$top=1000&$orderby=createdDateTime desc`;
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  return (response.value || []).map(mapToPurchase);
+  const items = await fetchAllListItems(client, endpoint);
+  return items.map(mapToPurchase);
 }
 
 export async function getPurchase(client: Client, id: string): Promise<PurchaseRequest> {
@@ -64,6 +69,15 @@ export async function getPurchase(client: Client, id: string): Promise<PurchaseR
     .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
     .get();
   return mapToPurchase(item);
+}
+
+// Raw column values for one purchase item — the migration's verify step compares
+// these against the source ticket (verifyMigration wants columns, not the model).
+export async function getPurchaseFields(client: Client, id: string): Promise<Record<string, unknown>> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  return item.fields as Record<string, unknown>;
 }
 
 // A purchase request is visible to admins, purchasers, inventory (the fulfillment

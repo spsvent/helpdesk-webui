@@ -7,8 +7,8 @@ import { getGraphClient } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PurchaseLineItem, PurchaseRequest } from "../types";
-import { getPurchase, updateLineItems, visiblePurchase } from "../purchaseService";
-import { canApprovePurchase, canPurchase, canReceive } from "../access";
+import { getPurchase, submitForApproval, updateLineItems, visiblePurchase } from "../purchaseService";
+import { canApprovePurchase, canEditPurchase, canPurchase, canReceive, isPurchaseEditable } from "../access";
 import { allItemsOrdered, allItemsReceived } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 import LineItemsTable from "./LineItemsTable";
@@ -24,6 +24,7 @@ export default function PurchaseDetail({ id }: { id: string }) {
   const [pr, setPr] = useState<PurchaseRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     if (!account) return;
@@ -53,6 +54,28 @@ export default function PurchaseDetail({ id }: { id: string }) {
     setPr(await updateLineItems(client, pr.id, receivedItems, { purchaseStatus: status, notes }));
   }
 
+  // Put a bounced ("Changes Requested") or never-submitted request back into the
+  // approval queue: status → Pending + a fresh approver email.
+  async function handleResubmit() {
+    if (!account || !pr) return;
+    // Guard: an itemless request can't enter the GM approval queue.
+    if (pr.lineItems.length === 0) {
+      setError("Add at least one item (edit the request) before submitting for approval.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const client = getGraphClient(instance, account);
+      setPr(await submitForApproval(client, pr.id, pr.requesterName));
+    } catch (e) {
+      console.error("[PurchaseDetail] resubmit failed:", e);
+      setError("Could not submit for approval. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (loading) return <div className="p-8"><LoadingSpinner /></div>;
   if (error) return <p className="p-8 text-sm text-red-600">{error}</p>;
   if (!pr) return <p className="p-8 text-sm text-text-secondary">Request not found.</p>;
@@ -67,6 +90,9 @@ export default function PurchaseDetail({ id }: { id: string }) {
 
   const showOrder = ["Ordered", "Purchased", "Received"].includes(pr.purchaseStatus);
   const showReceived = ["Received"].includes(pr.purchaseStatus) || pr.lineItems.some((i) => i.receivedDate);
+  // Owner edit/resubmit escape hatch (mirrors CdwDetail): only while the request
+  // is out of the approval gate — "Changes Requested" or never submitted.
+  const canEdit = canEditPurchase(pr, permissions) && isPurchaseEditable(pr);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -83,6 +109,35 @@ export default function PurchaseDetail({ id }: { id: string }) {
 
       {canApprovePurchase(permissions) && pr.approvalStatus === "Pending" && (
         <div className="mt-4"><PurchaseApprovalPanel pr={pr} onDecided={setPr} /></div>
+      )}
+
+      {canEdit && (
+        <div className="mt-4 rounded-lg border border-border bg-bg-subtle p-4">
+          <p className="text-sm text-text-primary">
+            {pr.approvalStatus === "Changes Requested"
+              ? `Changes were requested${pr.approvedByName ? ` by ${pr.approvedByName}` : ""}. Edit the request, then resubmit for approval.`
+              : "This request hasn’t been submitted. Edit or submit it for approval when ready."}
+          </p>
+          {pr.approvalStatus === "Changes Requested" && pr.approvalNotes && (
+            <p className="mt-1 text-sm text-text-secondary">“{pr.approvalNotes}”</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href={`/purchase/edit/?id=${pr.id}`}
+              className="px-4 py-2 bg-bg-card text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40"
+            >
+              Edit request
+            </Link>
+            <button
+              type="button"
+              onClick={handleResubmit}
+              disabled={submitting}
+              className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
+            >
+              {submitting ? "Submitting…" : pr.approvalStatus === "Changes Requested" ? "Resubmit for Approval" : "Submit for Approval"}
+            </button>
+          </div>
+        </div>
       )}
 
       {(pr.approvalStatus === "Approved" || pr.approvalStatus === "Denied") && pr.approvedByName && (

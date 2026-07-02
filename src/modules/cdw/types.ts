@@ -23,6 +23,18 @@ export const CDW_PUBLIC_STATUS: CdwStatus = "Approved";
 // names with the matching CdwStatus values, so a decision IS a status.
 export type CdwDecision = "Approved" | "Denied" | "Changes Requested";
 
+// Statuses in which a brief's CONTENT may still be edited — i.e. while it's in the
+// requester's hands. Once it enters the approval queue ("Pending Approval") or has
+// been decided ("Approved"/"Denied") the content is frozen: editing then would keep
+// the status — and any "Approved by X" attribution — attached to rewritten text.
+// Single source of truth shared by CdwForm (hard gate on the edit route) and
+// CdwDetail (which only offers the Edit button for these statuses).
+export const CDW_EDITABLE_STATUSES: readonly CdwStatus[] = ["Draft", "Changes Requested"];
+
+export function isEditableCdwStatus(status: CdwStatus): boolean {
+  return CDW_EDITABLE_STATUSES.includes(status);
+}
+
 export function decisionToStatus(decision: CdwDecision): CdwStatus {
   return decision;
 }

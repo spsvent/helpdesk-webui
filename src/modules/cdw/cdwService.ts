@@ -5,8 +5,8 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
+import { fetchAllListItems } from "@/shared/listItems";
 import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
-import { SharePointListResponse } from "@/shared/spTypes";
 import type { Attachment } from "@/types/ticket";
 import {
   CDWBrief,
@@ -48,9 +48,11 @@ function toFields(w: CdwWritable): Record<string, unknown> {
 
 export async function listCdw(client: Client): Promise<CDWBrief[]> {
   if (!CDW_LIST_ID) return [];
+  // Paged (fetchAllListItems follows @odata.nextLink) so briefs past the first
+  // Graph page don't silently vanish from the list view.
   const endpoint = `/sites/${SITE_ID}/lists/${CDW_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  return (response.value || []).map(mapToCdw);
+  const items = await fetchAllListItems(client, endpoint);
+  return items.map(mapToCdw);
 }
 
 export async function getCdw(client: Client, id: string): Promise<CDWBrief> {

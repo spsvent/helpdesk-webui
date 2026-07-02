@@ -33,3 +33,16 @@ export function canEditPurchase(
   const me = perms.email.toLowerCase();
   return [pr.createdByEmail, pr.requesterEmail].some((e) => e && e.toLowerCase() === me);
 }
+
+// Status gate for edits (there is no Draft: new requests submit straight to the
+// approval queue). Editable only when the approver bounced it ("Changes
+// Requested") or it never entered the gate ("None" + still Pending Approval —
+// e.g. a migrated record that was never submitted). A request that is Pending,
+// Approved, or Denied is immutable; resubmitting (submitForApproval) is the only
+// way back into the queue.
+export function isPurchaseEditable(
+  pr: Pick<PurchaseRequest, "approvalStatus" | "purchaseStatus">
+): boolean {
+  if (pr.approvalStatus === "Changes Requested") return true;
+  return pr.approvalStatus === "None" && pr.purchaseStatus === "Pending Approval";
+}

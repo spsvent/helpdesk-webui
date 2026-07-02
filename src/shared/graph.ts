@@ -28,6 +28,7 @@ export {
 
 export { ensureList } from "@/shared/ensureList";
 export type { SharePointColumnDef } from "@/shared/ensureList";
+export { fetchAllListItems } from "@/shared/listItems";
 export type {
   SharePointListItem,
   SharePointListResponse,

@@ -33,4 +33,32 @@ function isTerminalStatus(approvalStatus) {
   return approvalStatus === "Approved" || approvalStatus === "Denied";
 }
 
-module.exports = { actionToDecision, buildDecisionFields, isTerminalStatus };
+// Redeem-side status gate for the emailed decision links, shared by the three
+// *ApprovalAction POST handlers. The mint side (the send*ApprovalRequest functions)
+// only issues tokens while the item is pending — but tokens then stay valid for
+// days, so the redeem side must re-check against the CURRENT status. Returns null
+// when the decision may proceed, otherwise a 409-shaped body:
+//   - Approved / Denied       → already_decided (with attribution) — terminal.
+//   - any other non-pending   → not_pending. E.g. "Changes Requested" or "Draft":
+//     the item was pulled back for revision, so a stale emailed Approve link must
+//     not decide the half-revised content. Resubmitting re-enters the pending
+//     state and mints fresh links.
+// `pendingStatus` differs per flow ("Pending" for tickets/purchases,
+// "Pending Approval" for CDWs). Call this on FRESHLY READ fields — including on
+// the re-read inside the 412 (If-Match) retry loop, so the gate holds after a
+// concurrent write.
+function decisionConflict(currentStatus, pendingStatus, fields) {
+  if (isTerminalStatus(currentStatus)) {
+    return {
+      reason: "already_decided",
+      decidedBy: fields.ApprovedByName,
+      decidedDate: fields.ApprovalDate,
+    };
+  }
+  if (currentStatus !== pendingStatus) {
+    return { reason: "not_pending", currentStatus: currentStatus || null };
+  }
+  return null;
+}
+
+module.exports = { actionToDecision, buildDecisionFields, isTerminalStatus, decisionConflict };

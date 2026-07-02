@@ -54,8 +54,16 @@ export default function MigrationPanel() {
             {report.dryRun
               ? `${report.items.filter((i) => i.action === "would-create").length} would be created`
               : `${report.created} created`}{" "}
+            {report.warnings > 0 && `· ${report.warnings} with warnings `}
             · {report.errors} error{report.errors === 1 ? "" : "s"}
           </p>
+          {report.warnings > 0 && (
+            <ul className="mt-1 text-amber-700">
+              {report.items.filter((i) => i.action === "created-with-warnings").map((i) => (
+                <li key={i.sourceTicketId}>#{i.sourceTicketNumber ?? i.sourceTicketId}: {(i.warnings || []).join(", ")}</li>
+              ))}
+            </ul>
+          )}
           {report.errors > 0 && (
             <ul className="mt-1 text-red-600">
               {report.items.filter((i) => i.action === "error").map((i) => (
