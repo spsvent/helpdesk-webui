@@ -1,15 +1,17 @@
 const { app } = require("@azure/functions");
 const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
-const { purchaseReminderEmail } = require("../lib/purchaseEmailTemplates");
+const { purchaseReminderDigestEmail } = require("../lib/purchaseEmailTemplates");
 const { reminderPlan, shouldSend } = require("../lib/purchaseReminderLogic");
 
 // Daily purchase-reminder sweep. For every non-terminal PurchaseRequests item it
-// asks reminderPlan() which nudges are due, throttles per-record via LastReminderSent,
-// then emails the right audience:
-//   approval → General Managers · order → Purchasers · receive → Inventory + requester
+// asks reminderPlan() which nudges are due (throttled per-record via LastReminderSent),
+// then sends ONE DIGEST email per audience summarizing everything due that day —
+// not one email per request — so a busy morning is a single email, not a flood:
+//   approval → General Managers · order → Purchasers · receive → Inventory + each requester
 //
 // Recipients come from the same Entra groups the approval flow uses (GENERAL_MANAGERS_/
-// PURCHASER_/INVENTORY_GROUP_ID). If a group id is unset, that nudge simply no-ops.
+// PURCHASER_/INVENTORY_GROUP_ID). If an audience is empty, that digest simply isn't sent
+// (and its records aren't stamped, so they'll be picked up once the group is configured).
 
 const TERMINAL = new Set(["Received", "Denied"]);
 
@@ -60,21 +62,21 @@ async function runPurchaseReminders(context) {
   const items = await fetchPurchaseRequests(client);
   context.log(`purchaseReminders: evaluating ${items.length} purchase request(s).`);
 
-  let sentEmails = 0;
-  let remindedRecords = 0;
+  // Pass 1 — bucket every due record by nudge kind. Each entry keeps the item id so
+  // we can stamp it, and receive rows also key by requester for the per-person digest.
+  const buckets = { approval: [], order: [], receive: [] };
 
   for (const item of items) {
     const fields = item.fields || {};
     fields.id = item.id;
     if (TERMINAL.has(fields.PurchaseStatus)) continue;
 
-    const lineItems = parseItems(fields);
     const req = {
       approvalStatus: fields.ApprovalStatus,
       purchaseStatus: fields.PurchaseStatus,
       needByDate: fields.NeedByDate,
       approvalRequestedDate: fields.ApprovalRequestedDate,
-      lineItems,
+      lineItems: parseItems(fields),
       orderedAt: fields.PurchasedDate || item.lastModifiedDateTime,
     };
 
@@ -82,37 +84,55 @@ async function runPurchaseReminders(context) {
     if (plan.reminders.length === 0) continue;
     if (!shouldSend(fields.LastReminderSent, plan.cadenceDays, nowMs)) continue;
 
-    const recipientsFor = {
-      approval: gmEmails,
-      order: purchaserEmails,
-      receive: [...inventoryEmails, fields.RequesterEmail].filter(Boolean),
-    };
-
-    let sentForRecord = 0;
-    for (const kind of plan.reminders) {
-      const recipients = Array.from(new Set(recipientsFor[kind] || []));
-      if (recipients.length === 0) continue;
-      const html = purchaseReminderEmail(kind, fields, fields.NeedByDate);
-      if (!html) continue;
-      const subject = `[Reminder] Purchase Request: ${fields.Title}`;
-      for (const to of recipients) {
-        try {
-          await sendMail(client, to, subject, html);
-          sentEmails++;
-          sentForRecord++;
-        } catch (e) {
-          context.error(`purchaseReminders: email (${kind}) to ${to} failed:`, e.message);
-        }
-      }
-    }
-
-    if (sentForRecord > 0) {
-      await stampReminded(client, item.id, nowIso);
-      remindedRecords++;
-    }
+    for (const kind of plan.reminders) buckets[kind].push({ id: item.id, fields });
   }
 
-  const result = { checked: items.length, remindedRecords, sentEmails };
+  // Pass 2 — send at most one digest per audience, and track which records made it
+  // into a digest that was actually sent (so only those get stamped).
+  const stampIds = new Set();
+  let sentEmails = 0;
+
+  async function sendDigest(kind, records, recipients) {
+    const to = Array.from(new Set((recipients || []).filter(Boolean)));
+    if (!records.length || to.length === 0) return;
+    const html = purchaseReminderDigestEmail(kind, records.map((r) => r.fields));
+    if (!html) return;
+    const subject = `[Reminder] ${records.length} purchase request${records.length === 1 ? "" : "s"} need attention`;
+    let anySent = false;
+    for (const addr of to) {
+      try {
+        await sendMail(client, addr, subject, html);
+        sentEmails++;
+        anySent = true;
+      } catch (e) {
+        context.error(`purchaseReminders: ${kind} digest to ${addr} failed:`, e.message);
+      }
+    }
+    if (anySent) records.forEach((r) => stampIds.add(r.id));
+  }
+
+  // Approval → GMs (one email); order → Purchasers (one email).
+  await sendDigest("approval", buckets.approval, gmEmails);
+  await sendDigest("order", buckets.order, purchaserEmails);
+
+  // Receive → one digest to Inventory (everything), plus one digest per requester
+  // (only their own items), so nobody gets a per-item flood.
+  await sendDigest("receive", buckets.receive, inventoryEmails);
+  const byRequester = new Map();
+  for (const rec of buckets.receive) {
+    const email = rec.fields.RequesterEmail;
+    if (!email) continue;
+    if (!byRequester.has(email)) byRequester.set(email, []);
+    byRequester.get(email).push(rec);
+  }
+  for (const [email, records] of byRequester) {
+    await sendDigest("receive", records, [email]);
+  }
+
+  // Stamp each record that appeared in a sent digest.
+  for (const id of stampIds) await stampReminded(client, id, nowIso);
+
+  const result = { checked: items.length, remindedRecords: stampIds.size, sentEmails };
   context.log("purchaseReminders: done", result);
   return result;
 }
