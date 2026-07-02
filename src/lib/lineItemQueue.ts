@@ -21,6 +21,13 @@ export interface QueueRow {
   // Display vendor: explicit item.vendor if present, otherwise inferred from URL.
   // Used for grouping and the visible "Vendor" column.
   displayVendor: string;
+  // Parent-request context (from the ticket), shown in the queue's Requester +
+  // Approval columns so the purchaser can see who asked and that it was approved.
+  requester: string;
+  department: string;
+  requestedDate: string | undefined; // when the request was created
+  approvedDate: string | undefined;
+  approver: string | undefined;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {
@@ -65,6 +72,11 @@ export function inferVendorFromUrl(url: string | undefined): string {
 
 function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow {
   const explicit = item.vendor?.trim();
+  // Prefer the migrated original requester name when present (mirrors how the
+  // ticket detail derives the requester), else the Person field's display name.
+  const requester = ticket.originalRequester
+    ? ticket.originalRequester.split("<")[0].trim() || ticket.originalRequester
+    : ticket.requester.displayName;
   return {
     source: "ticket",
     ticketId: ticket.id,
@@ -74,6 +86,11 @@ function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow
     itemIndex: idx,
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
+    requester,
+    department: ticket.problemType,
+    requestedDate: ticket.created,
+    approvedDate: ticket.approvalDate,
+    approver: ticket.approvedBy?.displayName,
   };
 }
 
