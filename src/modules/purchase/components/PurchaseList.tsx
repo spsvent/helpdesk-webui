@@ -65,6 +65,25 @@ export default function PurchaseList() {
         )}
       </div>
 
+      {isPurchaseConfigured() && permissions?.role === "admin" && (
+        <div className="mt-2 text-right">
+          <button
+            type="button"
+            onClick={handleSetup}
+            disabled={setupBusy}
+            title="Add any missing columns to the PurchaseRequests list (idempotent — safe to run anytime)"
+            className="text-xs text-text-secondary underline hover:text-text-primary disabled:opacity-50"
+          >
+            {setupBusy ? "Repairing list…" : "Repair list columns"}
+          </button>
+          {setupResult === "error" ? (
+            <p className="mt-1 text-xs text-red-700">Could not update the list.</p>
+          ) : setupResult ? (
+            <p className="mt-1 text-xs text-green-700">List columns are up to date.</p>
+          ) : null}
+        </div>
+      )}
+
       {!isPurchaseConfigured() && (
         <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-2">
           <p>The PurchaseRequests list isn’t configured yet. Set <code className="mx-1">NEXT_PUBLIC_PURCHASE_LIST_ID</code> after creating it.</p>
