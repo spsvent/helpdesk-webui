@@ -244,16 +244,19 @@ export default function LineItemQueue({
           <>
             <td className="px-3 py-2 text-xs">
               <div className="text-text-primary">{r.requester || "—"}</div>
-              <div className="text-text-secondary">{r.department || "—"}</div>
+              <div className="text-text-secondary">
+                {[r.department, r.requestedDate ? `req ${shortDate(r.requestedDate)}` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </div>
             </td>
             <td className="px-3 py-2 text-xs whitespace-nowrap">
-              <div className="text-text-primary">req {shortDate(r.requestedDate)}</div>
+              <div className="text-text-primary">appr {shortDate(r.approvedDate)}</div>
               <div
                 className="text-text-secondary truncate max-w-[11rem]"
                 title={r.approver || undefined}
               >
-                appr {shortDate(r.approvedDate)}
-                {r.approver ? ` · ${r.approver}` : ""}
+                {r.approver ? `by ${r.approver}` : "—"}
               </div>
             </td>
           </>
