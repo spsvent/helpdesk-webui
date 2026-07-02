@@ -39,6 +39,17 @@ function deriveItemLabel(row: QueueRow): string {
   return `Item ${row.itemIndex + 1}`;
 }
 
+// Compact M/D for the queue. Formats date-only strings by splitting the string
+// (not via Date()) to avoid a timezone off-by-one; full ISO datetimes fall back
+// to the locale's numeric month/day.
+function shortDate(s: string | undefined): string {
+  if (!s) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${+m[2]}/${+m[3]}`;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+}
+
 export default function LineItemQueue({
   mode,
   awaitingRows,
@@ -117,7 +128,9 @@ export default function LineItemQueue({
   // Columns: select(only when !isRecent) + ticket + item + qty + vendor + $/ea + subtotal + extras
   const orderExtras = mode === "order" && !isRecent ? 1 : mode === "order" && isRecent ? 2 : 0;
   const receiveExtras = mode === "receive" && !isRecent ? 2 : mode === "receive" && isRecent ? 2 : 0;
-  const colCount = (isRecent ? 0 : 1) + 6 + orderExtras + receiveExtras;
+  // Order queue also shows Requester + Approval context columns.
+  const reqCols = mode === "order" ? 2 : 0;
+  const colCount = (isRecent ? 0 : 1) + 6 + reqCols + orderExtras + receiveExtras;
 
   const renderHeaderRow = () => (
     <tr className="bg-bg-subtle text-text-secondary">
@@ -134,6 +147,16 @@ export default function LineItemQueue({
       <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
         Ticket
       </th>
+      {mode === "order" && (
+        <>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Requester
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Approval
+          </th>
+        </>
+      )}
       <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
         Item
       </th>
@@ -193,7 +216,7 @@ export default function LineItemQueue({
     return (
       <tr
         key={k}
-        className={`border-t border-border ${isSelected ? "bg-indigo-50" : ""}`}
+        className={`border-t border-border [&>td]:align-top ${isSelected ? "bg-indigo-50" : ""}`}
       >
         {!isRecent && (
           <td className="px-3 py-2">
@@ -223,6 +246,27 @@ export default function LineItemQueue({
             </Link>
           )}
         </td>
+        {mode === "order" && (
+          <>
+            <td className="px-3 py-2 text-xs">
+              <div className="text-text-primary">{r.requester || "—"}</div>
+              <div className="text-text-secondary">
+                {[r.department, r.requestedDate ? `req ${shortDate(r.requestedDate)}` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </div>
+            </td>
+            <td className="px-3 py-2 text-xs whitespace-nowrap">
+              <div className="text-text-primary">appr {shortDate(r.approvedDate)}</div>
+              <div
+                className="text-text-secondary truncate max-w-[11rem]"
+                title={r.approver || undefined}
+              >
+                {r.approver ? `by ${r.approver}` : "—"}
+              </div>
+            </td>
+          </>
+        )}
         <td className="px-3 py-2">
           {r.item.url ? (
             <a

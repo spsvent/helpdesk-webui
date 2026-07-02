@@ -23,6 +23,15 @@ export interface QueueRow {
   displayVendor: string;
   // Order-date proxy (record purchased/modified date) for the Awaiting Receipt sort.
   orderedAt?: string;
+  // Parent-request context, shown in the queue's Requester + Approval columns so
+  // the purchaser can see who asked and that it was approved. Optional because
+  // producers supply what they have — module purchase requests carry no
+  // department, and future producers may omit some fields.
+  requester?: string;
+  department?: string;
+  requestedDate?: string; // when the request was created
+  approvedDate?: string;
+  approver?: string;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {
@@ -67,6 +76,11 @@ export function inferVendorFromUrl(url: string | undefined): string {
 
 function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow {
   const explicit = item.vendor?.trim();
+  // Prefer the migrated original requester name when present (mirrors how the
+  // ticket detail derives the requester), else the Person field's display name.
+  const requester = ticket.originalRequester
+    ? ticket.originalRequester.split("<")[0].trim() || ticket.originalRequester
+    : ticket.requester.displayName;
   return {
     source: "ticket",
     ticketId: ticket.id,
@@ -77,6 +91,11 @@ function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
     orderedAt: ticket.purchasedDate || ticket.modified,
+    requester,
+    department: ticket.problemType,
+    requestedDate: ticket.created,
+    approvedDate: ticket.approvalDate,
+    approver: ticket.approvedBy?.displayName,
   };
 }
 
