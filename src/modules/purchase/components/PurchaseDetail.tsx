@@ -208,6 +208,12 @@ export default function PurchaseDetail({ id }: { id: string }) {
             <dd className="sm:col-span-2 text-sm text-text-primary">{pr.project}</dd>
           </div>
         )}
+        {pr.needByDate && (
+          <div className="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1">
+            <dt className="text-sm font-medium text-text-secondary">Need-by date</dt>
+            <dd className="sm:col-span-2 text-sm text-text-primary">{pr.needByDate}</dd>
+          </div>
+        )}
       </dl>
 
       {canPurchase(pr, permissions) && (

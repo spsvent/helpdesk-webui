@@ -304,6 +304,7 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   MEMO("PurchaseJustification"),
   TEXT("PurchaseProject"),
   MEMO("PurchaseNotes"),
+  DATE("NeedByDate"),
   DATE("PurchasedDate"),
   TEXT("PurchasedByEmail"),
   DATE("ReceivedDate"),
@@ -328,6 +329,8 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   // the approval-request email went out (its re-send cooldown stamp). Never
   // written by the SPA. Lists created before this column tolerate its absence.
   { name: "ApprovalRequestSentAt", dateTime: { format: "dateTime", displayAs: "default" } },
+  // Server-written by the purchaseReminders timer function to throttle repeat reminders.
+  { name: "LastReminderSent", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
 export async function ensurePurchaseList(client: Client): Promise<string> {

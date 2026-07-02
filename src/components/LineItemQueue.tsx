@@ -6,7 +6,7 @@ import type { QueueRow } from "@/lib/lineItemQueue";
 import { groupByVendor } from "@/lib/lineItemQueue";
 
 type Tab = "awaiting" | "recent";
-type SortKey = "vendor" | "ticket" | "cost";
+type SortKey = "vendor" | "ticket" | "cost" | "orderDate";
 
 interface LineItemQueueProps {
   mode: "order" | "receive";
@@ -47,7 +47,8 @@ export default function LineItemQueue({
   loading = false,
 }: LineItemQueueProps) {
   const [tab, setTab] = useState<Tab>("awaiting");
-  const [sortKey, setSortKey] = useState<SortKey>("vendor");
+  // Default sort per queue: Awaiting Order → ticket #; Awaiting Receipt → order date (oldest first).
+  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "ticket");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const rows = tab === "awaiting" ? awaitingRows : recentRows;
@@ -58,6 +59,11 @@ export default function LineItemQueue({
     copy.sort((a, b) => {
       if (sortKey === "vendor") return a.displayVendor.localeCompare(b.displayVendor);
       if (sortKey === "ticket") return (a.ticketNumber ?? 0) - (b.ticketNumber ?? 0);
+      if (sortKey === "orderDate") {
+        const at = a.orderedAt ? new Date(a.orderedAt).getTime() : Infinity;
+        const bt = b.orderedAt ? new Date(b.orderedAt).getTime() : Infinity;
+        return at - bt; // earliest order first
+      }
       return b.item.qty * b.item.cost - a.item.qty * a.item.cost;
     });
     return copy;
@@ -307,6 +313,7 @@ export default function LineItemQueue({
             >
               <option value="vendor">Vendor</option>
               <option value="ticket">Ticket #</option>
+              <option value="orderDate">Order date (oldest first)</option>
               <option value="cost">Subtotal (high → low)</option>
             </select>
           </label>

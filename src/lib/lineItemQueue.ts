@@ -21,6 +21,8 @@ export interface QueueRow {
   // Display vendor: explicit item.vendor if present, otherwise inferred from URL.
   // Used for grouping and the visible "Vendor" column.
   displayVendor: string;
+  // Order-date proxy (record purchased/modified date) for the Awaiting Receipt sort.
+  orderedAt?: string;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {
@@ -74,6 +76,7 @@ function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow
     itemIndex: idx,
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
+    orderedAt: ticket.purchasedDate || ticket.modified,
   };
 }
 
@@ -91,9 +94,7 @@ export function flattenUnorderedItems(tickets: Ticket[]): QueueRow[] {
     if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const hasVendor = Boolean(item.vendor?.trim());
-      const hasOrderNum = Boolean(item.orderNum?.trim());
-      if (hasVendor && hasOrderNum) return; // already ordered
+      if (item.vendor?.trim()) return; // already ordered (vendor present; order # optional)
       rows.push(buildRow(ticket, item, idx));
     });
   }
@@ -109,7 +110,7 @@ export function flattenUnreceivedItems(tickets: Ticket[]): QueueRow[] {
     if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
       if (fullyReceived) return;
@@ -128,7 +129,7 @@ export function flattenRecentlyOrdered(tickets: Ticket[], daysBack = 30): QueueR
     if (!ticket.isPurchaseRequest) continue;
     const items = ticket.purchaseLineItems ?? [];
     items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
+      const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
       // Use ticket modified date as a proxy — line items don't carry their
       // own ordered-on timestamp.

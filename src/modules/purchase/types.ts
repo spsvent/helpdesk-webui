@@ -45,6 +45,7 @@ export interface PurchaseRequest {
   justification?: string;
   project?: string;
   notes?: string;
+  needByDate?: string; // ISO date (yyyy-mm-dd) — drives the need-by reminder emails
   // Ordering / receiving audit
   purchasedDate?: string;
   purchasedByEmail?: string;
@@ -87,6 +88,7 @@ export type PurchaseWritable = {
     | "justification"
     | "project"
     | "notes"
+    | "needByDate"
     | "purchasedDate"
     | "purchasedByEmail"
     | "receivedDate"
@@ -111,6 +113,7 @@ export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   justification: "PurchaseJustification",
   project: "PurchaseProject",
   notes: "PurchaseNotes",
+  needByDate: "NeedByDate",
   purchasedDate: "PurchasedDate",
   purchasedByEmail: "PurchasedByEmail",
   receivedDate: "ReceivedDate",
@@ -175,6 +178,7 @@ export function mapToPurchase(item: SharePointListItem): PurchaseRequest {
     justification: str("PurchaseJustification"),
     project: str("PurchaseProject"),
     notes: str("PurchaseNotes"),
+    needByDate: str("NeedByDate"),
     purchasedDate: str("PurchasedDate"),
     purchasedByEmail: str("PurchasedByEmail"),
     receivedDate: str("ReceivedDate"),

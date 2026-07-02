@@ -41,6 +41,7 @@ interface DraftShape {
   title: string;
   justification: string;
   project: string;
+  needByDate: string;
   lineItems: PurchaseLineItem[];
 }
 
@@ -58,6 +59,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
   const [title, setTitle] = useState("");
   const [justification, setJustification] = useState("");
   const [project, setProject] = useState("");
+  const [needByDate, setNeedByDate] = useState("");
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
   const [submitting, setSubmitting] = useState<null | "save" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,13 +80,14 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
       setTitle(d.title || "");
       setJustification(d.justification || "");
       setProject(d.project || "");
+      setNeedByDate(d.needByDate || "");
       if (d.lineItems?.length) setLineItems(d.lineItems);
     }
   }, [isConvert, isEdit]);
 
   useEffect(() => {
-    if (!isConvert && !isEdit) saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
-  }, [isConvert, isEdit, title, justification, project, lineItems]);
+    if (!isConvert && !isEdit) saveDraft(DRAFT_KEY, { title, justification, project, needByDate, lineItems });
+  }, [isConvert, isEdit, title, justification, project, needByDate, lineItems]);
 
   // Edit mode: hydrate from the existing request.
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         setTitle(pr.title);
         setJustification(pr.justification || "");
         setProject(pr.project || "");
+        setNeedByDate(pr.needByDate || "");
         setLineItems(pr.lineItems.length ? pr.lineItems : [{ qty: 1, cost: 0 }]);
       } catch (e) {
         console.error("[PurchaseForm] load for edit failed:", e);
@@ -161,6 +165,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
           // null (not undefined) so blanking the optional Project field on edit
           // actually clears the stored column instead of keeping the old value.
           project: project.trim() || null,
+          needByDate: needByDate || null,
         });
         await updateLineItems(client, purchaseId!, items);
         if (resubmit) {
@@ -186,6 +191,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         title: title.trim(),
         justification: justification.trim(),
         project: project.trim() || undefined,
+        needByDate: needByDate || undefined,
         // Converted requests keep the original ticket's requester; otherwise the submitter.
         requesterName: sourceTicket?.requesterName || account.name || account.username || "",
         requesterEmail: sourceTicket?.requesterEmail || account.username || "",
@@ -286,6 +292,12 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         <div>
           <label htmlFor="pr-proj" className="block text-sm font-medium text-text-primary">Project</label>
           <input id="pr-proj" className={`mt-1 ${inputClass}`} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional project / budget code" />
+        </div>
+
+        <div>
+          <label htmlFor="pr-needby" className="block text-sm font-medium text-text-primary">Need-by date</label>
+          <p className="mt-0.5 text-xs text-text-secondary">Optional. If set, reminders go out daily starting 9 days before this date until it&apos;s approved and ordered.</p>
+          <input id="pr-needby" type="date" className={`mt-1 ${inputClass}`} value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} />
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
