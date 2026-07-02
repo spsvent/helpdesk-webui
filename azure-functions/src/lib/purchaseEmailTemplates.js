@@ -107,4 +107,39 @@ function purchaseApprovedForPurchaserEmail(fields, approverName) {
   return shell("Purchase Approved — Ready to Order", body);
 }
 
-module.exports = { purchaseApprovalRequestEmail, purchaseDecisionEmail, purchaseApprovedForPurchaserEmail };
+// Daily-reminder emails (purchaseReminders.js). `kind` selects the nudge:
+//   approval → GMs, order → Purchasers, receive → Inventory + requester.
+// `needByDate` (optional) adds an urgency line when a deadline is set.
+function purchaseReminderEmail(kind, fields, needByDate) {
+  const copy = {
+    approval: {
+      headline: "Reminder — Purchase Request Awaiting Approval",
+      lead: "This purchase request is still waiting for a decision. Please approve, deny, or request changes.",
+      cta: { href: `${config.appUrl}/purchase?id=${fields.id}`, label: "Review the request" },
+    },
+    order: {
+      headline: "Reminder — Approved Purchase Not Yet Ordered",
+      lead: "This request was approved but one or more items haven't been ordered yet.",
+      cta: { href: `${config.appUrl}/orders`, label: "Open the order queue" },
+    },
+    receive: {
+      headline: "Reminder — Mark Items as Received",
+      lead: "One or more ordered items on this request haven't been marked received. If they've arrived, please record receipt.",
+      cta: { href: `${config.appUrl}/receiving`, label: "Open the receiving queue" },
+    },
+  }[kind];
+  if (!copy) return null;
+  const needBy = needByDate
+    ? `<p style="color:#b45309;"><span class="label">Needed by:</span> ${escapeHtml(needByDate)}</p>`
+    : "";
+  const body = `<p>${copy.lead}</p>${needBy}${info(fields)}
+    <div class="actions"><a href="${copy.cta.href}" class="btn btn-view">${copy.cta.label}</a></div>`;
+  return shell(copy.headline, body);
+}
+
+module.exports = {
+  purchaseApprovalRequestEmail,
+  purchaseDecisionEmail,
+  purchaseApprovedForPurchaserEmail,
+  purchaseReminderEmail,
+};
