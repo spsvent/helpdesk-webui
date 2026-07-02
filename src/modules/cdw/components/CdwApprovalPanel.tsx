@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
+import { DecisionConflictError, decisionConflictMessage } from "@/shared/decisionConflict";
 import { CDWBrief, CdwDecision } from "../types";
 import { recordDecision } from "../cdwService";
 import { notifyCdwDecision } from "../cdwEmail";
@@ -10,9 +11,12 @@ import { notifyCdwDecision } from "../cdwEmail";
 interface Props {
   brief: CDWBrief;
   onDecided: (updated: CDWBrief) => void;
+  // The brief was decided elsewhere (email link / another GM) while this panel
+  // was open — the parent shows the message and reloads the fresh item.
+  onConflict: (message: string) => void;
 }
 
-export default function CdwApprovalPanel({ brief, onDecided }: Props) {
+export default function CdwApprovalPanel({ brief, onDecided, onConflict }: Props) {
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const [notes, setNotes] = useState("");
@@ -44,6 +48,12 @@ export default function CdwApprovalPanel({ brief, onDecided }: Props) {
       onDecided(updated);
     } catch (e) {
       console.error("[CdwApprovalPanel] decision failed:", e);
+      if (e instanceof DecisionConflictError) {
+        // Someone else already decided (or pulled back) this brief — don't show
+        // the generic "try again"; report the conflict and let the parent refresh.
+        onConflict(decisionConflictMessage(e, "brief"));
+        return;
+      }
       setError("Could not record the decision. Please try again.");
       setBusy(null);
     }

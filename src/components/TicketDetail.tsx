@@ -5,7 +5,7 @@ import { useMsal } from "@azure/msal-react";
 import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
 import { isImageAttachment, isBrowserPreviewable } from "@/lib/attachmentComments";
 import { buildRenditionView, isHeic, renditionName } from "@/lib/heicRenditions";
-import { convertHeicToJpeg, isHeicConvertEnabled } from "@/lib/heicConvertService";
+import { convertHeicToJpeg, isConvertibleSize, isHeicConvertEnabled } from "@/lib/heicConvertService";
 import {
   getGraphClient,
   getComments,
@@ -99,8 +99,16 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const previewInflight = useRef<Map<string, Promise<string | null>>>(new Map());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [highlightAttachments, setHighlightAttachments] = useState(false);
+  // Name of the single attachment row to highlight after a "jump to file" link
+  // (null → highlight the whole section instead).
+  const [highlightedAttachment, setHighlightedAttachment] = useState<string | null>(null);
   const attachmentsSectionRef = useRef<HTMLDivElement>(null);
-  const pendingScrollRef = useRef(false);
+  // Deferred mobile scroll: holds the target of a scroll requested while the
+  // Details tab wasn't mounted yet ({} → the section, { name } → that file's row).
+  const pendingScrollRef = useRef<{ name?: string } | null>(null);
+  // Highlight-clearing timer — kept in a ref so a second jump restarts the
+  // window instead of a stale timeout cutting the new highlight short.
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   const heicConvertEnabled = isHeicConvertEnabled();
 
@@ -120,6 +128,15 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const ticketIdRef = useRef(ticket.id);
   ticketIdRef.current = ticket.id;
 
+  // Attachment sizes by name, so the HEIC-conversion paths can skip files the
+  // converter would reject (over its size cap) without downloading them first.
+  const attachmentSizes = useMemo(
+    () => new Map(attachments.map((a) => [a.name, a.size])),
+    [attachments]
+  );
+  const attachmentSizeRef = useRef(attachmentSizes);
+  attachmentSizeRef.current = attachmentSizes;
+
   const imageAttachments = useMemo(
     () => displayAttachments.filter((a) => isImageAttachment(a.name)),
     [displayAttachments]
@@ -135,10 +152,13 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   );
 
   // Can the lightbox show this inline (converting a HEIC on demand if needed)?
+  // Oversized HEICs (beyond the converter's cap) get the download fallback.
   const canPreview = useCallback(
     (name: string) =>
       isBrowserPreviewable(name) ||
-      (isHeic(name) && (renditionRef.current.has(name) || heicConvertEnabled)),
+      (isHeic(name) &&
+        (renditionRef.current.has(name) ||
+          (heicConvertEnabled && isConvertibleSize(attachmentSizeRef.current.get(name))))),
     [heicConvertEnabled]
   );
 
@@ -160,6 +180,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         return downloadAttachment(client, tid, existing.name, instance, accounts[0]);
       }
       if (!heicConvertEnabled) return null;
+      // The converter caps its input size — skip the download + round trip for
+      // oversized files so they fall back to the download-only path immediately.
+      if (!isConvertibleSize(attachmentSizeRef.current.get(name))) return null;
 
       const heicBlob = await downloadAttachment(client, tid, name, instance, accounts[0]);
       if (!heicBlob) return null;
@@ -193,24 +216,48 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       if (inflight) return inflight;
       if (!accounts[0]) return null;
 
-      const promise = (async () => {
+      const tid = ticket.id;
+      // `let` + self-reference: the finally block runs only after the async
+      // body has awaited at least once, so `promise` is assigned by then.
+      let promise: Promise<string | null> | undefined;
+      promise = (async () => {
         try {
           const blob = await fetchPreviewBlob(name);
           if (!blob) return null;
           const url = URL.createObjectURL(blob);
+          // The cache/inflight maps are keyed by name only and outlive ticket
+          // switches (the cleanup effect below revokes+clears them per ticket).
+          // If the user switched tickets while this download was in flight,
+          // caching now would poison the NEW ticket's cache with this ticket's
+          // bytes — and leak an object URL nobody would revoke. Drop it instead.
+          if (ticketIdRef.current !== tid) {
+            URL.revokeObjectURL(url);
+            return null;
+          }
           previewCache.current.set(name, url);
           return url;
         } catch (e) {
           console.error("Failed to load attachment preview:", e);
           return null;
         } finally {
-          previewInflight.current.delete(name);
+          // Only remove our own entry: after a ticket switch clears the map,
+          // the new ticket may have an in-flight download under the same name.
+          if (previewInflight.current.get(name) === promise) {
+            previewInflight.current.delete(name);
+          }
         }
       })();
       previewInflight.current.set(name, promise);
       return promise;
     },
-    [accounts, fetchPreviewBlob]
+    [accounts, fetchPreviewBlob, ticket.id]
+  );
+
+  // Synchronous cache peek so the lightbox can show an already-fetched image
+  // on its very first frame (no spinner flash when paging back to it).
+  const peekPreviewUrl = useCallback(
+    (name: string): string | null => previewCache.current.get(name) ?? null,
+    []
   );
 
   // Revoke cached object URLs and close the lightbox when the ticket changes.
@@ -233,30 +280,48 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     [imageAttachments]
   );
 
-  const doScrollToAttachments = useCallback(() => {
-    const el = attachmentsSectionRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    setHighlightAttachments(true);
-    window.setTimeout(() => setHighlightAttachments(false), 1600);
+  // Scroll to the Attachments section — or, when a filename is given and its
+  // row is rendered, to that specific row (with a row-level highlight). Falls
+  // back to the section-level highlight when the name isn't in the list.
+  const doScrollToAttachments = useCallback((name?: string) => {
+    const section = attachmentsSectionRef.current;
+    if (!section) return;
+    const row = name
+      ? section.querySelector<HTMLElement>(`[data-attachment-name="${CSS.escape(name)}"]`)
+      : null;
+    (row ?? section).scrollIntoView({ behavior: "smooth", block: row ? "center" : "start" });
+    setHighlightAttachments(!row);
+    setHighlightedAttachment(row && name ? name : null);
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightAttachments(false);
+      setHighlightedAttachment(null);
+      highlightTimeoutRef.current = null;
+    }, 1600);
   }, []);
 
-  const scrollToAttachments = useCallback(() => {
-    // On mobile the Attachments live in the "Details" tab — switch to it first,
-    // then scroll once the panel has mounted (handled by the effect below).
-    if (isMobile && mobileDetailView !== "details") {
-      pendingScrollRef.current = true;
-      setMobileDetailView("details");
-      return;
-    }
-    doScrollToAttachments();
-  }, [isMobile, mobileDetailView, doScrollToAttachments]);
+  const scrollToAttachments = useCallback(
+    (name?: string) => {
+      // On mobile the Attachments live in the "Details" tab — switch to it first,
+      // then scroll once the panel has mounted (handled by the effect below).
+      if (isMobile && mobileDetailView !== "details") {
+        pendingScrollRef.current = { name };
+        setMobileDetailView("details");
+        return;
+      }
+      doScrollToAttachments(name);
+    },
+    [isMobile, mobileDetailView, doScrollToAttachments]
+  );
 
   // Perform a deferred scroll after the mobile Details panel becomes visible.
   useEffect(() => {
     if (mobileDetailView === "details" && pendingScrollRef.current) {
-      pendingScrollRef.current = false;
-      const id = window.setTimeout(() => doScrollToAttachments(), 60);
+      const { name } = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+      const id = window.setTimeout(() => doScrollToAttachments(name), 60);
       return () => window.clearTimeout(id);
     }
   }, [mobileDetailView, doScrollToAttachments]);
@@ -378,8 +443,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id, accounts, instance]);
 
-  // Fetch attachments when ticket changes
+  // Fetch attachments when ticket changes. The cancelled flag prevents a slow
+  // fetch from landing another ticket's attachment list (or clobbering the new
+  // ticket's loading state) if the user switches tickets before it resolves.
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAttachments = async () => {
       if (!accounts[0]) return;
 
@@ -387,15 +456,19 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       try {
         const client = getGraphClient(instance, accounts[0]);
         const ticketAttachments = await getAttachments(client, ticket.id, instance, accounts[0]);
-        setAttachments(ticketAttachments);
+        if (!cancelled) setAttachments(ticketAttachments);
       } catch (e) {
-        console.error("Failed to fetch attachments:", e);
+        if (!cancelled) console.error("Failed to fetch attachments:", e);
       } finally {
-        setAttachmentsLoading(false);
+        if (!cancelled) setAttachmentsLoading(false);
       }
     };
 
     fetchAttachments();
+
+    return () => {
+      cancelled = true;
+    };
   }, [ticket.id, accounts, instance]);
 
   // Handle adding a new comment
@@ -1079,6 +1152,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onPreviewImage={openLightbox}
               attachmentsSectionRef={attachmentsSectionRef}
               highlightAttachments={highlightAttachments}
+              highlightAttachmentName={highlightedAttachment}
               onMergeComplete={handleMergeComplete}
               saveRef={detailsPanelSaveRef}
             />
@@ -1092,6 +1166,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           images={imageAttachments}
           index={lightboxIndex}
           getPreviewUrl={getPreviewUrl}
+          peekPreviewUrl={peekPreviewUrl}
           canPreview={canPreview}
           canPreloadNeighbor={canThumbnail}
           onClose={() => setLightboxIndex(null)}

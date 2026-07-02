@@ -11,7 +11,10 @@ const config: Record<CdwStatus, { label: string; className: string }> = {
 };
 
 export default function CdwStatusBadge({ status, size = "md" }: { status: CdwStatus; size?: "sm" | "md" }) {
-  const c = config[status];
+  // mapToCdw casts the raw column value, so a hand-edited list value can arrive
+  // here outside CdwStatus — show it in a neutral (Draft-style) badge rather
+  // than crashing the page on config[status].className.
+  const c = config[status] ?? { label: status, className: "bg-gray-100 text-gray-600 border border-gray-300" };
   const sizeClasses = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
   return (
     <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.className} ${sizeClasses}`}>

@@ -811,6 +811,8 @@ export async function bulkUpdateLineItems(
 const EMAIL_FUNCTION_URL = process.env.NEXT_PUBLIC_EMAIL_FUNCTION_URL || "";
 
 // Azure Function that builds + sends the approval-request email with signed action links.
+// The function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL || "";
 
 // Ask the server to send the signed approval-request email to the GM group.

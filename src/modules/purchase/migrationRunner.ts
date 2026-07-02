@@ -68,7 +68,7 @@ export async function runPurchaseMigration(
   for (const item of tickets) {
     const input = mapTicketItemToPurchase(item);
     const sid = input.sourceTicketId || item.id;
-    const base = { sourceTicketNumber: input.sourceTicketNumber, sourceTicketId: sid, title: input.title || "" };
+    const base = { sourceTicketNumber: input.sourceTicketNumber ?? undefined, sourceTicketId: sid, title: input.title || "" };
 
     if (migrated.has(sid)) {
       report.alreadyMigrated++;

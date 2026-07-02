@@ -2,6 +2,7 @@ const { app } = require("@azure/functions");
 const { signToken } = require("../lib/approvalToken");
 const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { cdwApprovalRequestEmail } = require("../lib/cdwEmailTemplates");
+const { isValidItemId, isWithinCooldown } = require("../lib/requestGuards");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,15 +12,21 @@ const corsHeaders = {
 
 // Mirror of sendApprovalRequest.js, but for CDW creative briefs: mints signed
 // one-click tokens (tagged kind:'cdw') and emails the GM group.
+//
+// authLevel "function": only the SPA (whose NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL
+// carries ?code=<function-key>, same as the SendEmail/Teams/Escalation URLs) can
+// trigger approver emails — an anonymous caller could otherwise loop this into an
+// approval-fatigue email bomb with valid one-click tokens.
 app.http("sendCdwApprovalRequest", {
   methods: ["POST", "OPTIONS"],
-  authLevel: "anonymous",
+  authLevel: "function",
   handler: async (request, context) => {
     if (request.method === "OPTIONS") return { status: 204, headers: corsHeaders };
 
     const { cdwId, requesterName } = await request.json().catch(() => ({}));
-    if (!cdwId) {
-      return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "missing_cdwId" } };
+    // Strict numeric id — it's interpolated into the Graph path below.
+    if (!isValidItemId(cdwId)) {
+      return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "invalid_cdwId" } };
     }
     if (!config.cdwListId) {
       return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "cdw_list_not_configured" } };
@@ -34,10 +41,20 @@ app.http("sendCdwApprovalRequest", {
       fields.id = item.id;
       const who = fields.RequesterName || requesterName || "A staff member";
 
-      // SECURITY GATE: anonymous endpoint — only mint/send tokens for a brief that
-      // is genuinely Pending Approval (mirrors the ticket flow's gate).
+      // SECURITY GATE: only mint/send tokens for a brief that is genuinely Pending
+      // Approval (mirrors the ticket flow's gate). The distinct "not_pending" note is
+      // fine to keep now that the endpoint requires a function key — the only caller
+      // is the SPA, which needs the real signal.
       if (fields.CdwStatus !== "Pending Approval") {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "not_pending" } };
+      }
+
+      // RE-SEND COOLDOWN: refuse to email the GM group again if a request for this
+      // brief already went out in the last 10 minutes. The stamp is server-written
+      // below; briefs on lists created before the column existed simply have no
+      // stamp, so the cooldown just doesn't apply there.
+      if (isWithinCooldown(fields.ApprovalRequestSentAt)) {
+        return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "cooldown" } };
       }
 
       const approvers = await getGroupMembers(client, config.generalManagersGroupId);
@@ -59,10 +76,23 @@ app.http("sendCdwApprovalRequest", {
         catch (e) { context.error(`CDW approval email to ${email} failed:`, e.message); }
       }));
 
+      if (sent > 0) {
+        try {
+          await client
+            .api(`/sites/${config.siteId}/lists/${config.cdwListId}/items/${item.id}/fields`)
+            .patch({ ApprovalRequestSentAt: new Date().toISOString() });
+        } catch (e) {
+          // Lists created before the column existed can't hold the stamp — log and
+          // proceed without a cooldown rather than failing the (already sent) request.
+          context.warn(`could not stamp ApprovalRequestSentAt on CDW ${item.id}:`, e.message);
+        }
+      }
+
       return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent } };
     } catch (error) {
+      // Log the detail server-side only — error.message can leak Graph/config internals.
       context.error("sendCdwApprovalRequest failed:", error);
-      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error", details: error.message } };
+      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error" } };
     }
   },
 });

@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import ResendApprovalButton from "@/components/ResendApprovalButton";
 import { CDWBrief, isEditableCdwStatus } from "../types";
 import { CDW_FIELDS } from "../fields";
 import { validateBrief } from "../validation";
-import { getCdw, submitForApproval, visibleCdw } from "../cdwService";
+import { getCdw, submitForApproval, triggerCdwApprovalRequest, visibleCdw } from "../cdwService";
 import CdwStatusBadge from "./CdwStatusBadge";
 import CdwApprovalPanel from "./CdwApprovalPanel";
 
@@ -33,6 +34,10 @@ export default function CdwDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Non-fatal: the submit saved but the approver email didn't go out.
+  const [emailWarning, setEmailWarning] = useState(false);
+  // The approval panel hit a concurrent decision (email link / another GM).
+  const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!account) return;
@@ -61,11 +66,13 @@ export default function CdwDetail({ id }: { id: string }) {
       return;
     }
     setError(null);
+    setEmailWarning(false);
     setSubmitting(true);
     try {
       const client = getGraphClient(instance, account);
-      const updated = await submitForApproval(client, brief.id, brief.requesterName);
+      const { brief: updated, emailSent } = await submitForApproval(client, brief.id, brief.requesterName);
       setBrief(updated);
+      setEmailWarning(!emailSent);
     } catch (e) {
       console.error("[CdwDetail] submit failed:", e);
       setError("Could not submit for approval. Please try again.");
@@ -111,9 +118,37 @@ export default function CdwDetail({ id }: { id: string }) {
         Submitted by {brief.requesterName || brief.createdByName || "—"}
       </p>
 
+      {conflictNotice && (
+        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-800">{conflictNotice}</p>
+        </div>
+      )}
+
       {showApproval && (
         <div className="mt-4">
-          <CdwApprovalPanel brief={brief} onDecided={setBrief} />
+          <CdwApprovalPanel
+            brief={brief}
+            onDecided={setBrief}
+            onConflict={(msg) => {
+              // Show what happened, then reload so the stale panel is replaced by
+              // the real (decided) state.
+              setConflictNotice(msg);
+              load();
+            }}
+          />
+        </div>
+      )}
+
+      {brief.status === "Pending Approval" && (
+        <div className="mt-4">
+          {emailWarning && (
+            <p className="mb-2 text-sm text-amber-600">
+              Submitted — but the approval email could not be sent. Use “Re-send approval request” below.
+            </p>
+          )}
+          <ResendApprovalButton
+            onSend={() => triggerCdwApprovalRequest(brief.id, brief.requesterName || brief.createdByName)}
+          />
         </div>
       )}
 

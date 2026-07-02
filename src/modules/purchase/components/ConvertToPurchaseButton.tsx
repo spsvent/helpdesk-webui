@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { useRBAC } from "@/contexts/RBACContext";
+import type { TicketDetailActionProps } from "@/shared/formModules";
 import { canCreatePurchase } from "../access";
 
 // Additive bridge on the ticket detail: turn a regular Request/Problem ticket into a
 // purchase request. Self-contained (lives in the module) so it's removed with it.
-// The parent decides when to render it (non-purchase tickets); this just gates on
-// create permission and links to the pre-filled purchase form.
-export default function ConvertToPurchaseButton({ ticketId }: { ticketId: string }) {
+// Contributed to the details panel via the manifest's `ticketDetailActions` (which
+// also holds the ticket-level render gate); this just gates on create permission
+// and links to the pre-filled purchase form.
+export default function ConvertToPurchaseButton({ ticket }: TicketDetailActionProps) {
   const { permissions } = useRBAC();
   if (!canCreatePurchase(permissions)) return null;
   return (
     <Link
-      href={`/purchase/new?fromTicket=${ticketId}`}
+      href={`/purchase/new?fromTicket=${ticket.id}`}
       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg font-medium hover:bg-amber-700 transition-colors"
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

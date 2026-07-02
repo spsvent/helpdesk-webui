@@ -22,6 +22,7 @@ export default function ReceiveActionPanel({ pr, onMarkReceived }: ReceiveAction
   );
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Restore a receive draft snapshotted before a renewal redirect, then clear it (one-shot).
   useEffect(() => {
@@ -52,12 +53,14 @@ export default function ReceiveActionPanel({ pr, onMarkReceived }: ReceiveAction
   const handleSubmit = async () => {
     if (!isValid) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       await onMarkReceived(receivedItems, notes.trim() || undefined);
       setIsExpanded(false);
       setNotes("");
     } catch (error) {
       console.error("Failed to mark as received:", error);
+      setError("Could not save the receipt. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -148,6 +151,8 @@ export default function ReceiveActionPanel({ pr, onMarkReceived }: ReceiveAction
           className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-2">
         <button
