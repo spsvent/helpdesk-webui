@@ -21,13 +21,15 @@ export interface QueueRow {
   // Display vendor: explicit item.vendor if present, otherwise inferred from URL.
   // Used for grouping and the visible "Vendor" column.
   displayVendor: string;
-  // Parent-request context (from the ticket), shown in the queue's Requester +
-  // Approval columns so the purchaser can see who asked and that it was approved.
-  requester: string;
-  department: string;
-  requestedDate: string | undefined; // when the request was created
-  approvedDate: string | undefined;
-  approver: string | undefined;
+  // Parent-request context, shown in the queue's Requester + Approval columns so
+  // the purchaser can see who asked and that it was approved. Optional because
+  // producers supply what they have — module purchase requests carry no
+  // department, and future producers may omit some fields.
+  requester?: string;
+  department?: string;
+  requestedDate?: string; // when the request was created
+  approvedDate?: string;
+  approver?: string;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {

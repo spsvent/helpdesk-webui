@@ -22,6 +22,12 @@ function buildRow(pr: PurchaseRequest, item: PurchaseLineItem, idx: number): Que
     itemIndex: idx,
     item,
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
+    // Request context for the queue's Requester + Approval columns. Purchase
+    // requests have no department (a ticket-only concept), so it's left blank.
+    requester: pr.requesterName || pr.createdByName,
+    requestedDate: pr.created,
+    approvedDate: pr.approvalDate,
+    approver: pr.approvedByName,
   };
 }
 
