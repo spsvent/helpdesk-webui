@@ -76,9 +76,12 @@ export interface PurchaseRequest {
 // are written as JSON via a dedicated helper, so they're excluded here.
 // participantEmails is string[] in the model; toFields serializes it to the
 // ";"-delimited ParticipantEmails text column.
-export type PurchaseWritable = Partial<
-  Pick<
-    PurchaseRequest,
+// A value of null clears the stored column (the same null-to-clear convention
+// graphClient.ts uses for ticket columns) — the edit form relies on this so a
+// blanked field doesn't silently keep its old value. Omitted (undefined) keys
+// are left untouched.
+export type PurchaseWritable = {
+  [K in
     | "title"
     | "purchaseStatus"
     | "justification"
@@ -99,9 +102,8 @@ export type PurchaseWritable = Partial<
     | "requesterEmail"
     | "participantEmails"
     | "sourceTicketNumber"
-    | "sourceTicketId"
-  >
->;
+    | "sourceTicketId"]?: PurchaseRequest[K] | null;
+};
 
 export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   title: "Title",

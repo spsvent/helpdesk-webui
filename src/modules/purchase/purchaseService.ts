@@ -6,8 +6,9 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
 import { fetchAllListItems } from "@/shared/listItems";
+import { guardedDecisionPatch, type DecisionReadResult } from "@/shared/decisionConflict";
 import { serializeParticipantEmails } from "@/lib/participants";
-import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
+import { getAttachments, uploadAttachment, deleteAttachment } from "@/shared/graph";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
@@ -20,6 +21,8 @@ import {
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const PURCHASE_LIST_ID = process.env.NEXT_PUBLIC_PURCHASE_LIST_ID || "";
+// The Azure Function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_PURCHASE_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL || "";
 
 export const PURCHASE_LIST_NAME = "PurchaseRequests";
@@ -157,9 +160,28 @@ export async function bulkUpdateLineItems(
   );
 }
 
+// Fresh read of the approval gate + ETag for the concurrency-guarded decision
+// write (mirror of getPurchaseFields in the purchaseApprovalAction Function).
+async function readDecisionState(client: Client, id: string): Promise<DecisionReadResult> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  const pr = mapToPurchase(item);
+  return {
+    status: pr.approvalStatus,
+    decidedBy: pr.approvedByName,
+    etag: (item["@odata.etag"] as string) || "*",
+  };
+}
+
 // Record an approver decision (in-app). Ports the purchase branch of
 // processApprovalDecision (graphClient.ts:614-633): maps the decision onto both the
 // approval gate and the fulfillment status.
+//
+// Concurrency: mirrors the emailed-link Function — a fresh read + pending-only gate
+// + an If-Match–conditioned PATCH (guardedDecisionPatch). If the request was already
+// decided by email or another GM, this throws DecisionConflictError instead of
+// silently overwriting that decision from a stale tab.
 export async function recordDecision(
   client: Client,
   id: string,
@@ -198,21 +220,36 @@ export async function recordDecision(
       patch.approvalStatus = "Changes Requested";
       break;
   }
-  return updatePurchase(client, id, patch);
+
+  if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
+  const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`;
+  await guardedDecisionPatch({
+    read: () => readDecisionState(client, id),
+    patch: (etag) => client.api(endpoint).header("If-Match", etag).patch({ fields: toFields(patch) }),
+    pendingStatus: "Pending",
+  });
+  return getPurchase(client, id);
+}
+
+// Result of a submit/resubmit: the saved request plus whether the approver email
+// actually went out — callers surface a non-fatal warning when it didn't.
+export interface SubmitForApprovalResult {
+  purchase: PurchaseRequest;
+  emailSent: boolean;
 }
 
 export async function submitForApproval(
   client: Client,
   id: string,
   requesterName: string
-): Promise<PurchaseRequest> {
+): Promise<SubmitForApprovalResult> {
   const updated = await updatePurchase(client, id, {
     purchaseStatus: "Pending Approval",
     approvalStatus: "Pending",
     approvalRequestedDate: new Date().toISOString().slice(0, 10),
   });
-  await triggerPurchaseApprovalRequest(id, requesterName);
-  return updated;
+  const emailSent = await triggerPurchaseApprovalRequest(id, requesterName);
+  return { purchase: updated, emailSent };
 }
 
 // POST to the Azure Function that mints kind:'purchase' tokens + emails GM approvers.
@@ -287,6 +324,10 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   MEMO("ParticipantEmails"),
   NUM("SourceTicketNumber"),
   TEXT("SourceTicketId"),
+  // Server-written by the sendPurchaseApprovalRequest Azure Function: last time
+  // the approval-request email went out (its re-send cooldown stamp). Never
+  // written by the SPA. Lists created before this column tolerate its absence.
+  { name: "ApprovalRequestSentAt", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
 export async function ensurePurchaseList(client: Client): Promise<string> {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { mapToPurchase, parsePurchaseLineItems } from "./types";
+import { isSafeItemUrl, validateLineItem } from "./lineItems";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
 import { canEditPurchase, isPurchaseEditable } from "./access";
 import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
@@ -37,6 +38,29 @@ describe("parsePurchaseLineItems (dual-read)", () => {
   });
   it("returns [] when there is nothing", () => {
     expect(parsePurchaseLineItems({})).toEqual([]);
+  });
+});
+
+describe("validateLineItem / isSafeItemUrl (URL must be http(s) — it renders as a raw href)", () => {
+  it("accepts http/https URLs and rejects everything else", () => {
+    expect(isSafeItemUrl("https://vendor.example/item")).toBe(true);
+    expect(isSafeItemUrl("http://vendor.example/item")).toBe(true);
+    // eslint-disable-next-line no-script-url
+    expect(isSafeItemUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeItemUrl("data:text/html,<script>1</script>")).toBe(false);
+    expect(isSafeItemUrl("vendor.example/item")).toBe(false); // unparseable (no scheme)
+  });
+
+  it("rejects an item whose URL isn't a valid http(s) link", () => {
+    // eslint-disable-next-line no-script-url
+    expect(validateLineItem({ url: "javascript:alert(1)", qty: 1, cost: 0 })).toMatch(/http/);
+    expect(validateLineItem({ name: "Cable", url: "not a url", qty: 1, cost: 0 })).toMatch(/http/);
+  });
+
+  it("still allows an empty/absent URL when a name is present", () => {
+    expect(validateLineItem({ name: "Cable", qty: 1, cost: 0 })).toBeNull();
+    expect(validateLineItem({ name: "Cable", url: "  ", qty: 1, cost: 0 })).toBeNull();
+    expect(validateLineItem({ url: "https://vendor.example/item", qty: 1, cost: 0 })).toBeNull();
   });
 });
 

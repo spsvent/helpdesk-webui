@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { runPurchaseMigration, MigrationReport } from "../migrationRunner";
 
 // Admin-only: copy existing purchase-request tickets into the PurchaseRequests list.

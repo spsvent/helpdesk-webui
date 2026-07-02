@@ -109,7 +109,17 @@ After deploying, update the web app's environment variables in Azure Static Web 
 - `NEXT_PUBLIC_EMAIL_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/SendEmail?code=<function-key>`
 - `NEXT_PUBLIC_TEAMS_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/SendTeamsNotification?code=<function-key>`
 - `NEXT_PUBLIC_ESCALATION_FUNCTION_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/runEscalationCheck?code=<function-key>`
-- `NEXT_PUBLIC_HEIC_CONVERT_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/convertheic` (anonymous; converts only the bytes it's handed, so no function key needed)
+- `NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/sendApprovalRequest?code=<function-key>`
+- `NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/sendCdwApprovalRequest?code=<function-key>`
+- `NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/sendPurchaseApprovalRequest?code=<function-key>`
+- `NEXT_PUBLIC_HEIC_CONVERT_URL` = `https://helpdesk-notify-func.azurewebsites.net/api/convertheic?code=<function-key>`
+
+All of the above are `authLevel: "function"` — the `?code=` key is required. The
+approval-request triggers and the HEIC converter used to be anonymous; after
+deploying this version, add the key to each URL or the SPA's calls will 401.
+Only the email-link redemption endpoints (`approvalAction`, `cdwApprovalAction`,
+`purchaseApprovalAction`) stay anonymous: they are opened from email one-click
+links and authorize via their signed token instead.
 
 Get the function keys from Azure Portal → Function App → Functions → [Function Name] → Function Keys
 

@@ -816,6 +816,14 @@ const helpSections: HelpSection[] = [
           </div>
         </div>
 
+        <p className="mt-3">
+          <strong>iPhone photos (HEIC):</strong> HEIC images are previewed through an
+          auto-generated JPEG copy stored next to them (e.g. <code>IMG_0001.HEIC.jpg</code>),
+          which is hidden from the attachment list. Note that a file you upload yourself named{" "}
+          <code>X.HEIC.jpg</code> sitting next to an <code>X.HEIC</code> is treated as that
+          photo&apos;s preview rendition and hidden from the list too.
+        </p>
+
         <h4 className="font-semibold text-text-primary mt-6">File Size Limits</h4>
         <p>
           The maximum file size for attachments is <strong>10 MB</strong> per file.
@@ -2361,6 +2369,17 @@ const helpSections: HelpSection[] = [
           purchasing, and inventory receiving.
         </p>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
+          <p className="text-sm text-blue-800">
+            <strong>Two ways to request a purchase:</strong> this section covers the{" "}
+            <strong>ticket-embedded</strong> flow (a Purchase Request checkbox on a
+            regular ticket). There is also a <strong>standalone Purchase Request</strong>{" "}
+            form with its own page and an edit/resubmit cycle — see{" "}
+            <strong>Purchase Requests (Standalone)</strong> below. Both flows coexist and
+            feed the same order/receiving queues.
+          </p>
+        </div>
+
         <h4 className="font-semibold text-text-primary mt-6">
           Creating a Purchase Request
         </h4>
@@ -2524,6 +2543,54 @@ const helpSections: HelpSection[] = [
             request&apos;s progress.
           </p>
         </div>
+      </div>
+    ),
+  },
+  {
+    id: "purchase-requests-module",
+    title: "Purchase Requests (Standalone)",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The <strong>standalone Purchase Request</strong> form lives on its own page
+          (<strong>/purchase</strong>) instead of inside a ticket. Use it to request one or more
+          items for purchase — it must be approved by a General Manager before the purchasing
+          team can order it.
+        </p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Click <strong>+ New</strong> in the header and choose <strong>New Purchase Request</strong> (or go to <strong>/purchase</strong>).</li>
+          <li>Add a title, your item(s) — each needs a name or an http(s) link, a quantity, and an estimated cost — and a justification (a project/budget code is optional).</li>
+          <li>Click <strong>Submit for Approval</strong> — the General Managers are emailed with one-click approve/deny/request-changes links, and they can also decide inside the app.</li>
+        </ol>
+        <p>
+          A request can also be created <strong>from an existing ticket</strong>: open the ticket
+          and use <strong>Convert to Purchase Request</strong> in the details panel. The new
+          request is prefilled from the ticket, and the ticket is resolved and linked to it.
+        </p>
+        <h4 className="font-semibold text-text-primary mt-6">Editing and resubmitting</h4>
+        <p>
+          If the approver chooses <strong>Request Changes</strong>, the request comes back to you:
+          open it and click <strong>Edit</strong>, make your changes, then either{" "}
+          <strong>Save &amp; Resubmit for Approval</strong> (re-enters the approval queue and
+          re-emails the approvers) or <strong>Save without Resubmitting</strong> to keep revising.
+          Requests that are pending, approved, or denied can&apos;t be edited. If the approval
+          email didn&apos;t go out, use <strong>Re-send approval request</strong> on the request page.
+        </p>
+        <h4 className="font-semibold text-text-primary mt-6">After approval</h4>
+        <p>
+          Approved requests flow into the same <strong>Order Queue</strong> (/orders) and{" "}
+          <strong>Receiving Queue</strong> (/receiving) as ticket-embedded purchase requests, so
+          purchasers and the inventory team process both kinds side by side. The requester is
+          emailed when a decision is made.
+        </p>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>Visibility:</strong> A purchase request is visible to admins, purchasers,
+          inventory, and its creator/requester.
+        </div>
+        <p className="text-sm text-text-secondary">
+          If the &quot;New Purchase Request&quot; option doesn&apos;t appear in the + New menu, the
+          PurchaseRequests list hasn&apos;t been configured yet — ask an administrator.
+        </p>
       </div>
     ),
   },

@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from "vitest";
 import { visibleCdw, mapToCdw, isEditableCdwStatus, CDWBrief, CDW_STATUSES } from "./types";
-import { validateCdw, validateBrief, briefToFormState } from "./validation";
+import { validateCdw, validateBrief, briefToFormState, buildCdwPayload } from "./validation";
 import { canCreateCdw, canEditCdw } from "./access";
 import type { UserPermissions } from "@/types/rbac";
 
@@ -162,6 +162,45 @@ describe("briefToFormState + validateBrief (edit path)", () => {
   it("an incomplete brief (e.g. no final recipient) is rejected before submit", () => {
     expect(validateBrief(brief({ title: "Promo", deadline: "2026-07-01", quickTake: "x", projectManagerEmail: "pm@x.com", projectManagerName: "PM" })))
       .toMatch(/final/i);
+  });
+});
+
+describe("buildCdwPayload (create omits empties; edit nulls them so columns clear)", () => {
+  const values = { title: "Promo", quickTake: "Make a flyer", campaign: "  " };
+  const persons = {
+    projectManager: { displayName: "PM", email: "pm@x.com" },
+    finalRecipient: null,
+  };
+
+  it("create mode: only writes filled fields and present persons", () => {
+    const p = buildCdwPayload(values, persons, false);
+    expect(p).toEqual({
+      title: "Promo",
+      quickTake: "Make a flyer",
+      projectManagerName: "PM",
+      projectManagerEmail: "pm@x.com",
+    });
+    // Emptied/absent keys are omitted entirely, not written as blanks.
+    expect("campaign" in p).toBe(false);
+    expect("finalRecipientEmail" in p).toBe(false);
+  });
+
+  it("edit mode: emptied fields and removed persons are written as null (clears the column)", () => {
+    const p = buildCdwPayload(values, persons, true);
+    expect(p.title).toBe("Promo");
+    expect(p.campaign).toBeNull();
+    expect(p.deadline).toBeNull();
+    expect(p.finalRecipientName).toBeNull();
+    expect(p.finalRecipientEmail).toBeNull();
+    // A person who is still set is written normally.
+    expect(p.projectManagerEmail).toBe("pm@x.com");
+  });
+
+  it("never includes requester or workflow fields (set at creation / by the approval path)", () => {
+    const p = buildCdwPayload(values, persons, true);
+    expect("requesterEmail" in p).toBe(false);
+    expect("status" in p).toBe(false);
+    expect("approvedByName" in p).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
 import { initAppInsights, setAuthenticatedUser, trackEvent } from "@/lib/appInsights";
 import { markAuthReady, clearRenewalAttempt } from "@/lib/authActions";
-import { modulePublicRoutePrefixes } from "@/shared/formModules";
+import { isPublicModuleRoute } from "@/shared/formModules";
 import "./globals.css";
 
 export default function RootLayout({
@@ -150,13 +150,11 @@ export default function RootLayout({
           const accounts = instance.getAllAccounts();
           // Public, token-authorized pages skip ALL auth bootstrapping: no cached-session
           // validation (which redirects and would drop the ?token= from the URL) AND no
-          // Teams SSO. The page authorizes via its token. The built-in ticket /approve
-          // page plus any module-contributed prefixes (e.g. the CDW /cdw/approve landing)
-          // come from the form-module manifest, so the shell stays decoupled from modules.
-          const publicPrefixes = ["/approve", ...modulePublicRoutePrefixes()];
+          // Teams SSO. The page authorizes via its token. isPublicModuleRoute covers the
+          // built-in ticket /approve page plus any module-contributed prefixes (e.g. the
+          // CDW /cdw/approve landing), so the shell stays decoupled from modules.
           const isPublicActionPage =
-            typeof window !== "undefined" &&
-            publicPrefixes.some((p) => window.location.pathname.startsWith(p));
+            typeof window !== "undefined" && isPublicModuleRoute(window.location.pathname);
           if (isPublicActionPage) {
             if (accounts.length > 0) instance.setActiveAccount(accounts[0]);
             // intentionally no validateCachedSession and no ssoSilent — fall through

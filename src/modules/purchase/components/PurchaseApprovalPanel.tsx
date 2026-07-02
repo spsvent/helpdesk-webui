@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
+import { DecisionConflictError, decisionConflictMessage } from "@/shared/decisionConflict";
 import { PurchaseRequest } from "../types";
 import { PurchaseDecision, recordDecision } from "../purchaseService";
 import { notifyPurchaseDecision } from "../purchaseEmail";
@@ -10,6 +11,9 @@ import { notifyPurchaseDecision } from "../purchaseEmail";
 interface Props {
   pr: PurchaseRequest;
   onDecided: (updated: PurchaseRequest) => void;
+  // The request was decided elsewhere (email link / another GM) while this panel
+  // was open — the parent shows the message and reloads the fresh item.
+  onConflict: (message: string) => void;
 }
 
 const BUTTONS: { decision: PurchaseDecision; label: string; className: string; needsNote?: boolean }[] = [
@@ -19,7 +23,7 @@ const BUTTONS: { decision: PurchaseDecision; label: string; className: string; n
   { decision: "Denied", label: "Deny", className: "bg-red-600 hover:bg-red-700" },
 ];
 
-export default function PurchaseApprovalPanel({ pr, onDecided }: Props) {
+export default function PurchaseApprovalPanel({ pr, onDecided, onConflict }: Props) {
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const [notes, setNotes] = useState("");
@@ -42,6 +46,12 @@ export default function PurchaseApprovalPanel({ pr, onDecided }: Props) {
       onDecided(updated);
     } catch (e) {
       console.error("[PurchaseApprovalPanel] failed:", e);
+      if (e instanceof DecisionConflictError) {
+        // Someone else already decided (or pulled back) this request — don't show
+        // the generic "try again"; report the conflict and let the parent refresh.
+        onConflict(decisionConflictMessage(e, "request"));
+        return;
+      }
       setError("Could not record the decision. Please try again.");
       setBusy(null);
     }

@@ -8,28 +8,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { loginRequest } from "@/lib/msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "@/lib/teamsAuth";
 import { useRBAC } from "@/contexts/RBACContext";
-
-// Dynamic imports for Settings tabs - only load the active tab
-const AutoAssignRulesManager = dynamic(
-  () => import("@/components/AutoAssignRulesManager"),
-  { loading: () => <TabLoadingSpinner /> }
-);
-const EscalationRulesManager = dynamic(
-  () => import("@/components/EscalationRulesManager"),
-  { loading: () => <TabLoadingSpinner /> }
-);
-const TeamsChannelsManager = dynamic(
-  () => import("@/components/TeamsChannelsManager"),
-  { loading: () => <TabLoadingSpinner /> }
-);
-const ActivityLogManager = dynamic(
-  () => import("@/components/ActivityLogManager"),
-  { loading: () => <TabLoadingSpinner /> }
-);
-const VisibilityKeywordsManager = dynamic(
-  () => import("@/components/VisibilityKeywordsManager"),
-  { loading: () => <TabLoadingSpinner /> }
-);
+import { FORM_MODULES, moduleSettingsTabs } from "@/shared/formModules";
 
 function TabLoadingSpinner() {
   return (
@@ -39,11 +18,52 @@ function TabLoadingSpinner() {
   );
 }
 
+// Built-in settings tabs. Dynamic imports so only the active tab's panel loads.
+const BUILT_IN_TABS: { id: string; label: string; Component: React.ComponentType }[] = [
+  {
+    id: "auto-assign",
+    label: "Auto-Assignment Rules",
+    Component: dynamic(() => import("@/components/AutoAssignRulesManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+  {
+    id: "escalation",
+    label: "Escalation Rules",
+    Component: dynamic(() => import("@/components/EscalationRulesManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+  {
+    id: "teams",
+    label: "Teams Channels",
+    Component: dynamic(() => import("@/components/TeamsChannelsManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+  {
+    id: "activity-log",
+    label: "Activity Log",
+    Component: dynamic(() => import("@/components/ActivityLogManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+  {
+    id: "request-visibility",
+    label: "Request Visibility",
+    Component: dynamic(() => import("@/components/VisibilityKeywordsManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+];
+
+// Panels for tabs contributed by form-module manifests (settingsTabs). Created
+// once at module scope — next/dynamic components must not be built per render.
+// Which of them are *shown* is filtered per render via moduleSettingsTabs(perms).
+const MODULE_TAB_PANELS = new Map<string, React.ComponentType>(
+  FORM_MODULES.flatMap((m) => m.settingsTabs ?? []).map((tab) => [
+    tab.id,
+    dynamic(tab.load, { loading: () => <TabLoadingSpinner /> }),
+  ])
+);
+
 export default function SettingsPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const { permissions, loading: rbacLoading } = useRBAC();
-  const [activeTab, setActiveTab] = useState<"auto-assign" | "escalation" | "teams" | "activity-log" | "request-visibility">("auto-assign");
+  const [activeTab, setActiveTab] = useState<string>("auto-assign");
+  // Settings tabs contributed by form-module manifests, filtered by visibility.
+  const visibleModuleTabs = moduleSettingsTabs(permissions);
 
   // Handle authentication. Under NAA the Teams host brokers loginPopup; down-level
   // Teams uses the Teams SDK popup; the browser uses a redirect.
@@ -154,66 +174,32 @@ export default function SettingsPage() {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Tabs */}
+        {/* Tabs: built-ins first, then tabs contributed by form-module manifests */}
         <div className="flex gap-2 mb-6 border-b border-border">
-          <button
-            onClick={() => setActiveTab("auto-assign")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "auto-assign"
-                ? "border-brand-primary text-brand-primary"
-                : "border-transparent text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Auto-Assignment Rules
-          </button>
-          <button
-            onClick={() => setActiveTab("escalation")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "escalation"
-                ? "border-brand-primary text-brand-primary"
-                : "border-transparent text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Escalation Rules
-          </button>
-          <button
-            onClick={() => setActiveTab("teams")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "teams"
-                ? "border-brand-primary text-brand-primary"
-                : "border-transparent text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Teams Channels
-          </button>
-          <button
-            onClick={() => setActiveTab("activity-log")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "activity-log"
-                ? "border-brand-primary text-brand-primary"
-                : "border-transparent text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Activity Log
-          </button>
-          <button
-            onClick={() => setActiveTab("request-visibility")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "request-visibility"
-                ? "border-brand-primary text-brand-primary"
-                : "border-transparent text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Request Visibility
-          </button>
+          {[...BUILT_IN_TABS, ...visibleModuleTabs].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? "border-brand-primary text-brand-primary"
+                  : "border-transparent text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
-        {activeTab === "auto-assign" && <AutoAssignRulesManager />}
-        {activeTab === "escalation" && <EscalationRulesManager />}
-        {activeTab === "teams" && <TeamsChannelsManager />}
-        {activeTab === "activity-log" && <ActivityLogManager />}
-        {activeTab === "request-visibility" && <VisibilityKeywordsManager />}
+        {(() => {
+          const ActivePanel =
+            BUILT_IN_TABS.find((t) => t.id === activeTab)?.Component ??
+            (visibleModuleTabs.some((t) => t.id === activeTab)
+              ? MODULE_TAB_PANELS.get(activeTab)
+              : undefined);
+          return ActivePanel ? <ActivePanel /> : null;
+        })()}
       </main>
     </div>
   );

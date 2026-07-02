@@ -20,7 +20,9 @@ export type CdwStatus = (typeof CDW_STATUSES)[number];
 export const CDW_PUBLIC_STATUS: CdwStatus = "Approved";
 
 // The three terminal/active approval decisions. These deliberately share their
-// names with the matching CdwStatus values, so a decision IS a status.
+// names with the matching CdwStatus values, so a decision IS a status — writers
+// assign a CdwDecision straight to `status` (the subtype relation is checked by
+// the compiler; no mapping function needed).
 export type CdwDecision = "Approved" | "Denied" | "Changes Requested";
 
 // Statuses in which a brief's CONTENT may still be edited — i.e. while it's in the
@@ -33,10 +35,6 @@ export const CDW_EDITABLE_STATUSES: readonly CdwStatus[] = ["Draft", "Changes Re
 
 export function isEditableCdwStatus(status: CdwStatus): boolean {
   return CDW_EDITABLE_STATUSES.includes(status);
-}
-
-export function decisionToStatus(decision: CdwDecision): CdwStatus {
-  return decision;
 }
 
 export interface CDWBrief {
@@ -77,9 +75,12 @@ export interface CDWBrief {
 }
 
 // Writable subset used when creating/updating (maps to SharePoint columns).
-export type CdwWritable = Partial<
-  Pick<
-    CDWBrief,
+// A value of null clears the stored column (the same null-to-clear convention
+// graphClient.ts uses for ticket columns) — the edit form relies on this so a
+// blanked field or removed person doesn't silently keep its old value. Omitted
+// (undefined) keys are left untouched.
+export type CdwWritable = {
+  [K in
     | "title"
     | "status"
     | "deadline"
@@ -104,9 +105,8 @@ export type CdwWritable = Partial<
     | "approvedByName"
     | "approvedByEmail"
     | "approvalDate"
-    | "approvalNotes"
-  >
->;
+    | "approvalNotes"]?: CDWBrief[K] | null;
+};
 
 // CDWBrief field <-> SharePoint column name. Single source of truth for read
 // (mapToCdw) and write (toFields in cdwService).

@@ -2,6 +2,7 @@ const { app } = require("@azure/functions");
 const { signToken } = require("../lib/approvalToken");
 const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { approvalRequestEmail } = require("../lib/emailTemplates");
+const { isValidItemId } = require("../lib/requestGuards");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,15 +10,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+// authLevel "function": only the SPA (whose NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL
+// carries ?code=<function-key>, same as the SendEmail/Teams/Escalation URLs) can
+// trigger approver emails — an anonymous caller could otherwise loop this into an
+// approval-fatigue email bomb with valid one-click tokens.
 app.http("sendApprovalRequest", {
   methods: ["POST", "OPTIONS"],
-  authLevel: "anonymous",
+  authLevel: "function",
   handler: async (request, context) => {
     if (request.method === "OPTIONS") return { status: 204, headers: corsHeaders };
 
     const { ticketId, requesterName } = await request.json().catch(() => ({}));
-    if (!ticketId) {
-      return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "missing_ticketId" } };
+    // Strict numeric id — it's interpolated into the Graph path below.
+    if (!isValidItemId(ticketId)) {
+      return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "invalid_ticketId" } };
     }
 
     try {
@@ -31,12 +37,10 @@ app.http("sendApprovalRequest", {
       // Derive the requester name from SharePoint, not the (untrusted) browser param.
       const who = fields.ApprovalRequestedByName || requesterName || "A staff member";
 
-      // SECURITY GATE: this endpoint is anonymous, so only mint + send tokens when the
-      // ticket is genuinely Pending approval — blocks minting for non-pending or
-      // already-decided tickets. (Residual, accepted: an anonymous caller could still
-      // re-trigger approval emails for a *currently-pending* ticket ID until it leaves
-      // Pending — far narrower than the original "any ticket" exposure. Chosen over
-      // full bearer-token validation for simplicity.)
+      // SECURITY GATE: only mint + send tokens when the ticket is genuinely Pending
+      // approval — blocks minting for non-pending or already-decided tickets. The
+      // endpoint additionally requires a function key (see authLevel above), so
+      // "not_pending" is only ever observable by the SPA itself.
       if (fields.ApprovalStatus !== "Pending") {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "not_pending" } };
       }
@@ -62,8 +66,9 @@ app.http("sendApprovalRequest", {
 
       return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent } };
     } catch (error) {
+      // Log the detail server-side only — error.message can leak Graph/config internals.
       context.error("sendApprovalRequest failed:", error);
-      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error", details: error.message } };
+      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error" } };
     }
   },
 });
