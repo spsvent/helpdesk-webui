@@ -14,6 +14,7 @@ const config = {
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
   purchaserGroupId: process.env.PURCHASER_GROUP_ID,
+  inventoryGroupId: process.env.INVENTORY_GROUP_ID,
   appUrl: process.env.APP_URL || "https://tickets.spsvent.net",
 };
 
