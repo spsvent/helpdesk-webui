@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient, getPendingApprovalsCount } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
+import { listPendingPurchaseApprovals } from "@/modules/purchase/purchaseService";
+import { canApprovePurchase } from "@/modules/purchase/access";
 
 interface PendingApprovalsBadgeProps {
   onClick?: () => void;
@@ -11,21 +13,28 @@ interface PendingApprovalsBadgeProps {
 
 export default function PendingApprovalsBadge({ onClick }: PendingApprovalsBadgeProps) {
   const { instance, accounts } = useMsal();
-  const { canApprove } = useRBAC();
+  const { canApprove, permissions } = useRBAC();
   const [count, setCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  // A user may approve tickets (GM), purchases (admin), or both — surface a single
+  // merged count so the one "Approvals" badge covers everything awaiting them.
+  const canApprovePurchases = canApprovePurchase(permissions);
+
   useEffect(() => {
     async function fetchCount() {
-      if (!canApprove() || !accounts[0]) {
+      if ((!canApprove() && !canApprovePurchases) || !accounts[0]) {
         setLoading(false);
         return;
       }
 
       try {
         const client = getGraphClient(instance, accounts[0]);
-        const pendingCount = await getPendingApprovalsCount(client);
-        setCount(pendingCount);
+        const [ticketCount, purchasePending] = await Promise.all([
+          canApprove() ? getPendingApprovalsCount(client) : Promise.resolve(0),
+          canApprovePurchases ? listPendingPurchaseApprovals(client) : Promise.resolve([]),
+        ]);
+        setCount(ticketCount + purchasePending.length);
       } catch (error) {
         console.error("Failed to fetch pending approvals count:", error);
       } finally {
@@ -34,10 +43,10 @@ export default function PendingApprovalsBadge({ onClick }: PendingApprovalsBadge
     }
 
     fetchCount();
-  }, [canApprove, accounts, instance]);
+  }, [canApprove, canApprovePurchases, accounts, instance]);
 
-  // Don't render if user can't approve or there are no pending
-  if (!canApprove() || loading || count === 0) {
+  // Don't render if user can't approve anything or there are no pending
+  if ((!canApprove() && !canApprovePurchases) || loading || count === 0) {
     return null;
   }
 

@@ -45,3 +45,7 @@
   When items are purchased/ordered, automatically look at the page it was purchased from to gather info for the inventory team — and even pull manuals and warranty info. Each vendor will be different but we could start small. Some may have an API we can use for that kind of stuff.
 - [ ] **Snipe-IT integration for received assets** — _2026-05-08_
   Items marked as received are loaded into Snipe-IT. Explore further connections possible with Snipe-IT to better track assets purchased.
+- [ ] **Search box + filters on the Recently Ordered / Received queues** — _2026-07-03_
+  The "Recently Ordered" (and by extension "Recently Received") list in the order/receiving queues
+  (`src/components/LineItemQueue.tsx`) is an unbounded history view that will grow too large to scan.
+  Add a search box (item name / vendor / requester / order #) and filters so it stays usable at scale.

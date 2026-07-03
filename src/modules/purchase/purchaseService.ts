@@ -67,6 +67,15 @@ export async function listPurchases(client: Client): Promise<PurchaseRequest[]> 
   return items.map(mapToPurchase);
 }
 
+// Purchase requests awaiting an approval decision — the purchase half of the home
+// page's merged "Approvals" view/badge. Mirrors the ticket count (ApprovalStatus
+// "Pending"); "Changes Requested" is excluded since it needs the requester, not the
+// approver. Only meaningful for approvers (canApprovePurchase) — the caller gates.
+export async function listPendingPurchaseApprovals(client: Client): Promise<PurchaseRequest[]> {
+  const all = await listPurchases(client);
+  return all.filter((p) => p.approvalStatus === "Pending");
+}
+
 export async function getPurchase(client: Client, id: string): Promise<PurchaseRequest> {
   const item = await client
     .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
