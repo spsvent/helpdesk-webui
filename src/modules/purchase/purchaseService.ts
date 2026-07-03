@@ -18,6 +18,7 @@ import {
   PURCHASE_COLUMN_MAP,
   mapToPurchase,
 } from "./types";
+import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const PURCHASE_LIST_ID = process.env.NEXT_PUBLIC_PURCHASE_LIST_ID || "";
@@ -74,6 +75,16 @@ export async function listPurchases(client: Client): Promise<PurchaseRequest[]> 
 export async function listPendingPurchaseApprovals(client: Client): Promise<PurchaseRequest[]> {
   const all = await listPurchases(client);
   return all.filter((p) => p.approvalStatus === "Pending");
+}
+
+// Header-badge counts (Awaiting Order / Awaiting Receipt). Reuse the same row
+// builders the /orders and /receiving queues use so the numbers always match the
+// pages. Purchases moved off the Tickets list, so these read the PurchaseRequests list.
+export async function getUnorderedItemCount(client: Client): Promise<number> {
+  return purchaseUnorderedRows(await listPurchases(client)).length;
+}
+export async function getUnreceivedItemCount(client: Client): Promise<number> {
+  return purchaseUnreceivedRows(await listPurchases(client)).length;
 }
 
 export async function getPurchase(client: Client, id: string): Promise<PurchaseRequest> {

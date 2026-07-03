@@ -4,22 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import {
-  getGraphClient,
-  getTickets,
-  invalidateTicketsCache,
-  bulkUpdateLineItems,
-  logActivity,
-  BulkLineItemUpdate,
-} from "@/lib/graphClient";
-import { allItemsOrdered } from "@/lib/lineItemHelpers";
-import {
-  flattenUnorderedItems,
-  flattenRecentlyOrdered,
-  QueueRow,
-} from "@/lib/lineItemQueue";
-// Purchase-module requests (PurchaseRequests list) share this queue but write
-// back through the module's own service, never the ticket update path.
+import { getGraphClient } from "@/lib/graphClient";
+import { QueueRow } from "@/lib/lineItemQueue";
+// Order queue reads exclusively from the PurchaseRequests list and writes back
+// through the purchase module's own service (purchases were extracted from the
+// ticket flow — see src/modules/purchase/).
 import {
   listPurchases,
   bulkUpdateLineItems as bulkUpdatePurchaseItems,
@@ -32,7 +21,6 @@ import { useRBAC } from "@/contexts/RBACContext";
 import LineItemQueue from "@/components/LineItemQueue";
 import BulkOrderDialog, { BulkOrderSubmission } from "@/components/BulkOrderDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import type { Ticket, PurchaseLineItem } from "@/types/ticket";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -40,7 +28,6 @@ export default function OrdersPage() {
   const isAuthenticated = useIsAuthenticated();
   const { permissions, loading: rbacLoading } = useRBAC();
 
-  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogRows, setDialogRows] = useState<QueueRow[] | null>(null);
@@ -51,12 +38,10 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const [list, prs] = await Promise.all([getTickets(client), listPurchases(client)]);
-      setTickets(list);
-      setPurchases(prs);
+      setPurchases(await listPurchases(client));
     } catch (e) {
-      console.error("Failed to load tickets for orders queue:", e);
-      setError("Failed to load tickets.");
+      console.error("Failed to load purchase requests for orders queue:", e);
+      setError("Failed to load purchase requests.");
     } finally {
       setLoading(false);
     }
@@ -76,52 +61,19 @@ export default function OrdersPage() {
   const handleBulkConfirm = async (rows: QueueRow[], submission: BulkOrderSubmission) => {
     if (!accounts[0]) return;
     const client = getGraphClient(instance, accounts[0]);
-    const purchaserEmail = accounts[0].username;
-    const purchaserName = accounts[0].name || accounts[0].username;
 
-    // Group selected rows by parent record. For each one build the new
-    // lineItems array (preserve unselected items as-is, mutate the
-    // selected ones with vendor/orderNum/actualCost/expectedDelivery).
-    // Ticket rows and purchase-module rows are grouped separately — each
-    // writes back to its own list — but rowOrder keeps the OVERALL index so
-    // submission.perRow lines up across both.
-    const byTicket = new Map<string, { rows: QueueRow[]; rowOrder: number[] }>();
+    // Group selected rows by parent request, build each new lineItems array
+    // (preserve unselected items, mutate selected ones with vendor/orderNum/…),
+    // then write back to the PurchaseRequests list. rowOrder keeps the overall
+    // index so submission.perRow lines up.
     const byPurchase = new Map<string, { rows: QueueRow[]; rowOrder: number[] }>();
     rows.forEach((r, i) => {
-      const map = r.source === "purchase" ? byPurchase : byTicket;
-      const entry = map.get(r.ticketId) ?? { rows: [], rowOrder: [] };
+      const entry = byPurchase.get(r.ticketId) ?? { rows: [], rowOrder: [] };
       entry.rows.push(r);
       entry.rowOrder.push(i);
-      map.set(r.ticketId, entry);
+      byPurchase.set(r.ticketId, entry);
     });
 
-    const updates: BulkLineItemUpdate[] = [];
-    Array.from(byTicket.entries()).forEach(([ticketId, entry]) => {
-      const ticket = tickets.find((t) => t.id === ticketId);
-      if (!ticket) return;
-      const original = ticket.purchaseLineItems ?? [];
-      const newItems: PurchaseLineItem[] = original.map((it) => ({ ...it }));
-      entry.rows.forEach((r: QueueRow, i: number) => {
-        const overall = entry.rowOrder[i];
-        const perRow = submission.perRow[overall];
-        newItems[r.itemIndex] = {
-          ...newItems[r.itemIndex],
-          vendor: submission.vendor,
-          orderNum: submission.orderNum,
-          actualCost: perRow?.actualCost,
-          expectedDelivery: perRow?.expectedDelivery,
-        };
-      });
-      const allOrdered = allItemsOrdered(newItems);
-      updates.push({
-        ticketId,
-        lineItems: newItems,
-        purchaseStatus: allOrdered ? "Ordered" : ticket.purchaseStatus ?? "Approved",
-        notes: submission.notes,
-      });
-    });
-
-    // Purchase-module rows: same mutation, written to the PurchaseRequests list.
     const prUpdates: PurchaseBulkUpdate[] = [];
     Array.from(byPurchase.entries()).forEach(([prId, entry]) => {
       const pr = purchases.find((p) => p.id === prId);
@@ -146,48 +98,15 @@ export default function OrdersPage() {
       });
     });
 
-    const [results, prResults] = await Promise.all([
-      bulkUpdateLineItems(client, updates),
-      bulkUpdatePurchaseItems(client, prUpdates),
-    ]);
-    const succeeded = results.filter((r) => r.success);
-    const failed = results.filter((r) => !r.success);
+    const prResults = await bulkUpdatePurchaseItems(client, prUpdates);
     const prFailed = prResults.filter((r) => !r.ok);
 
-    // Per-ticket activity log entries — only for the ones that saved.
-    for (const result of succeeded) {
-      const ticketId = result.ticketId;
-      const ticket = tickets.find((t) => t.id === ticketId);
-      const entry = byTicket.get(ticketId);
-      if (!ticket || !entry) continue;
-      logActivity(client, {
-        eventType: "purchase_ordered",
-        ticketId,
-        ticketNumber: ticket.ticketNumber?.toString() || ticketId,
-        actor: purchaserEmail,
-        actorName: purchaserName,
-        description: `Bulk-ordered ${entry.rows.length} item${
-          entry.rows.length === 1 ? "" : "s"
-        } from ${submission.vendor} (${submission.orderNum})`,
-        details: JSON.stringify({
-          vendor: submission.vendor,
-          orderNum: submission.orderNum,
-          itemCount: entry.rows.length,
-          itemIndexes: entry.rows.map((r) => r.itemIndex),
-        }),
-      }).catch((e) => console.error("Failed to log bulk-ordered:", e));
-    }
-
-    invalidateTicketsCache();
-
-    if (failed.length > 0 || prFailed.length > 0) {
-      const failures = [
-        ...failed.map((f) => `#${f.ticketId} (${f.error})`),
-        ...prFailed.map((f) => `PR ${f.id} (${f.error})`),
-      ];
-      const savedCount = succeeded.length + prResults.filter((r) => r.ok).length;
-      const msg = `Saved ${savedCount} of ${results.length + prResults.length} requests. ${failures.length} failed: ${failures.join(", ")}`;
-      throw new Error(msg);
+    if (prFailed.length > 0) {
+      const failures = prFailed.map((f) => `PR ${f.id} (${f.error})`);
+      const savedCount = prResults.filter((r) => r.ok).length;
+      throw new Error(
+        `Saved ${savedCount} of ${prResults.length} requests. ${failures.length} failed: ${failures.join(", ")}`
+      );
     }
 
     setDialogRows(null);
@@ -210,8 +129,8 @@ export default function OrdersPage() {
     );
   }
 
-  const awaitingRows = [...flattenUnorderedItems(tickets), ...purchaseUnorderedRows(purchases)];
-  const recentRows = [...flattenRecentlyOrdered(tickets, 30), ...purchaseRecentlyOrderedRows(purchases, 30)];
+  const awaitingRows = purchaseUnorderedRows(purchases);
+  const recentRows = purchaseRecentlyOrderedRows(purchases, 30);
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -24,15 +24,3 @@ export function shouldClearApprovalOnConversion(
     AWAITING_APPROVAL_STATUSES.includes(approvalStatus)
   );
 }
-
-/**
- * Purchase requests run their own purchase workflow on top of the Request
- * approval flow, so they can't be reclassified as Problems. Returns true when a
- * proposed change to "Problem" must be blocked.
- */
-export function isProblemConversionBlocked(
-  ticket: Pick<Ticket, "isPurchaseRequest">,
-  newCategory: Ticket["category"]
-): boolean {
-  return newCategory === "Problem" && !!ticket.isPurchaseRequest;
-}

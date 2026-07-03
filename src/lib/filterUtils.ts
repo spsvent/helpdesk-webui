@@ -114,19 +114,6 @@ export function filterTickets(
       return false;
     }
 
-    // Purchase request filter
-    if (filters.isPurchaseRequest !== undefined) {
-      if (filters.isPurchaseRequest && !ticket.isPurchaseRequest) return false;
-      if (!filters.isPurchaseRequest && ticket.isPurchaseRequest) return false;
-    }
-
-    // Purchase status filter
-    if (filters.purchaseStatus && filters.purchaseStatus.length > 0) {
-      if (!ticket.purchaseStatus || !filters.purchaseStatus.includes(ticket.purchaseStatus)) {
-        return false;
-      }
-    }
-
     // Approval status filter
     if (filters.approvalStatus && filters.approvalStatus.length > 0) {
       if (!filters.approvalStatus.includes(ticket.approvalStatus)) {

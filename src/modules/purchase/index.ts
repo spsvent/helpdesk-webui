@@ -44,7 +44,7 @@ export const purchaseModule: FormModule = {
       id: "convert-to-purchase",
       // The component itself additionally gates on purchase-create permission.
       load: () => import("./components/ConvertToPurchaseButton"),
-      visibleWhen: (ticket) => !ticket.isPurchaseRequest && ticket.status !== "Closed",
+      visibleWhen: (ticket) => ticket.status !== "Closed",
     },
   ],
 };

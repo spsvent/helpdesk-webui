@@ -59,25 +59,10 @@ export interface Ticket {
   approvalNotes?: string;
   // Participants (manually-added notification audience)
   participantEmails?: string[];
-  // Purchase request fields
-  isPurchaseRequest?: boolean;
-  purchaseLineItems?: PurchaseLineItem[];   // canonical (new) — dual-read with legacy columns below
-  purchaseItemUrl?: string;
-  purchaseQuantity?: number;
-  purchaseEstCostPerItem?: number;
-  purchaseJustification?: string;
-  purchaseProject?: string;
-  purchaseStatus?: PurchaseStatus;
-  purchaseVendor?: string;
-  purchaseConfirmationNum?: string;
-  purchaseActualCost?: number;
-  purchaseNotes?: string;
-  purchaseExpectedDelivery?: string;
-  purchasedDate?: string;
-  purchasedByEmail?: string;
-  receivedDate?: string;
-  receivedNotes?: string;
-  receivedByEmail?: string;
+  // NOTE: Purchase requests were extracted into their own form module
+  // (src/modules/purchase/, PurchaseRequests SharePoint list). The Tickets list
+  // still has its legacy purchase columns (kept as the migration rollback backup),
+  // but the app no longer reads or writes them — hence no purchase fields here.
 }
 
 export interface Comment {
@@ -111,37 +96,6 @@ export interface Attachment {
 // SharePointListItem / SharePointListResponse and the getPersonDisplayName /
 // getPersonEmail helpers now live in @/shared/spTypes (imported + re-exported at
 // the top of this file). Kept out of ticket.ts so any form module can reuse them.
-
-function parsePurchaseLineItems(fields: Record<string, unknown>): PurchaseLineItem[] | undefined {
-  if (!fields.IsPurchaseRequest) return undefined;
-  const json = fields.PurchaseLineItemsJSON as string | undefined;
-  if (json && json.trim()) {
-    try {
-      const parsed = JSON.parse(json);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as PurchaseLineItem[];
-    } catch (e) {
-      console.warn("[parsePurchaseLineItems] Failed to parse PurchaseLineItemsJSON, falling back to legacy columns:", e);
-    }
-  }
-  // Legacy fallback: synthesize a one-row array from the singular columns
-  const legacyUrl = fields.PurchaseItemUrl as string | undefined;
-  const legacyQty = fields.PurchaseQuantity as number | undefined;
-  const legacyCost = fields.PurchaseEstCostPerItem as number | undefined;
-  if (legacyUrl || legacyQty != null || legacyCost != null) {
-    const legacyItem: PurchaseLineItem = {
-      url: legacyUrl,
-      qty: legacyQty ?? 1,
-      cost: legacyCost ?? 0,
-    };
-    if (fields.PurchaseVendor) legacyItem.vendor = fields.PurchaseVendor as string;
-    if (fields.PurchaseConfirmationNum) legacyItem.orderNum = fields.PurchaseConfirmationNum as string;
-    if (fields.PurchaseActualCost != null) legacyItem.actualCost = fields.PurchaseActualCost as number;
-    if (fields.PurchaseExpectedDelivery) legacyItem.expectedDelivery = fields.PurchaseExpectedDelivery as string;
-    if (fields.ReceivedDate) legacyItem.receivedDate = fields.ReceivedDate as string;
-    return [legacyItem];
-  }
-  return undefined;
-}
 
 // Transform SharePoint response to Ticket
 export function mapToTicket(item: SharePointListItem): Ticket {
@@ -198,25 +152,6 @@ export function mapToTicket(item: SharePointListItem): Ticket {
     participantEmails: (fields.ParticipantEmails as string | undefined)
       ? (fields.ParticipantEmails as string).split(/[;,]/).map((e) => e.trim()).filter(Boolean)
       : [],
-    // Purchase request fields
-    isPurchaseRequest: fields.IsPurchaseRequest as boolean | undefined,
-    purchaseLineItems: parsePurchaseLineItems(fields),
-    purchaseItemUrl: fields.PurchaseItemUrl as string | undefined,
-    purchaseQuantity: fields.PurchaseQuantity as number | undefined,
-    purchaseEstCostPerItem: fields.PurchaseEstCostPerItem as number | undefined,
-    purchaseJustification: fields.PurchaseJustification as string | undefined,
-    purchaseProject: fields.PurchaseProject as string | undefined,
-    purchaseStatus: fields.PurchaseStatus as PurchaseStatus | undefined,
-    purchaseVendor: fields.PurchaseVendor as string | undefined,
-    purchaseConfirmationNum: fields.PurchaseConfirmationNum as string | undefined,
-    purchaseActualCost: fields.PurchaseActualCost as number | undefined,
-    purchaseNotes: fields.PurchaseNotes as string | undefined,
-    purchaseExpectedDelivery: fields.PurchaseExpectedDelivery as string | undefined,
-    purchasedDate: fields.PurchasedDate as string | undefined,
-    purchasedByEmail: fields.PurchasedByEmail as string | undefined,
-    receivedDate: fields.ReceivedDate as string | undefined,
-    receivedNotes: fields.ReceivedNotes as string | undefined,
-    receivedByEmail: fields.ReceivedByEmail as string | undefined,
   };
 }
 

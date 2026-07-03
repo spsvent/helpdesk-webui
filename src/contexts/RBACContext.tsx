@@ -22,8 +22,6 @@ import {
   canRequestApproval as canRequestApprovalService,
   canApproveTickets,
   isVisibleWithApprovalGate,
-  canPurchase as canPurchaseService,
-  canMarkReceived as canMarkReceivedService,
 } from "@/lib/rbacService";
 import { UserPermissions, DEFAULT_PERMISSIONS } from "@/types/rbac";
 import { isPublicModuleRoute } from "@/shared/formModules";
@@ -50,10 +48,6 @@ interface RBACContextValue {
   canRequestApproval: (ticket: Ticket) => boolean;
   canApprove: () => boolean;
   isVisibleWithApproval: (ticket: Ticket) => boolean;
-
-  // Purchase workflow helpers
-  canPurchaseTicket: (ticket: Ticket) => boolean;
-  canReceiveTicket: (ticket: Ticket) => boolean;
 }
 
 const RBACContext = createContext<RBACContextValue>({
@@ -69,8 +63,6 @@ const RBACContext = createContext<RBACContextValue>({
   canRequestApproval: () => false,
   canApprove: () => false,
   isVisibleWithApproval: () => true,
-  canPurchaseTicket: () => false,
-  canReceiveTicket: () => false,
 });
 
 export function useRBAC() {
@@ -209,17 +201,6 @@ export function RBACProvider({ children }: RBACProviderProps) {
     [permissions]
   );
 
-  // Purchase workflow helpers
-  const canPurchaseTicket = useCallback(
-    (ticket: Ticket) => canPurchaseService(permissions, ticket),
-    [permissions]
-  );
-
-  const canReceiveTicket = useCallback(
-    (ticket: Ticket) => canMarkReceivedService(permissions, ticket),
-    [permissions]
-  );
-
   const value: RBACContextValue = {
     permissions,
     loading,
@@ -233,8 +214,6 @@ export function RBACProvider({ children }: RBACProviderProps) {
     canRequestApproval,
     canApprove,
     isVisibleWithApproval,
-    canPurchaseTicket,
-    canReceiveTicket,
   };
 
   return <RBACContext.Provider value={value}>{children}</RBACContext.Provider>;
