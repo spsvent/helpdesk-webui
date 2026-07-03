@@ -9,12 +9,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc5
 // General Managers group ID from environment
 const GENERAL_MANAGERS_GROUP_ID = process.env.NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID || "";
 
-// Purchaser group ID from environment
-const PURCHASER_GROUP_ID = process.env.NEXT_PUBLIC_PURCHASER_GROUP_ID || "";
-
-// Inventory group ID from environment
-const INVENTORY_GROUP_ID = process.env.NEXT_PUBLIC_INVENTORY_GROUP_ID || "";
-
 // Email template styles
 const emailStyles = `
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
@@ -486,113 +480,5 @@ export async function sendStatusChangeEmail(
   const htmlContent = generateStatusChangeEmail(ticket, oldStatus, changedByName);
   const conversationId = getTicketConversationId(ticket.id);
   await sendEmail(client, requesterEmail, subject, htmlContent, conversationId);
-}
-
-// ============================================
-// Purchase Workflow Email Functions
-// ============================================
-
-// Get members of the Purchaser group
-export async function getPurchaserEmails(client: Client): Promise<string[]> {
-  if (!PURCHASER_GROUP_ID) {
-    console.warn("PURCHASER_GROUP_ID not configured");
-    return [];
-  }
-
-  try {
-    const response = await client
-      .api(`/groups/${PURCHASER_GROUP_ID}/members`)
-      .select("mail,userPrincipalName")
-      .get();
-
-    const emails: string[] = [];
-    for (const member of response.value) {
-      const email = member.mail || member.userPrincipalName;
-      if (email) {
-        emails.push(email);
-      }
-    }
-    return emails;
-  } catch (error) {
-    console.error("Failed to get purchaser emails:", error);
-    return [];
-  }
-}
-
-// Member shape used by the GM approval UI to show "these users will be notified"
-// before confirming. Generic across purchaser / GM / inventory groups.
-export interface GroupMember {
-  email: string;
-  displayName: string;
-}
-
-// Backwards-compat alias for the original purchaser-only helper.
-export type PurchaserMember = GroupMember;
-
-async function fetchGroupMembers(client: Client, groupId: string, label: string): Promise<GroupMember[]> {
-  if (!groupId) {
-    console.warn(`${label} group ID not configured`);
-    return [];
-  }
-  try {
-    const response = await client
-      .api(`/groups/${groupId}/members`)
-      .select("mail,userPrincipalName,displayName")
-      .get();
-
-    const members: GroupMember[] = [];
-    for (const member of response.value) {
-      const email = member.mail || member.userPrincipalName;
-      if (email) {
-        members.push({
-          email,
-          displayName: member.displayName || email,
-        });
-      }
-    }
-    return members;
-  } catch (error) {
-    console.error(`Failed to get ${label} members:`, error);
-    return [];
-  }
-}
-
-export function getPurchaserMembers(client: Client): Promise<GroupMember[]> {
-  return fetchGroupMembers(client, PURCHASER_GROUP_ID, "purchaser");
-}
-
-export function getGeneralManagerMembers(client: Client): Promise<GroupMember[]> {
-  return fetchGroupMembers(client, GENERAL_MANAGERS_GROUP_ID, "general manager");
-}
-
-export function getInventoryMembers(client: Client): Promise<GroupMember[]> {
-  return fetchGroupMembers(client, INVENTORY_GROUP_ID, "inventory");
-}
-
-// Get members of the Inventory group
-export async function getInventoryEmails(client: Client): Promise<string[]> {
-  if (!INVENTORY_GROUP_ID) {
-    console.warn("INVENTORY_GROUP_ID not configured");
-    return [];
-  }
-
-  try {
-    const response = await client
-      .api(`/groups/${INVENTORY_GROUP_ID}/members`)
-      .select("mail,userPrincipalName")
-      .get();
-
-    const emails: string[] = [];
-    for (const member of response.value) {
-      const email = member.mail || member.userPrincipalName;
-      if (email) {
-        emails.push(email);
-      }
-    }
-    return emails;
-  } catch (error) {
-    console.error("Failed to get inventory emails:", error);
-    return [];
-  }
 }
 
