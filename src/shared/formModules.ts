@@ -60,6 +60,12 @@ export interface FormModule {
   // Route prefixes that are public + token-authorized (auth bootstrap is skipped for
   // them in the app layout), e.g. an email-approval landing page.
   publicRoutePrefixes?: string[];
+  // Workspace switcher: a module with a `workspaceHref` becomes a top-level
+  // workspace the user can switch the whole app view to (its list + detail).
+  // `workspaceLabel` is the short chip label; `workspaceOrder` sorts the switcher.
+  workspaceHref?: string;
+  workspaceLabel?: string;
+  workspaceOrder?: number;
 }
 
 // Built-in module: the existing helpdesk ticket. Always present; with no add-on
@@ -71,6 +77,9 @@ const ticketModule: FormModule = {
   creatable: true,
   newHref: "/new",
   visibleWhen: () => true,
+  workspaceHref: "/",
+  workspaceLabel: "Tickets",
+  workspaceOrder: 0,
 };
 
 // === Form modules ===========================================================
@@ -84,6 +93,16 @@ export const FORM_MODULES: FormModule[] = [ticketModule, cdwModule, purchaseModu
 // Modules the given user can create, in menu order.
 export function creatableModules(perms: UserPermissions | null): FormModule[] {
   return FORM_MODULES.filter((m) => m.creatable && m.visibleWhen(perms));
+}
+
+// Modules that participate in the top-level workspace switcher (those with a
+// workspaceHref, visible to this user), ordered by workspaceOrder. The built-in
+// ticket workspace is always present, so a solo-ticket install just shows one chip
+// (the switcher hides itself when there's only one).
+export function workspaceModules(perms: UserPermissions | null): FormModule[] {
+  return FORM_MODULES.filter((m) => m.workspaceHref && m.visibleWhen(perms)).sort(
+    (a, b) => (a.workspaceOrder ?? 100) - (b.workspaceOrder ?? 100)
+  );
 }
 
 // All settings tabs contributed by visible modules.

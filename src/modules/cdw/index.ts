@@ -29,4 +29,7 @@ export const cdwModule: FormModule = {
   visibleWhen: (perms) => isCdwConfigured() && canCreateCdw(perms),
   // The email-approval landing page authorizes via its token, not a login session.
   publicRoutePrefixes: ["/cdw/approve"],
+  workspaceHref: "/cdw",
+  workspaceLabel: "CDW",
+  workspaceOrder: 20,
 };

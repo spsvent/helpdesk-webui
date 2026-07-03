@@ -16,6 +16,7 @@ import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
 import PurchaseApprovalsSection from "@/components/PurchaseApprovalsSection";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import AwaitingOrderBadge from "@/components/AwaitingOrderBadge";
 import AwaitingReceiptBadge from "@/components/AwaitingReceiptBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
@@ -482,6 +483,8 @@ export default function Home() {
           {/* Manifest-driven "+ New" entry point. One creatable module → a single
               link (unchanged); add-on modules (e.g. CDW) make it a dropdown. */}
           <NewFormMenu permissions={permissions} />
+          {/* Manifest-driven workspace switcher (Tickets · Purchase · CDW · …). */}
+          <WorkspaceSwitcher />
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
