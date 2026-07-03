@@ -15,6 +15,7 @@ import TicketList from "@/components/TicketList";
 import TicketDetail from "@/components/TicketDetail";
 import TicketFiltersComponent from "@/components/TicketFilters";
 import PendingApprovalsBadge from "@/components/PendingApprovalsBadge";
+import PurchaseApprovalsSection from "@/components/PurchaseApprovalsSection";
 import AwaitingOrderBadge from "@/components/AwaitingOrderBadge";
 import AwaitingReceiptBadge from "@/components/AwaitingReceiptBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
@@ -191,6 +192,12 @@ export default function Home() {
     const filtered = filterTickets(rbacFilteredTickets, filters, viewer);
     return sortTickets(filtered, filters.sort);
   }, [rbacFilteredTickets, filters, permissions]);
+
+  // The "Awaiting Approval" view is active when the approval-status filter is set and
+  // no purchase-specific preset is applied — that's when we also surface pending
+  // purchase-request approvals (their own list) alongside the ticket approvals.
+  const approvalsViewActive =
+    (filters.approvalStatus?.length ?? 0) > 0 && !filters.isPurchaseRequest;
 
   // Pre-compute ticket IDs and index map for O(1) lookups in checkbox handler
   const { ticketIds, ticketIndexMap } = useMemo(() => {
@@ -630,14 +637,20 @@ export default function Home() {
                 Loading permissions...
               </div>
             ) : (
-              <TicketList
-                tickets={filteredAndSortedTickets}
-                selectedId={selectedTicket?.id}
-                onSelect={handleSelectTicket}
-                showCheckboxes={permissions?.role === "admin" && !isMobile}
-                checkedIds={checkedIds}
-                onToggleCheck={handleToggleCheck}
-              />
+              <>
+                {/* Merged approvals view: when the "Awaiting Approval" filter is active,
+                    surface pending purchase-request approvals (own list) as a distinct
+                    block above the ticket approvals. */}
+                {approvalsViewActive && <PurchaseApprovalsSection />}
+                <TicketList
+                  tickets={filteredAndSortedTickets}
+                  selectedId={selectedTicket?.id}
+                  onSelect={handleSelectTicket}
+                  showCheckboxes={permissions?.role === "admin" && !isMobile}
+                  checkedIds={checkedIds}
+                  onToggleCheck={handleToggleCheck}
+                />
+              </>
             )}
           </div>
         </aside>
