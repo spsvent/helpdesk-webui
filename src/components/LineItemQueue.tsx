@@ -127,7 +127,9 @@ export default function LineItemQueue({
   // Column count drives colSpan on group-divider rows when grouping by vendor.
   // Columns: select(only when !isRecent) + ticket + item + qty + vendor + $/ea + subtotal + extras
   const orderExtras = mode === "order" && !isRecent ? 1 : mode === "order" && isRecent ? 2 : 0;
-  const receiveExtras = mode === "receive" && !isRecent ? 2 : mode === "receive" && isRecent ? 2 : 0;
+  // Receive queue extras: Awaiting Receipt → Requestor + Order # + Ordered + Delivery (4);
+  // Recently Received → Received + On + Received by (3).
+  const receiveExtras = mode === "receive" && !isRecent ? 4 : mode === "receive" && isRecent ? 3 : 0;
   // Order queue also shows Requester + Approval context columns.
   const reqCols = mode === "order" ? 2 : 0;
   const colCount = (isRecent ? 0 : 1) + 6 + reqCols + orderExtras + receiveExtras;
@@ -156,6 +158,11 @@ export default function LineItemQueue({
             Approval
           </th>
         </>
+      )}
+      {mode === "receive" && !isRecent && (
+        <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+          Requestor
+        </th>
       )}
       <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
         Item
@@ -193,6 +200,9 @@ export default function LineItemQueue({
             Order #
           </th>
           <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Ordered
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
             Delivery
           </th>
         </>
@@ -204,6 +214,9 @@ export default function LineItemQueue({
           </th>
           <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
             On
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Received by
           </th>
         </>
       )}
@@ -267,6 +280,11 @@ export default function LineItemQueue({
             </td>
           </>
         )}
+        {mode === "receive" && !isRecent && (
+          <td className="px-3 py-2 text-xs text-text-primary truncate max-w-[10rem]" title={r.requester || undefined}>
+            {r.requester || "—"}
+          </td>
+        )}
         <td className="px-3 py-2">
           {r.item.url ? (
             <a
@@ -300,6 +318,7 @@ export default function LineItemQueue({
         {mode === "receive" && !isRecent && (
           <>
             <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{shortDate(r.orderedAt)}</td>
             <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
           </>
         )}
@@ -309,6 +328,9 @@ export default function LineItemQueue({
               {r.item.receivedQty ?? 0} / {r.item.qty}
             </td>
             <td className="px-3 py-2 text-xs">{r.item.receivedDate ?? "—"}</td>
+            <td className="px-3 py-2 text-xs text-text-secondary truncate max-w-[11rem]" title={r.receivedBy || undefined}>
+              {r.receivedBy || "—"}
+            </td>
           </>
         )}
       </tr>

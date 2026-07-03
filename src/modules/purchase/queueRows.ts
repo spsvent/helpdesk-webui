@@ -30,6 +30,7 @@ function buildRow(pr: PurchaseRequest, item: PurchaseLineItem, idx: number): Que
     requestedDate: pr.created,
     approvedDate: pr.approvalDate,
     approver: pr.approvedByName,
+    receivedBy: pr.receivedByEmail,
   };
 }
 
