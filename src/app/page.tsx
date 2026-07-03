@@ -194,11 +194,10 @@ export default function Home() {
     return sortTickets(filtered, filters.sort);
   }, [rbacFilteredTickets, filters, permissions]);
 
-  // The "Awaiting Approval" view is active when the approval-status filter is set and
-  // no purchase-specific preset is applied — that's when we also surface pending
-  // purchase-request approvals (their own list) alongside the ticket approvals.
-  const approvalsViewActive =
-    (filters.approvalStatus?.length ?? 0) > 0 && !filters.isPurchaseRequest;
+  // The "Awaiting Approval" view is active when the approval-status filter is set —
+  // that's when we also surface pending purchase-request approvals (their own list)
+  // alongside the ticket approvals.
+  const approvalsViewActive = (filters.approvalStatus?.length ?? 0) > 0;
 
   // Pre-compute ticket IDs and index map for O(1) lookups in checkbox handler
   const { ticketIds, ticketIndexMap } = useMemo(() => {
@@ -579,30 +578,6 @@ export default function Home() {
             tickets={rbacFilteredTickets}
             permissions={permissions}
           />
-
-          {/* Purchase workflow preset buttons */}
-          {permissions && (permissions.isPurchaser || permissions.isInventory) && (
-            <div className="px-3 py-2 border-b border-border flex gap-2 flex-wrap">
-              {permissions.isPurchaser && (
-                <button
-                  onClick={() => setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.purchaseQueue.filters } as TicketFilters)}
-                  className="px-3 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors border border-indigo-200"
-                  title={PRESET_VIEWS.purchaseQueue.description}
-                >
-                  Purchase Queue
-                </button>
-              )}
-              {permissions.isInventory && (
-                <button
-                  onClick={() => setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.incomingOrders.filters } as TicketFilters)}
-                  className="px-3 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors border border-emerald-200"
-                  title={PRESET_VIEWS.incomingOrders.description}
-                >
-                  Incoming Orders
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Bulk Action Toolbar (admin only) */}
           {permissions?.role === "admin" && checkedIds.size > 0 && (

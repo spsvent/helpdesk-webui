@@ -725,40 +725,6 @@ export async function getPendingApprovalsCount(client: Client): Promise<number> 
   return pendingCount;
 }
 
-// Count of approved purchase items awaiting an order (for header badge).
-// Reuses the cached ticket fetch so this is cheap when called alongside
-// other ticket consumers.
-export async function getUnorderedItemCount(client: Client): Promise<number> {
-  const tickets = await getAllTicketsCached(client);
-  let count = 0;
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest || ticket.approvalStatus !== "Approved") continue;
-    if (ticket.purchaseStatus === "Received" || ticket.purchaseStatus === "Denied") continue;
-    for (const item of ticket.purchaseLineItems ?? []) {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) count++;
-    }
-  }
-  return count;
-}
-
-// Count of ordered purchase items awaiting receipt (for header badge).
-export async function getUnreceivedItemCount(client: Client): Promise<number> {
-  const tickets = await getAllTicketsCached(client);
-  let count = 0;
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
-    for (const item of ticket.purchaseLineItems ?? []) {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) continue;
-      const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
-      if (!fullyReceived) count++;
-    }
-  }
-  return count;
-}
-
 // Bulk-update line items across multiple tickets. Each entry's lineItems
 // replaces the entire array on its ticket (the JSON column is per-ticket
 // so partial updates aren't possible — caller must construct the full

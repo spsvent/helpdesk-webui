@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Attachment, PurchaseLineItem, Comment } from "@/types/ticket";
+import { Ticket, Attachment, Comment } from "@/types/ticket";
 import { collectParticipants } from "@/lib/participants";
 import { ensureFreshToken } from "@/lib/authActions";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
@@ -26,7 +26,7 @@ import {
 } from "@/lib/categoryConfig";
 import { getSuggestedAssignee } from "@/lib/autoAssignConfig";
 import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/autoAssignConfigService";
-import { shouldClearApprovalOnConversion, isProblemConversionBlocked } from "@/lib/approvalFlow";
+import { shouldClearApprovalOnConversion } from "@/lib/approvalFlow";
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
 import RequestApprovalButton from "./RequestApprovalButton";
@@ -34,13 +34,8 @@ import ApprovalHistory from "./ApprovalHistory";
 import AttachmentList from "./AttachmentList";
 import AttachmentUpload from "./AttachmentUpload";
 import MergeTicketPanel from "./MergeTicketPanel";
-import PurchaseStatusBadge from "./PurchaseStatusBadge";
-import PurchaseActionPanel from "./PurchaseActionPanel";
-import ReceiveActionPanel from "./ReceiveActionPanel";
-import LineItemsTable from "./LineItemsTable";
 import { formatDateTime } from "@/lib/dateUtils";
 import { sendAssignmentEmail, sendStatusChangeEmail } from "@/lib/emailService";
-import { PurchaseStatus } from "@/types/ticket";
 import {
   sendStatusChangeTeamsNotification,
   sendPriorityEscalationTeamsNotification,
@@ -63,9 +58,6 @@ interface DetailsPanelProps {
   comments?: Comment[];
   canEdit?: boolean;
   onRequestApproval?: () => Promise<void>;
-  // Purchase workflow
-  onMarkPurchased?: (orderItems: PurchaseLineItem[], notes?: string) => Promise<void>;
-  onMarkReceived?: (receivedItems: PurchaseLineItem[], notes?: string) => Promise<void>;
   // Attachments
   attachments: Attachment[];
   attachmentsLoading?: boolean;
@@ -101,8 +93,6 @@ export default function DetailsPanel({
   comments = [],
   canEdit = true,
   onRequestApproval,
-  onMarkPurchased,
-  onMarkReceived,
   attachments,
   attachmentsLoading = false,
   onUploadAttachment,
@@ -116,7 +106,7 @@ export default function DetailsPanel({
   saveRef,
 }: DetailsPanelProps) {
   const { instance, accounts } = useMsal();
-  const { canRequestApproval, canApprove, canPurchaseTicket, canReceiveTicket, permissions } = useRBAC();
+  const { canRequestApproval, canApprove, permissions } = useRBAC();
   const isAdmin = permissions?.role === "admin";
 
   // Basic fields (support staff can edit)
@@ -338,12 +328,7 @@ export default function DetailsPanel({
     const oldCategory = ticket.category;
     const oldAssigneeEmail = ticket.originalAssignedTo || ticket.assignedTo?.email;
 
-    // Purchase requests can't be reclassified as Problems — they run their own
-    // purchase workflow. The category dropdown disables that option, but guard
-    // the write too so the conversion can't slip through.
-    const effectiveCategory = isProblemConversionBlocked(ticket, category)
-      ? oldCategory
-      : category;
+    const effectiveCategory = category;
 
     try {
       // Pre-flight: snapshot the edits so a renewal redirect doesn't lose them.
@@ -739,16 +724,11 @@ export default function DetailsPanel({
               className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
             >
               {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} disabled={isProblemConversionBlocked(ticket, opt)}>
+                <option key={opt} value={opt}>
                   {opt}
                 </option>
               ))}
             </select>
-            {ticket.isPurchaseRequest && (
-              <p className="mt-1 text-xs text-text-secondary">
-                Purchase requests can&apos;t be converted to Problems.
-              </p>
-            )}
           </>
         ) : (
           <span className="text-sm">{category}</span>
@@ -863,53 +843,6 @@ export default function DetailsPanel({
           </label>
           <span className="text-sm">{formatDateTime(ticket.dueDate)}</span>
         </div>
-      )}
-
-      {/* Purchase Details Section */}
-      {ticket.isPurchaseRequest && ticket.purchaseStatus && (
-        <>
-          <hr className="border-border" />
-          <div className="space-y-3">
-            <div className="border-t border-border pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-text-primary">Purchase Details</h3>
-                <PurchaseStatusBadge status={ticket.purchaseStatus as PurchaseStatus} size="sm" />
-              </div>
-
-              {ticket.purchaseLineItems && ticket.purchaseLineItems.length > 0 && (
-                <LineItemsTable
-                  items={ticket.purchaseLineItems}
-                  showOrderColumns={ticket.purchaseLineItems.some((i) => i.vendor || i.orderNum)}
-                  showReceivedColumns={ticket.purchaseLineItems.some((i) => i.receivedDate)}
-                />
-              )}
-
-              {ticket.purchaseJustification && (
-                <div className="mt-3">
-                  <p className="text-xs text-text-secondary uppercase">Justification</p>
-                  <p className="text-sm whitespace-pre-wrap">{ticket.purchaseJustification}</p>
-                </div>
-              )}
-
-              {ticket.purchaseProject && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-text-secondary uppercase">Project</span>
-                  <span className="text-sm">{ticket.purchaseProject}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Purchaser action panel */}
-            {canPurchaseTicket(ticket) && onMarkPurchased && (
-              <PurchaseActionPanel ticket={ticket} onMarkPurchased={onMarkPurchased} />
-            )}
-
-            {/* Inventory action panel */}
-            {canReceiveTicket(ticket) && onMarkReceived && (
-              <ReceiveActionPanel ticket={ticket} onMarkReceived={onMarkReceived} />
-            )}
-          </div>
-        </>
       )}
 
       <hr className="border-border" />

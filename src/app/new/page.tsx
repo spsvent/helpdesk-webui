@@ -29,9 +29,6 @@ import AssigneePreview from "@/components/AssigneePreview";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import StagedAttachmentList from "@/components/StagedAttachmentList";
-import LineItemsField from "@/components/LineItemsField";
-import type { PurchaseLineItem } from "@/types/ticket";
-import { validateLineItem } from "@/lib/lineItemHelpers";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -90,14 +87,6 @@ export default function NewTicketPage() {
   const [problemTypeSubs, setProblemTypeSubs] = useState<string[]>([]);
   const [problemTypeSub2s, setProblemTypeSub2s] = useState<string[]>([]);
 
-  // Purchase request state
-  const [isPurchaseRequest, setIsPurchaseRequest] = useState(false);
-  const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
-  const [purchaseShared, setPurchaseShared] = useState({
-    justification: "",
-    project: "",
-  });
-
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,18 +99,15 @@ export default function NewTicketPage() {
   // Draft persistence: survive a renewal redirect without losing in-progress entry.
   // (stagedFiles are File[] and can't be serialized — restore prompts a re-attach.)
   const DRAFT_KEY = "new-ticket";
-  const snapshotDraft = () => saveDraft(DRAFT_KEY, { formData, isPurchaseRequest, lineItems, purchaseShared });
+  const snapshotDraft = () => saveDraft(DRAFT_KEY, { formData });
   // One-shot restore: a draft only exists because a renewal redirect snapshotted it on the
   // way out (snapshotDraft, used by the pre-flight gate below). Restore once and clear it,
   // so an abandoned form or a prefilled new ticket is never clobbered by a stale draft on a
   // later visit. We deliberately do NOT auto-save on every keystroke.
   useEffect(() => {
-    const d = loadDraft<{ formData: CreateTicketData; isPurchaseRequest: boolean; lineItems: PurchaseLineItem[]; purchaseShared: { justification: string; project: string } }>(DRAFT_KEY);
+    const d = loadDraft<{ formData: CreateTicketData }>(DRAFT_KEY);
     if (d) {
       setFormData(d.formData);
-      setIsPurchaseRequest(d.isPurchaseRequest);
-      setLineItems(d.lineItems);
-      setPurchaseShared(d.purchaseShared);
       setSubmitStatus("Restored your in-progress ticket — please re-attach any files.");
       clearDraft(DRAFT_KEY);
     }
@@ -296,7 +282,7 @@ export default function NewTicketPage() {
       return;
     }
 
-    if (!isPurchaseRequest && !formData.description.trim()) {
+    if (!formData.description.trim()) {
       setError("Please describe your issue");
       return;
     }
@@ -311,25 +297,6 @@ export default function NewTicketPage() {
     if (hasSubCategories(formData.problemType) && !formData.problemTypeSub) {
       setError("Please select a sub-category");
       return;
-    }
-
-    // Validate purchase request fields
-    if (isPurchaseRequest) {
-      if (lineItems.length === 0) {
-        setError("Add at least one item to the purchase request.");
-        return;
-      }
-      for (let i = 0; i < lineItems.length; i++) {
-        const err = validateLineItem(lineItems[i]);
-        if (err) {
-          setError(`Item ${i + 1}: ${err}`);
-          return;
-        }
-      }
-      if (!purchaseShared.justification.trim()) {
-        setError("Justification is required for purchase requests.");
-        return;
-      }
     }
 
     // Validate location is selected
@@ -400,18 +367,10 @@ export default function NewTicketPage() {
         creatorEmail: requesterEmail,
       };
 
-      // Build ticket data, optionally including purchase fields
       const ticketData: CreateTicketData = {
         ...formData,
         assigneeEmail: assigneeEmail || undefined,
       };
-
-      if (isPurchaseRequest) {
-        ticketData.isPurchaseRequest = true;
-        ticketData.purchaseLineItems = lineItems;
-        ticketData.purchaseJustification = purchaseShared.justification;
-        ticketData.purchaseProject = purchaseShared.project || undefined;
-      }
 
       const newTicket = await createTicket(
         client,
@@ -606,13 +565,6 @@ export default function NewTicketPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Reset purchase request when switching to Problem category
-    if (name === "category" && value === "Problem") {
-      setIsPurchaseRequest(false);
-      setLineItems([{ qty: 1, cost: 0 }]);
-      setPurchaseShared({ justification: "", project: "" });
-    }
   };
 
   // Show loading while MSAL initializes
@@ -813,24 +765,6 @@ export default function NewTicketPage() {
                 </div>
               </div>
 
-              {/* Purchase Request Toggle - only shown for Requests, placed before Title */}
-              {formData.category === "Request" && (
-                <label className="flex items-center gap-3 p-3 border border-amber-300 bg-amber-50 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={isPurchaseRequest}
-                    onChange={(e) => setIsPurchaseRequest(e.target.checked)}
-                    className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
-                  />
-                  <div>
-                    <span className="font-medium text-amber-900">This is a Purchase Request</span>
-                    <p className="text-xs text-amber-700 mt-0.5">
-                      Check this if you need to purchase an item or service
-                    </p>
-                  </div>
-                </label>
-              )}
-
               {/* Title */}
               <div>
                 <label
@@ -845,69 +779,31 @@ export default function NewTicketPage() {
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
-                  placeholder={isPurchaseRequest ? "Title of overall purchase request" : "Brief summary of your issue"}
+                  placeholder="Brief summary of your issue"
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
                   required
                 />
               </div>
 
-              {/* Description - hidden when isPurchaseRequest (line items replace it) */}
-              {!isPurchaseRequest && (
-                <div>
-                  <label
-                    htmlFor="description"
-                    className="block text-sm font-medium text-text-primary mb-1"
-                  >
-                    Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, or relevant context."
-                    rows={6}
-                    className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                    required
-                  />
-                </div>
-              )}
-
-              {/* Purchase Request Line Items - shown in place of Description */}
-              {isPurchaseRequest && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
-                  <h3 className="text-sm font-medium text-amber-900">Line Items</h3>
-                  <LineItemsField items={lineItems} onChange={setLineItems} />
-
-                  <div>
-                    <label htmlFor="purchaseJustification" className="block text-xs font-medium text-amber-800 mb-1">
-                      Justification (shared) <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id="purchaseJustification"
-                      value={purchaseShared.justification}
-                      onChange={(e) => setPurchaseShared((prev) => ({ ...prev, justification: e.target.value }))}
-                      placeholder="Why is this purchase needed?"
-                      rows={3}
-                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="purchaseProject" className="block text-xs font-medium text-amber-800 mb-1">
-                      Project <span className="text-amber-600">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="purchaseProject"
-                      value={purchaseShared.project}
-                      onChange={(e) => setPurchaseShared((prev) => ({ ...prev, project: e.target.value }))}
-                      placeholder="Project name this is for"
-                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Description */}
+              <div>
+                <label
+                  htmlFor="description"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, or relevant context."
+                  rows={6}
+                  className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                  required
+                />
+              </div>
 
               {/* Department (Problem Type) - 3-level cascading dropdowns */}
               <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -1146,7 +1042,6 @@ export default function NewTicketPage() {
                     className="px-6 py-2 bg-brand-blue text-white rounded-lg font-medium hover:bg-brand-blue-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? (submitStatus || "Submitting...") : (
-                      isPurchaseRequest ? "Submit Purchase Request" :
                       stagedFiles.length > 0 ? `Submit Ticket (${stagedFiles.length} file${stagedFiles.length !== 1 ? "s" : ""})` :
                       "Submit Ticket"
                     )}

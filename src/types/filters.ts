@@ -6,7 +6,7 @@ export type SortOption = "default" | "urgency" | "recent" | "oldest";
 
 export type DateRange = "today" | "week" | "month" | "all";
 
-export type PresetView = "purchaseQueue" | "incomingOrders" | "pendingApprovals";
+export type PresetView = "pendingApprovals";
 
 export interface TicketFilters {
   search: string;
@@ -27,9 +27,6 @@ export interface TicketFilters {
   requestedByMeOnly: boolean;      // ticket requester email === viewer email
   // Viewer-independent quick filter
   unassignedOnly: boolean;         // ticket has no assignee (triage)
-  // Purchase request filters
-  isPurchaseRequest?: boolean;
-  purchaseStatus?: string[];
   // Approval workflow filter (e.g. ["Pending", "Changes Requested"])
   approvalStatus?: string[];
 }
@@ -78,26 +75,6 @@ export const EMPTY_FILTERS: TicketFilters = {
 // removed in favour of the new default + the "Show resolved & closed" toggle +
 // the combinable quick-filter chips.
 export const PRESET_VIEWS: Record<PresetView, { label: string; description: string; filters: Partial<TicketFilters> }> = {
-  purchaseQueue: {
-    label: "Purchase Queue",
-    description: "Approved purchases waiting to be ordered",
-    filters: {
-      status: [],
-      sort: "recent",
-      isPurchaseRequest: true,
-      purchaseStatus: ["Approved", "Approved with Changes"],
-    },
-  },
-  incomingOrders: {
-    label: "Incoming Orders",
-    description: "Purchased items waiting to be received",
-    filters: {
-      status: [],
-      sort: "recent",
-      isPurchaseRequest: true,
-      purchaseStatus: ["Purchased", "Ordered"],
-    },
-  },
   pendingApprovals: {
     label: "Awaiting Approval",
     description: "Tickets pending an approval decision",

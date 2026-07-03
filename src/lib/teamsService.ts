@@ -742,13 +742,6 @@ export function sendNewTicketTeamsNotification(
     return;
   }
 
-  // Skip Teams notification for purchase requests — notify after GM approval instead
-  // Use force: true to bypass this check (e.g., when sending after approval)
-  if (ticket.isPurchaseRequest && !options?.force) {
-    console.log(`Skipping Teams notification for purchase request ticket #${ticket.ticketNumber || ticket.id} (will notify after approval)`);
-    return;
-  }
-
   // Check date filter (skip old/migrated tickets)
   if (!isTicketAfterStartDate(ticket)) {
     return;

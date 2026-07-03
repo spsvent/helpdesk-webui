@@ -267,16 +267,8 @@ export default function ConversationThread({
     ? comments.slice(1)
     : comments;
 
-  // For purchase requests with an empty description, the user filled out a
-  // Justification instead — show that in the description slot. Otherwise fall
-  // back to the description (which may itself be empty → "No description provided").
-  const hasDescriptionText = effectiveDescription && effectiveDescription.trim().length > 0;
-  const usePurchaseJustification =
-    !hasDescriptionText && ticket.isPurchaseRequest && ticket.purchaseJustification?.trim();
-  const slotContent = usePurchaseJustification
-    ? ticket.purchaseJustification!
-    : effectiveDescription || "<em>No description provided</em>";
-  const slotLabel = usePurchaseJustification ? "Justification" : "Description";
+  const slotContent = effectiveDescription || "<em>No description provided</em>";
+  const slotLabel = "Description";
 
   return (
     <div className="space-y-4">

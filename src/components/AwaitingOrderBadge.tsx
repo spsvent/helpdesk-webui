@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient, getUnorderedItemCount } from "@/lib/graphClient";
+import { getGraphClient } from "@/lib/graphClient";
+import { getUnorderedItemCount } from "@/modules/purchase/purchaseService";
 import { useRBAC } from "@/contexts/RBACContext";
 
 export default function AwaitingOrderBadge() {
