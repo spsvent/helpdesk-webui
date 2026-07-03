@@ -32,6 +32,9 @@ export interface QueueRow {
   requestedDate?: string; // when the request was created
   approvedDate?: string;
   approver?: string;
+  // Who marked the item(s) received (record-level receiver). Shown in the
+  // Recently Received history. Email — no display name is stored on receipt.
+  receivedBy?: string;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {
@@ -96,6 +99,7 @@ function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow
     requestedDate: ticket.created,
     approvedDate: ticket.approvalDate,
     approver: ticket.approvedBy?.displayName,
+    receivedBy: ticket.receivedByEmail,
   };
 }
 

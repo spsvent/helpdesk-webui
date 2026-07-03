@@ -49,3 +49,9 @@
   The "Recently Ordered" (and by extension "Recently Received") list in the order/receiving queues
   (`src/components/LineItemQueue.tsx`) is an unbounded history view that will grow too large to scan.
   Add a search box (item name / vendor / requester / order #) and filters so it stays usable at scale.
+- [ ] **CDW "Send the approved final to:" — nudge toward groups over individuals** — _2026-07-03_
+  In the New CDW form, when an individual's email is entered in the "Send the approved final to:"
+  field, show a side tip suggesting a group that person belongs to (e.g. "Marketing includes Jane —
+  consider sending to the Marketing group instead"). Goal is to encourage using distribution/security
+  groups rather than naming individuals. Would look up the entered user's group memberships via Graph
+  (`/users/{id}/memberOf`) and surface matching groups as a lightweight, dismissible suggestion.
