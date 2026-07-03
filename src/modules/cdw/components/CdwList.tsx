@@ -6,7 +6,7 @@ import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { CDWBrief } from "../types";
+import { CDWBrief, CDW_EDITABLE_STATUSES } from "../types";
 import { canCreateCdw } from "../access";
 import { ensureCdwList, isCdwConfigured, listCdw, visibleCdw } from "../cdwService";
 import CdwStatusBadge from "./CdwStatusBadge";
@@ -21,6 +21,16 @@ export default function CdwList() {
   const [error, setError] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupResult, setSetupResult] = useState<string | null>(null);
+  // "Drafts" = briefs still in the requester's hands (Draft / Changes Requested).
+  const [tab, setTab] = useState<"all" | "drafts">("all");
+
+  const isDraft = (b: CDWBrief) => CDW_EDITABLE_STATUSES.includes(b.status);
+  const draftCount = briefs.filter(isDraft).length;
+  // Drafts first in the "all" view so an unfinished brief is easy to find; the
+  // "Drafts" tab narrows to just those.
+  const shownBriefs = [...(tab === "drafts" ? briefs.filter(isDraft) : briefs)].sort(
+    (a, b) => Number(isDraft(b)) - Number(isDraft(a))
+  );
 
   async function handleSetup() {
     if (!account) return;
@@ -97,15 +107,34 @@ export default function CdwList() {
         </div>
       )}
 
+      {!loading && !error && briefs.length > 0 && (
+        <div className="mt-4 inline-flex border border-border rounded-lg overflow-hidden text-sm">
+          <button
+            onClick={() => setTab("all")}
+            className={`px-3 py-1.5 font-medium ${tab === "all" ? "bg-brand-primary text-white" : "bg-bg-card text-text-primary hover:bg-bg-subtle"}`}
+          >
+            All ({briefs.length})
+          </button>
+          <button
+            onClick={() => setTab("drafts")}
+            className={`px-3 py-1.5 font-medium ${tab === "drafts" ? "bg-brand-primary text-white" : "bg-bg-card text-text-primary hover:bg-bg-subtle"}`}
+          >
+            Drafts ({draftCount})
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="p-8"><LoadingSpinner /></div>
       ) : error ? (
         <p className="mt-4 text-sm text-red-600">{error}</p>
       ) : briefs.length === 0 ? (
         <p className="mt-6 text-sm text-text-secondary">No briefs yet.</p>
+      ) : shownBriefs.length === 0 ? (
+        <p className="mt-6 text-sm text-text-secondary">No drafts — everything’s been submitted.</p>
       ) : (
         <ul className="mt-4 divide-y divide-border border border-border rounded-lg overflow-hidden">
-          {briefs.map((b) => (
+          {shownBriefs.map((b) => (
             <li key={b.id}>
               <Link href={`/cdw/?id=${b.id}`} className="flex items-center justify-between gap-3 p-3 hover:bg-bg-subtle transition-colors">
                 <div className="min-w-0">

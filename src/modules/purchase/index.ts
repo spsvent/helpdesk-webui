@@ -26,6 +26,9 @@ export const purchaseModule: FormModule = {
   // (NEXT_PUBLIC_PURCHASE_LIST_ID); then any signed-in user can create.
   visibleWhen: (perms) => isPurchaseConfigured() && canCreatePurchase(perms),
   publicRoutePrefixes: ["/purchase/approve"],
+  workspaceHref: "/purchase",
+  workspaceLabel: "Purchase",
+  workspaceOrder: 10,
   settingsTabs: [
     {
       id: "purchase-migration",
