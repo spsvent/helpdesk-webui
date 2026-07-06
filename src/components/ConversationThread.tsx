@@ -50,6 +50,13 @@ function formatTimestamp(dateString: string): string {
   });
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // Enrichment context threaded from TicketDetail so attachment comments can show
 // thumbnails and jump-to-attachments links.
 interface AttachmentEnrichment {
@@ -119,17 +126,23 @@ function AttachmentCommentBody({
         {label}
       </p>
 
-      {/* Clickable thumbnails for image attachments */}
+      {/* Clickable thumbnails for image attachments (132×88, caption row below) */}
       {getPreviewUrl && onOpenImage && images.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {images.map((a) => (
-            <AttachmentThumbnail
-              key={a.name}
-              attachment={a}
-              getPreviewUrl={getPreviewUrl}
-              previewable={canThumbnail ? canThumbnail(a.name) : undefined}
-              onOpen={() => onOpenImage(a.name)}
-            />
+            <figure key={a.name} className="m-0 w-[132px]">
+              <AttachmentThumbnail
+                attachment={a}
+                getPreviewUrl={getPreviewUrl}
+                previewable={canThumbnail ? canThumbnail(a.name) : undefined}
+                onOpen={() => onOpenImage(a.name)}
+                sizeClass="w-[132px] h-[88px]"
+              />
+              <figcaption className="mt-1 flex justify-between gap-1.5 text-[11px] text-text-secondary">
+                <span className="truncate">{a.name}</span>
+                {formatBytes(a.size) && <span className="shrink-0">{formatBytes(a.size)}</span>}
+              </figcaption>
+            </figure>
           ))}
         </div>
       )}
@@ -187,41 +200,44 @@ function CommentCard({
 
   return (
     <div className={cardClass}>
-      <div className="flex gap-3">
-        <UserAvatar name={author.displayName} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-text-primary">
-              {author.displayName}
-            </span>
-            <span className="text-xs text-text-secondary">
-              {formatTimestamp(timestamp)}
-            </span>
-            {isDescription && (
-              <span className="badge bg-brand-primary/15 text-brand-primary">
-                {descriptionLabel}
-              </span>
-            )}
-            {isInternal && (
-              <span className="badge bg-yellow-100 text-yellow-800">
-                Internal
-              </span>
-            )}
-            {commentType && commentType !== "Comment" && !isDescription && (
-              <span className="badge bg-gray-100 text-gray-800">
-                {commentType}
-              </span>
-            )}
-          </div>
-          {attachmentInfo ? (
-            <AttachmentCommentBody info={attachmentInfo} body={content} {...enrichment} />
-          ) : (
-            <div
-              className="text-text-primary prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-          )}
-        </div>
+      {/* Header row: sm avatar + author + timestamp + type tag */}
+      <div className="flex items-center gap-2 mb-1">
+        <UserAvatar name={author.displayName} size="sm" />
+        <span className="text-[13.5px] font-bold text-text-primary">
+          {author.displayName}
+        </span>
+        <span className="text-xs text-text-secondary">
+          {formatTimestamp(timestamp)}
+        </span>
+        {isDescription && (
+          <span className="text-xs text-text-secondary">{descriptionLabel}</span>
+        )}
+        {isInternal && (
+          <span
+            className="text-[11px] font-bold px-[7px] py-px rounded-full"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--color-brand-yellow) 25%, transparent)",
+              color: "#92640D",
+            }}
+          >
+            Internal
+          </span>
+        )}
+        {commentType && commentType !== "Comment" && !isDescription && (
+          <span className="badge bg-gray-100 text-gray-800">{commentType}</span>
+        )}
+      </div>
+
+      {/* Body — indented 30px to align under the author, past the avatar */}
+      <div className="ml-[30px]">
+        {attachmentInfo ? (
+          <AttachmentCommentBody info={attachmentInfo} body={content} {...enrichment} />
+        ) : (
+          <div
+            className="text-sm leading-[1.45] text-text-primary prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
+        )}
       </div>
     </div>
   );
@@ -271,8 +287,8 @@ export default function ConversationThread({
   const slotLabel = "Description";
 
   return (
-    <div className="space-y-4">
-      {/* Description (or Justification for purchase requests) as first "comment" */}
+    <div className="space-y-2">
+      {/* Description as first "comment" */}
       <CommentCard
         author={descriptionAuthor}
         content={slotContent}

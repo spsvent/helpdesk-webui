@@ -65,17 +65,46 @@ const helpSections: HelpSection[] = [
         <p>The main interface is divided into key areas:</p>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
-            <strong>Header:</strong> Contains the &quot;+ New Ticket&quot; button, Help link,
-            your name, and sign-out
+            <strong>Header:</strong> The <strong>New</strong> button (a menu when you can create more
+            than one kind of item — see below), any <strong>work-queue pills</strong> for your role,
+            the refresh and Help buttons, your name, and sign-out
           </li>
           <li>
             <strong>Ticket List (Left Sidebar):</strong> Displays all tickets in
-            a scrollable list
+            a scrollable list, with the search box and filter pills at the top
           </li>
           <li>
             <strong>Ticket Detail (Main Area):</strong> Shows the selected
-            ticket&apos;s conversation and details
+            ticket&apos;s conversation and, on the right, its Details panel
           </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">The Home Screen</h4>
+        <p>
+          When no ticket is selected, the main area shows a <strong>welcome panel</strong> with a
+          greeting and a set of <strong>start-here tiles</strong> — quick shortcuts to
+          <em> Report a problem</em>, <em>Make a request</em>, and (where available) start a creative
+          brief or a purchase request. Pick a ticket from the list to open it, or click a tile to
+          start something new.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Creating Something New</h4>
+        <p>
+          The <strong>New</strong> button (top-left of the header) is your entry point for creating
+          items. If you can create more than one kind — a ticket, a creative brief (CDW), or a
+          purchase request — it opens a menu; each option shows a short description of what it&apos;s
+          for. Otherwise it&apos;s a single button that opens the new-ticket form.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Work-Queue Pills</h4>
+        <p>
+          Depending on your role, the header shows one or more <strong>work-queue pills</strong> with a
+          live count badge (grey when the queue is empty):
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li><strong>Approvals</strong> (approvers) — filters the list to tickets awaiting an approval decision. Click again to return to your normal view.</li>
+          <li><strong>Needs ordering</strong> (purchasers) — opens the Orders queue of approved items to buy.</li>
+          <li><strong>Needs receiving</strong> (inventory) — opens the Receiving queue of ordered items to check in.</li>
         </ul>
       </div>
     ),
@@ -269,7 +298,8 @@ const helpSections: HelpSection[] = [
         </h4>
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>
-            Click the <strong>&quot;+ New Ticket&quot;</strong> button in the header
+            Click the <strong>New</strong> button in the header (choose <strong>New ticket</strong> if a
+            menu appears), or use a start-here tile on the home screen
           </li>
           <li>Fill out the ticket form with the following information:</li>
         </ol>
@@ -452,94 +482,44 @@ const helpSections: HelpSection[] = [
           Search results update as you type (with a small delay to avoid flickering).
         </p>
 
-        <h4 className="font-semibold text-text-primary mt-6">Show Resolved &amp; Closed Toggle</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Filter Pills</h4>
         <p>
-          By default the ticket list shows only <strong>active</strong> work — New, In Progress, and On Hold.
-          Resolved and Closed tickets are hidden so your list stays focused on what still needs attention.
-          Under the search box is a <strong>Show resolved &amp; closed</strong> checkbox — tick it to bring both
-          Resolved and Closed tickets back into the list, and untick it to hide them again.
-        </p>
-
-        <h4 className="font-semibold text-text-primary mt-6">Quick Filter Chips</h4>
-        <p>
-          Below the search box are one-tap <strong>quick filter chips</strong>. They are
-          <strong> combinable</strong> — turn on more than one and the list narrows to tickets that match
-          all of them. Tap a chip again to turn it off. Which chips you see depends on your role:
-        </p>
-        <div className="space-y-2 mt-3">
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">My Dept</span>
-            <span className="text-sm">Support staff only — tickets in the department(s) you cover</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">Assigned to me</span>
-            <span className="text-sm">Support &amp; admin — tickets currently assigned to you</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">My requests</span>
-            <span className="text-sm">Everyone — tickets you opened</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-brand-primary text-white">Unassigned</span>
-            <span className="text-sm">Support &amp; admin — tickets nobody is working yet (triage)</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 text-xs rounded-full bg-red-600 text-white">Urgent</span>
-            <span className="text-sm">Everyone — only Urgent-priority tickets</span>
-          </div>
-        </div>
-        <p className="mt-2 text-sm text-text-secondary">
-          The <strong>Urgent</strong> chip is a shortcut for the Urgent priority filter, so it stays in
-          sync with the Priority chips in the advanced panel. Purchasers and inventory staff also see
-          <strong> Purchase Queue</strong> and <strong>Incoming Orders</strong> buttons for their workflows.
-        </p>
-
-        <h4 className="font-semibold text-text-primary mt-6">Advanced Filters</h4>
-        <p>
-          Click the <strong>More filters</strong> button to expand the panel with the full set of options:
+          Under the search box is a row of <strong>filter pills</strong>. Click one to open a small
+          menu of options; click anywhere outside it to close. Each pill&apos;s
+          <strong> label is bold</strong>, and its current selection reads in lighter grey next to it.
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
-          <li>
-            <strong>Status:</strong> Select one or more status types (New, In Progress, On Hold, Resolved, Closed). The label shows a count — e.g. <em>Status (3)</em> when 3 are selected, or <em>Status (all)</em> when none are selected (meaning all statuses are visible).
-          </li>
-          <li>
-            <strong>Priority:</strong> Filter by priority level (Urgent, High, Normal, Low). Uses the same count indicator as Status.
-          </li>
-          <li>
-            <strong>Department:</strong> Cascading dropdowns for ProblemType → Sub-category → Specific type
-          </li>
-          <li>
-            <strong>Category:</strong> Filter by Request or Problem
-          </li>
-          <li>
-            <strong>Assignee:</strong> Filter by the person a ticket is assigned to
-          </li>
-          <li>
-            <strong>Location:</strong> Filter by ticket location
-          </li>
-          <li>
-            <strong>Date Range:</strong> Today, Last 7 days, Last 30 days, or All time
-          </li>
+          <li><strong>Sort:</strong> always shows the current order — Smart, Priority, Newest, or Oldest.</li>
+          <li><strong>Status</strong> and <strong>Priority:</strong> pick one or more from the menu. A small round badge shows how many are selected, and a <em>Clear</em> row inside the menu resets that pill.</li>
+          <li><strong>Category:</strong> All, Request, or Problem.</li>
+          <li><strong>Department:</strong> narrow the list to a single department.</li>
+        </ul>
+        <p className="mt-2 text-sm text-text-secondary">
+          An active pill is tinted and outlined in the brand colour, so you can see at a glance which
+          filters are narrowing your view.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">The &quot;More&quot; Pill</h4>
+        <p>
+          The <strong>More</strong> pill gathers the extra filters that don&apos;t need their own pill.
+          Its badge counts how many of these are active:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li><strong>Quick filters</strong> — one-tap, combinable chips: <em>My Dept</em> (support), <em>Assigned to me</em> (support &amp; admin), <em>My requests</em> (everyone), <em>Unassigned</em> (support &amp; admin), and <em>Urgent</em>. The Urgent chip stays in sync with the Priority pill.</li>
+          <li><strong>Show resolved &amp; closed</strong> — by default the list shows only active work (New, In Progress, On Hold); tick this to bring Resolved and Closed tickets back in.</li>
+          <li><strong>Sub-Category / Specific Type</strong> — appear once you&apos;ve chosen a Department that has them.</li>
+          <li><strong>Assignee, Location, and Date Range</strong> — Today, Last 7 days, Last 30 days, or All time.</li>
         </ul>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-          <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Deselecting all chips for Status or Priority means
-            &quot;show all&quot; — no filtering is applied for that category. The label will
-            display <em>(all)</em> to confirm this.
-          </p>
-        </div>
-
-        <h4 className="font-semibold text-text-primary mt-6">Filter Summary Pills</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Ticket Count &amp; Clearing Filters</h4>
         <p>
-          When the filter panel is collapsed and you have active filters, small blue
-          summary pills appear below the filter button showing which filters are active
-          (e.g. <em>Status: New, In Progress</em> or <em>Priority: Urgent, High</em>).
-          This lets you see at a glance what&apos;s filtering your view without opening the panel.
+          Just below the pills, the left side shows <strong>&quot;N of M tickets&quot;</strong> — how many match
+          out of the total you can see. When any filters are active, a <strong>Clear filters (n)</strong>
+          link appears on the right; click it to return to the default view (active tickets only,
+          resolved and closed hidden).
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Sort Options</h4>
-        <p>Use the sort dropdown to change how tickets are ordered:</p>
         <div className="space-y-2 mt-3 ml-4">
           <p><strong>Smart (urgent on top):</strong> Urgent tickets first, then by date, with higher priority shown first for same-day tickets</p>
           <p><strong>By priority:</strong> All urgent first, then high, normal, low</p>
@@ -547,36 +527,21 @@ const helpSections: HelpSection[] = [
           <p><strong>Oldest first:</strong> Oldest tickets first</p>
         </div>
 
-        <h4 className="font-semibold text-text-primary mt-6">Clearing Filters</h4>
-        <p>
-          When you have active filters, two buttons appear at the bottom of the filter panel:
-        </p>
-        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
-          <li>
-            <strong>Reset to default:</strong> Returns to the default view (active tickets only, resolved/closed hidden) and collapses the panel
-          </li>
-          <li>
-            <strong>Show all tickets:</strong> Clears ALL filters to show every ticket and collapses the filter panel
-          </li>
-        </ul>
-
         <h4 className="font-semibold text-text-primary mt-6">Archived Tickets</h4>
         <p>
           To improve performance, resolved and closed tickets older than 90 days are not loaded
           by default. To view these older tickets:
         </p>
         <ol className="list-decimal list-inside space-y-2 ml-4 mt-3">
-          <li>Click the <strong>&quot;Load archived tickets (90+ days old)&quot;</strong> button at the bottom of the filter area</li>
+          <li>Click the <strong>&quot;Load archived tickets (90+ days old)&quot;</strong> button below the filter area</li>
           <li>Wait for the archived tickets to load</li>
-          <li>Tick <strong>Show resolved &amp; closed</strong> (and clear other filters) to see them</li>
+          <li>Open <strong>More</strong> and tick <strong>Show resolved &amp; closed</strong> to see them</li>
         </ol>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> The badge on the <strong>More filters</strong> button shows how many
-            advanced filters are active. When the panel is collapsed, summary pills below the button
-            show exactly which filters are narrowing your view. (The quick filter chips stay visible,
-            so they aren&apos;t counted in the badge.)
+            <strong>Tip:</strong> Deselecting every option in the Status or Priority menu means
+            &quot;show all&quot; — no filtering is applied for that facet.
           </p>
         </div>
       </div>
@@ -1125,10 +1090,14 @@ const helpSections: HelpSection[] = [
     title: "Participants & Notifications",
     content: (
       <div className="space-y-4">
-        <p>Each ticket has a <strong>Participants</strong> list — everyone who gets notified of new activity.</p>
+        <p>
+          Each ticket has a <strong>Participants</strong> list — everyone who gets notified of new
+          activity. You&apos;ll find it in the <strong>Details</strong> panel on the right of the ticket,
+          just under the Requester.
+        </p>
         <ul className="list-disc pl-5 space-y-1">
-          <li><strong>Automatic:</strong> the requester, the assignee, the approver, and anyone who has commented.</li>
-          <li><strong>Manual:</strong> add anyone from the company directory in the Participants box on the ticket.</li>
+          <li><strong>Automatic:</strong> the requester, the assignee, the approver, and anyone who has commented. These appear as read-only rows.</li>
+          <li><strong>Manual:</strong> click <strong>+ Add</strong>, type a name or email to pick someone from the company directory, and press Enter or <strong>Add</strong>. Remove a manually-added person with the <strong>×</strong> next to their name.</li>
         </ul>
         <p>Participants are emailed on every new comment, approval decision, and status change.</p>
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
@@ -1148,7 +1117,7 @@ const helpSections: HelpSection[] = [
           General Manager before it becomes public.
         </p>
         <ol className="list-decimal pl-5 space-y-2">
-          <li>Click <strong>+ New</strong> in the header and choose <strong>New CDW</strong> (or go to <strong>/cdw</strong>).</li>
+          <li>Click <strong>New</strong> in the header and choose <strong>New creative brief (CDW)</strong> (or go to <strong>/cdw</strong>).</li>
           <li>Fill out the worksheet: project name, deadline, project manager, audience, specifications, timeline, and so on.</li>
           <li>Choose <strong>who should receive the final deliverable</strong> once the brief is approved.</li>
           <li>Click <strong>Submit for Approval</strong> — or <strong>Save as Draft</strong> to finish later.</li>
@@ -2385,7 +2354,8 @@ const helpSections: HelpSection[] = [
         </h4>
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>
-            Click <strong>&quot;+ New Ticket&quot;</strong> in the header
+            Click <strong>New</strong> in the header (choose <strong>New ticket</strong> if a menu
+            appears). A dedicated <strong>New purchase request</strong> option may also be available.
           </li>
           <li>
             Select <strong>&quot;Request&quot;</strong> as the category

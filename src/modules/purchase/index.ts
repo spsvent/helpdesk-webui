@@ -19,7 +19,12 @@ import { isPurchaseConfigured } from "./purchaseService";
 export const purchaseModule: FormModule = {
   id: "purchase",
   label: "Purchase Request",
-  newLabel: "New Purchase Request",
+  newLabel: "New purchase request",
+  newDescription: "Request to buy equipment, supplies, or services",
+  welcomeTile: {
+    description: "Request to buy equipment, supplies, or services — routed for approval.",
+    accent: "var(--color-brand-accent)",
+  },
   creatable: true,
   newHref: "/purchase/new",
   // Hidden until the PurchaseRequests list is configured

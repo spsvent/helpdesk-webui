@@ -6,28 +6,30 @@ import { getGraphClient, getPendingApprovalsCount } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { listPendingPurchaseApprovals } from "@/modules/purchase/purchaseService";
 import { canApprovePurchase } from "@/modules/purchase/access";
+import QueuePill from "./QueuePill";
 
 interface PendingApprovalsBadgeProps {
+  /** Highlighted when the Approvals queue is the current list view. */
+  active?: boolean;
   onClick?: () => void;
 }
 
-export default function PendingApprovalsBadge({ onClick }: PendingApprovalsBadgeProps) {
+// Work-queue pill: items awaiting an approval decision. A user may approve tickets
+// (GM), purchases (admin), or both — the count merges both so this single
+// "Approvals" pill covers everything awaiting them. Clicking filters the in-page
+// list (see the parent's toggle handler). Shown to approvers whenever they can
+// approve — even at zero — so the queue is always discoverable.
+export default function PendingApprovalsBadge({ active = false, onClick }: PendingApprovalsBadgeProps) {
   const { instance, accounts } = useMsal();
   const { canApprove, permissions } = useRBAC();
   const [count, setCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
 
-  // A user may approve tickets (GM), purchases (admin), or both — surface a single
-  // merged count so the one "Approvals" badge covers everything awaiting them.
   const canApprovePurchases = canApprovePurchase(permissions);
+  const canApproveAnything = canApprove() || canApprovePurchases;
 
   useEffect(() => {
     async function fetchCount() {
-      if ((!canApprove() && !canApprovePurchases) || !accounts[0]) {
-        setLoading(false);
-        return;
-      }
-
+      if (!canApproveAnything || !accounts[0]) return;
       try {
         const client = getGraphClient(instance, accounts[0]);
         const [ticketCount, purchasePending] = await Promise.all([
@@ -37,37 +39,21 @@ export default function PendingApprovalsBadge({ onClick }: PendingApprovalsBadge
         setCount(ticketCount + purchasePending.length);
       } catch (error) {
         console.error("Failed to fetch pending approvals count:", error);
-      } finally {
-        setLoading(false);
       }
     }
 
     fetchCount();
-  }, [canApprove, canApprovePurchases, accounts, instance]);
+  }, [canApprove, canApprovePurchases, canApproveAnything, accounts, instance]);
 
-  // Don't render if user can't approve anything or there are no pending
-  if ((!canApprove() && !canApprovePurchases) || loading || count === 0) {
-    return null;
-  }
+  if (!canApproveAnything) return null;
 
   return (
-    <button
+    <QueuePill
+      label="Approvals"
+      count={count}
+      active={active}
       onClick={onClick}
-      className="relative inline-flex items-center gap-2 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-sm font-medium transition-colors"
-      title={`${count} pending approval${count !== 1 ? "s" : ""}`}
-    >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      <span>Approvals</span>
-      <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-600 text-white text-xs font-bold rounded-full">
-        {count > 9 ? "9+" : count}
-      </span>
-    </button>
+      title={`${count} awaiting an approval decision`}
+    />
   );
 }

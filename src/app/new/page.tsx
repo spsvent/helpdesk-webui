@@ -71,10 +71,17 @@ export default function NewTicketPage() {
         }
       }
     }
+    // Honor a ?category=Problem|Request hint (e.g. from the welcome panel tiles).
+    const categoryParam =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("category")
+        : null;
+    const initialCategory =
+      categoryParam === "Problem" || categoryParam === "Request" ? categoryParam : "Request";
     return {
       title: "",
       description: "",
-      category: "Request",
+      category: initialCategory,
       priority: "Normal",
       problemType: "",
       problemTypeSub: "",
@@ -754,12 +761,12 @@ export default function NewTicketPage() {
                     </div>
                   </label>
                 </div>
-                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800">
-                    <strong>Note:</strong> {formData.category === "Request" ? (
-                      <>Requests require manager approval before support staff can see them. You&apos;ll be notified when approved.</>
+                <div className="mt-2 p-3 bg-bg-card border border-border rounded-lg">
+                  <p className="text-sm text-text-secondary leading-relaxed">
+                    {formData.category === "Request" ? (
+                      <>Requests are sent to a manager for approval before work begins. You&apos;ll be notified once it&apos;s approved.</>
                     ) : (
-                      <>Problems are routed directly to support staff and will be addressed promptly.</>
+                      <>Problems go straight to support staff and are addressed promptly.</>
                     )}
                   </p>
                 </div>

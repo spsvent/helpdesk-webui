@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Attachment } from "@/types/ticket";
 import { getFileIcon, formatFileSize } from "./fileTypeIcon";
 import { isImageAttachment } from "@/lib/attachmentComments";
+import AttachmentThumbnail from "./AttachmentThumbnail";
 
 interface AttachmentListProps {
   attachments: Attachment[];
@@ -11,6 +12,8 @@ interface AttachmentListProps {
   onDownload?: (filename: string) => Promise<void>;
   /** Open the full-size lightbox for an image attachment. */
   onPreview?: (filename: string) => void;
+  /** Downloads (once, cached by the parent) and returns an object URL — enables 40×40 image thumbs. */
+  getPreviewUrl?: (name: string) => Promise<string | null>;
   canDelete?: boolean;
   loading?: boolean;
   /** Briefly ring-highlight this attachment's row (jump-to-file links). */
@@ -22,6 +25,7 @@ export default function AttachmentList({
   onDelete,
   onDownload,
   onPreview,
+  getPreviewUrl,
   canDelete = false,
   loading = false,
   highlightName = null,
@@ -79,10 +83,19 @@ export default function AttachmentList({
             highlightName === attachment.name ? "ring-2 ring-brand-blue" : ""
           }`}
         >
-          {getFileIcon(attachment.contentType, attachment.name)}
+          {getPreviewUrl && isImageAttachment(attachment.name) ? (
+            <AttachmentThumbnail
+              attachment={attachment}
+              getPreviewUrl={getPreviewUrl}
+              onOpen={() => onPreview?.(attachment.name)}
+              sizeClass="w-10 h-10"
+            />
+          ) : (
+            getFileIcon(attachment.contentType, attachment.name)
+          )}
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary truncate">
+            <p className="text-[13.5px] font-medium text-text-primary truncate">
               {attachment.name}
             </p>
             {attachment.size > 0 && (

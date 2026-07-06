@@ -47,6 +47,13 @@ export interface FormModule {
   label: string;
   // Label for the "+ New" menu item; defaults to `New ${label}`.
   newLabel?: string;
+  // One-line sub-label shown under the item in the "+ New" menu.
+  newDescription?: string;
+  // Optional "start here" tile on the welcome/home panel. Modules that opt in get a
+  // data-driven tile (title = newLabel, plus this description + accent bar). The
+  // built-in ticket module is intentionally omitted — the welcome panel renders its
+  // two category tiles (Report a problem / Make a request) explicitly instead.
+  welcomeTile?: { description: string; accent: string };
   // Whether this module is creatable from the "+ New" menu.
   creatable: boolean;
   // Route to the create form.
@@ -73,7 +80,8 @@ export interface FormModule {
 const ticketModule: FormModule = {
   id: "ticket",
   label: "Ticket",
-  newLabel: "New Ticket",
+  newLabel: "New ticket",
+  newDescription: "Report a problem or make a request",
   creatable: true,
   newHref: "/new",
   visibleWhen: () => true,
