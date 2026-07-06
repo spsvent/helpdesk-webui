@@ -1,0 +1,67 @@
+name: Deploy Azure Functions
+
+# Deploys the azure-functions/ app (helpdesk-notify-func) automatically so a bad
+# manual `func publish` can't silently de-register every function again. Auth is
+# GitHub OIDC federated login (the app is on the Flex Consumption plan, which
+# doesn't support publish profiles). See the AZURE_FUNC_DEPLOY_* repo secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "azure-functions/**"
+      - ".github/workflows/deploy-functions.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # required for azure/login OIDC
+  contents: read
+
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install deps and smoke-test every function module
+        working-directory: azure-functions
+        # A single load-time require() error de-registers ALL functions on the
+        # v4 host, so fail the deploy here instead of shipping a broken bundle.
+        # Flex Consumption does a remote Oryx build, so ship source only —
+        # drop node_modules again once the smoke test has used it.
+        run: |
+          npm ci
+          for f in src/functions/*.js; do
+            node -e "require('./$f')" >/dev/null 2>&1 || { echo "FAILED to load $f"; exit 1; }
+          done
+          echo "all $(ls src/functions/*.js | wc -l) function modules load OK"
+          rm -rf node_modules
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_FUNC_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_FUNC_DEPLOY_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_FUNC_DEPLOY_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: helpdesk-notify-func
+          package: azure-functions
+          sku: flexconsumption
+          remote-build: true
+
+      - name: Verify functions registered
+        run: |
+          n=$(az functionapp function list -g SupportDesk -n helpdesk-notify-func --query "length(@)" -o tsv)
+          echo "registered functions: $n"
+          if [ "${n:-0}" -lt 10 ]; then echo "::error::only $n functions registered — deploy likely broken"; exit 1; fi
