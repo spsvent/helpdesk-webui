@@ -28,6 +28,7 @@ import { fetchAutoAssignConfig, getSuggestedAssigneeFromConfig } from "@/lib/aut
 import { shouldClearApprovalOnConversion, isProblemConversionBlocked } from "@/lib/approvalFlow";
 import UserAvatar from "./UserAvatar";
 import UserSearchDropdown from "./UserSearchDropdown";
+import ParticipantsPanel from "./ParticipantsPanel";
 import RequestApprovalButton from "./RequestApprovalButton";
 import ConvertToPurchaseButton from "@/modules/purchase/components/ConvertToPurchaseButton";
 import ApprovalHistory from "./ApprovalHistory";
@@ -63,6 +64,8 @@ interface DetailsPanelProps {
   onDeleteAttachment?: (filename: string) => Promise<void>;
   onDownloadAttachment?: (filename: string) => Promise<void>;
   onPreviewImage?: (filename: string) => void;
+  /** Downloads (once, cached) an attachment and returns an object URL — powers 40×40 image thumbs. */
+  getAttachmentPreviewUrl?: (name: string) => Promise<string | null>;
   // Ref to the Attachments section so comment links can scroll to it
   attachmentsSectionRef?: React.RefObject<HTMLDivElement>;
   // Briefly highlight the Attachments section after a scroll-to
@@ -97,6 +100,7 @@ export default function DetailsPanel({
   onDeleteAttachment,
   onDownloadAttachment,
   onPreviewImage,
+  getAttachmentPreviewUrl,
   attachmentsSectionRef,
   highlightAttachments = false,
   onMergeComplete,
@@ -707,6 +711,9 @@ export default function DetailsPanel({
         </div>
       </div>
 
+      {/* Participants — manually-added notification audience + auto-discovered recipients */}
+      <ParticipantsPanel ticket={ticket} comments={comments} onUpdate={onUpdate} />
+
       <hr className="border-border" />
 
       {/* Category - Editable by admins */}
@@ -915,6 +922,7 @@ export default function DetailsPanel({
           onDelete={canEdit ? onDeleteAttachment : undefined}
           onDownload={onDownloadAttachment}
           onPreview={onPreviewImage}
+          getPreviewUrl={getAttachmentPreviewUrl}
           canDelete={canEdit}
           loading={attachmentsLoading}
         />

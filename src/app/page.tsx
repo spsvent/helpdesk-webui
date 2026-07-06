@@ -20,6 +20,7 @@ import AwaitingReceiptBadge from "@/components/AwaitingReceiptBadge";
 import BulkActionToolbar from "@/components/BulkActionToolbar";
 import DarkModeToggle from "@/components/DarkModeToggle";
 import NewFormMenu from "@/components/NewFormMenu";
+import WelcomePanel from "@/components/WelcomePanel";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useRBAC } from "@/contexts/RBACContext";
 import { debugCapture } from "@/lib/debugCapture";
@@ -332,11 +333,17 @@ export default function Home() {
     }
   }, [searchParams, isAuthenticated, accounts, instance, loading, canApprove]);
 
-  // Filter the ticket list to tickets awaiting an approval decision
-  // (Pending or Changes Requested). Applied via the shared preset pattern
-  // so it self-resets like the purchase presets.
+  // Toggle the Approvals work-queue view: apply the "awaiting an approval decision"
+  // (Pending / Changes Requested) preset, or restore the default view if it's already
+  // active. Clicking also deselects any open ticket so the filtered list is visible.
   const handlePendingApprovalsClick = useCallback(() => {
-    setFilters({ ...EMPTY_FILTERS, ...PRESET_VIEWS.pendingApprovals.filters } as TicketFilters);
+    setFilters((prev) =>
+      prev.approvalStatus && prev.approvalStatus.length > 0
+        ? { ...DEFAULT_FILTERS }
+        : ({ ...EMPTY_FILTERS, ...PRESET_VIEWS.pendingApprovals.filters } as TicketFilters)
+    );
+    setSelectedTicket(null);
+    setMobileView("list");
   }, []);
 
   // Fetch tickets when authenticated
@@ -448,12 +455,18 @@ export default function Home() {
             SkyPark Help Desk
           </h1>
           <p className="text-text-secondary mb-6">
-            Sign in with your Microsoft account to view and manage support tickets.
+            Sign in with your Microsoft account to continue.
           </p>
           <button
             onClick={handleLogin}
-            className="bg-brand-primary hover:bg-brand-primary-light text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="inline-flex items-center gap-2.5 bg-brand-primary hover:bg-brand-primary-light text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="0" y="0" width="7" height="7" fill="#F25022" />
+              <rect x="9" y="0" width="7" height="7" fill="#7FBA00" />
+              <rect x="0" y="9" width="7" height="7" fill="#00A4EF" />
+              <rect x="9" y="9" width="7" height="7" fill="#FFB900" />
+            </svg>
             Sign in with Microsoft
           </button>
         </div>
@@ -477,6 +490,20 @@ export default function Home() {
           <NewFormMenu permissions={permissions} />
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Role-gated work-queue pills. Approvals filters the in-page list (toggle);
+              ordering/receiving navigate to their line-item pages. Grouped together
+              with a 1px divider before the icon buttons. */}
+          {(canApprove() || permissions?.isPurchaser || permissions?.isInventory) && (
+            <div className="hidden sm:flex items-center gap-2">
+              <PendingApprovalsBadge
+                active={!!filters.approvalStatus && filters.approvalStatus.length > 0}
+                onClick={handlePendingApprovalsClick}
+              />
+              <AwaitingOrderBadge />
+              <AwaitingReceiptBadge />
+              <div className="w-px h-[22px] bg-border mx-1" aria-hidden="true" />
+            </div>
+          )}
           <button
             type="button"
             onClick={handleHardRefresh}
@@ -499,9 +526,6 @@ export default function Home() {
               />
             </svg>
           </button>
-          <PendingApprovalsBadge onClick={handlePendingApprovalsClick} />
-          <AwaitingOrderBadge />
-          <AwaitingReceiptBadge />
           <DarkModeToggle />
           <Link
             href="/help"
@@ -681,19 +705,20 @@ export default function Home() {
                 }}
               />
             </div>
-          ) : (
+          ) : isMobile ? (
             <div className="h-full flex items-center justify-center text-text-secondary">
-              {isMobile ? (
-                <button
-                  onClick={() => setMobileView("list")}
-                  className="text-brand-primary font-medium"
-                >
-                  ← View Tickets
-                </button>
-              ) : (
-                "Select a ticket to view details"
-              )}
+              <button
+                onClick={() => setMobileView("list")}
+                className="text-brand-primary font-medium"
+              >
+                ← View Tickets
+              </button>
             </div>
+          ) : (
+            <WelcomePanel
+              userName={accounts[0]?.name || accounts[0]?.username}
+              permissions={permissions}
+            />
           )}
         </main>
       </div>

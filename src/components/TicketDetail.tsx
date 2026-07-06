@@ -39,7 +39,6 @@ import CommentInput from "./CommentInput";
 import ApprovalStatusBadge from "./ApprovalStatusBadge";
 import NudgeApprovalButton from "./NudgeApprovalButton";
 import ApprovalActionPanel from "./ApprovalActionPanel";
-import ParticipantsPanel from "./ParticipantsPanel";
 import { collectParticipants, staffSubset } from "@/lib/participants";
 import { getStaffEmails } from "@/lib/rbacService";
 import { ensureFreshToken } from "@/lib/authActions";
@@ -529,7 +528,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const approvalComment = await addComment(
       client,
       parseInt(ticket.id),
-      `📋 Approval requested by ${requesterName}`,
+      `Approval requested by ${requesterName}`,
       true
     );
     setComments((prev) => [...prev, approvalComment]);
@@ -620,7 +619,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     const approvalComment = await addComment(
       client,
       parseInt(ticket.id),
-      `📋 ${noteText}`,
+      noteText,
       true
     );
     setComments((prev) => [...prev, approvalComment]);
@@ -971,7 +970,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
             }`}
             style={isMobile ? undefined : { width: sidebarWidth }}
           >
-            <ParticipantsPanel ticket={ticket} comments={comments} onUpdate={onUpdate} />
             <DetailsPanel
               ticket={ticket}
               comments={comments}
@@ -986,6 +984,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onDeleteAttachment={handleDeleteAttachment}
               onDownloadAttachment={handleDownloadAttachment}
               onPreviewImage={openLightbox}
+              getAttachmentPreviewUrl={getPreviewUrl}
               attachmentsSectionRef={attachmentsSectionRef}
               highlightAttachments={highlightAttachments}
               onMergeComplete={handleMergeComplete}

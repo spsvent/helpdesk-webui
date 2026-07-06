@@ -18,7 +18,13 @@ import { canCreateCdw } from "./access";
 export const cdwModule: FormModule = {
   id: "cdw",
   label: "Creative Brief (CDW)",
-  newLabel: "New CDW",
+  newLabel: "New creative brief (CDW)",
+  newDescription: "Kick off a design or campaign project",
+  // CDW routes to a GM for approval; hardcoded blue accent per the design (#2A6FDB).
+  welcomeTile: {
+    description: "Kick off a design or campaign project — routed to a GM for approval.",
+    accent: "#2A6FDB",
+  },
   creatable: true,
   newHref: "/cdw/new",
   // Gated by canCreateCdw (see access.ts): any signed-in user by default, or a
