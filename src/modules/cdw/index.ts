@@ -14,6 +14,7 @@
 
 import type { FormModule } from "@/shared/formModules";
 import { canCreateCdw } from "./access";
+import { isCdwConfigured } from "./cdwService";
 
 export const cdwModule: FormModule = {
   id: "cdw",
@@ -27,9 +28,14 @@ export const cdwModule: FormModule = {
   },
   creatable: true,
   newHref: "/cdw/new",
-  // Gated by canCreateCdw (see access.ts): any signed-in user by default, or a
+  // Hidden until the CDW list is configured (NEXT_PUBLIC_CDW_LIST_ID) — the help
+  // page tells users a missing "New CDW" means exactly that. Then gated by
+  // canCreateCdw (see access.ts): any signed-in user by default, or a
   // configurable requesters group. Approval is gated separately (GM/admin).
-  visibleWhen: canCreateCdw,
+  visibleWhen: (perms) => isCdwConfigured() && canCreateCdw(perms),
   // The email-approval landing page authorizes via its token, not a login session.
   publicRoutePrefixes: ["/cdw/approve"],
+  workspaceHref: "/cdw",
+  workspaceLabel: "CDW",
+  workspaceOrder: 20,
 };

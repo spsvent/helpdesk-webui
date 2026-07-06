@@ -6,14 +6,12 @@ import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInP
 import { trackEvent } from "./appInsights";
 import {
   Ticket,
-  PurchaseLineItem,
   Comment,
   Attachment,
   SharePointListResponse,
   mapToTicket,
   mapToComment,
 } from "@/types/ticket";
-import { serializeLineItems } from "@/lib/lineItemHelpers";
 
 // SharePoint site and list IDs - configure in .env.local
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
@@ -416,11 +414,6 @@ export interface CreateTicketData {
   problemTypeSub2?: string;
   location?: string;
   assigneeEmail?: string; // Auto-assignment target
-  // Purchase request fields
-  isPurchaseRequest?: boolean;
-  purchaseLineItems?: PurchaseLineItem[];
-  purchaseJustification?: string;
-  purchaseProject?: string;
 }
 
 // Options for ticket creation (creator info for auto-approval)
@@ -459,17 +452,6 @@ export async function createTicket(
     fields.Location = ticketData.location;
   }
 
-  // Purchase request fields
-  if (ticketData.isPurchaseRequest) {
-    fields.IsPurchaseRequest = true;
-    fields.PurchaseStatus = "Pending Approval";
-    if (ticketData.purchaseLineItems && ticketData.purchaseLineItems.length > 0) {
-      fields.PurchaseLineItemsJSON = serializeLineItems(ticketData.purchaseLineItems);
-    }
-    if (ticketData.purchaseJustification) fields.PurchaseJustification = ticketData.purchaseJustification;
-    if (ticketData.purchaseProject) fields.PurchaseProject = ticketData.purchaseProject;
-  }
-
   // Auto-assignment: store the assignee email in OriginalAssignedTo field
   // SharePoint Person field lookup requires the user to exist in the site's user info list
   // Using OriginalAssignedTo as a text field is more reliable for auto-assignment
@@ -487,18 +469,10 @@ export async function createTicket(
   }
 
   // Approval workflow logic:
-  // - Purchase requests always require approval (even from admins)
-  // - Non-purchase tickets created by admin: auto-approved
+  // - Tickets created by admin: auto-approved
   // - Request tickets by non-admins: require approval (Pending status)
   // - Problem tickets by non-admins: no approval workflow needed
-  if (ticketData.isPurchaseRequest) {
-    // Purchase requests always need explicit GM approval
-    fields.ApprovalStatus = "Pending";
-    fields.ApprovalRequestedDate = new Date().toISOString();
-    if (requesterSiteUserId) {
-      fields.ApprovalRequestedByLookupId = requesterSiteUserId;
-    }
-  } else if (options?.isAdmin && options?.creatorEmail) {
+  if (options?.isAdmin && options?.creatorEmail) {
     // Auto-approve non-purchase tickets created by admins
     fields.ApprovalStatus = "Approved";
     fields.ApprovalDate = new Date().toISOString();
@@ -595,52 +569,24 @@ export async function requestApproval(
 export async function processApprovalDecision(
   client: Client,
   ticketId: string,
-  decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
+  decision: "Approved" | "Denied" | "Changes Requested",
   approverName: string,
   approverEmail: string,
   notes?: string,
-  isPurchaseRequest: boolean = false
 ): Promise<Ticket> {
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
 
   // Look up the site user ID for the Person field
   const siteUserId = await getSiteUserId(client, approverEmail);
 
-  // Map decision to approval status
-  let approvalStatus = decision as string;
-
-  // For purchase requests, also update PurchaseStatus
-  const purchaseFields: Record<string, unknown> = {};
-  if (isPurchaseRequest) {
-    switch (decision) {
-      case "Approved":
-        purchaseFields.PurchaseStatus = "Approved";
-        break;
-      case "Approved with Changes":
-        approvalStatus = "Approved";
-        purchaseFields.PurchaseStatus = "Approved with Changes";
-        break;
-      case "Approved & Ordered":
-        approvalStatus = "Approved";
-        purchaseFields.PurchaseStatus = "Ordered";
-        purchaseFields.PurchasedByEmail = approverEmail;
-        purchaseFields.PurchasedDate = new Date().toISOString();
-        break;
-      case "Denied":
-        purchaseFields.PurchaseStatus = "Denied";
-        break;
-    }
-  }
-
   // Step 1: PATCH the critical status fields (without the Person field, which can
   // cause SharePoint to silently reject the entire update if the lookup ID is invalid)
   const fields: Record<string, unknown> = {
-    ApprovalStatus: approvalStatus,
+    ApprovalStatus: decision,
     ApprovalDate: new Date().toISOString(),
     // Text fallbacks — always save reliably unlike Person lookup fields
     ApprovedByName: approverName,
     ApprovedByEmail: approverEmail,
-    ...purchaseFields,
   };
 
   if (notes) {
@@ -652,9 +598,9 @@ export async function processApprovalDecision(
   // Step 2: Verify the status actually changed by re-fetching
   const verifyResponse = await client.api(`${endpoint}?$expand=fields`).get();
   const verifiedFields = verifyResponse.fields;
-  if (verifiedFields.ApprovalStatus !== approvalStatus) {
+  if (verifiedFields.ApprovalStatus !== decision) {
     throw new Error(
-      `Approval status failed to save. Expected "${approvalStatus}" but SharePoint still has "${verifiedFields.ApprovalStatus}".`
+      `Approval status failed to save. Expected "${decision}" but SharePoint still has "${verifiedFields.ApprovalStatus}".`
     );
   }
 
@@ -683,34 +629,6 @@ export async function processApprovalDecision(
   return ticket;
 }
 
-// Update the line items JSON column with verification.
-// Optionally also writes purchaseStatus and/or notes in the same PATCH.
-export async function updateTicketLineItems(
-  client: Client,
-  ticketId: string,
-  lineItems: PurchaseLineItem[],
-  options?: { purchaseStatus?: string; notes?: string },
-): Promise<Ticket> {
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items/${ticketId}`;
-  const json = serializeLineItems(lineItems);
-
-  const fields: Record<string, unknown> = { PurchaseLineItemsJSON: json };
-  if (options?.purchaseStatus) fields.PurchaseStatus = options.purchaseStatus;
-  if (options?.notes) fields.PurchaseNotes = options.notes;
-
-  await client.api(endpoint).patch({ fields });
-
-  // Verify: re-fetch and confirm the JSON saved
-  const verifyResponse = await client.api(`${endpoint}?$expand=fields`).get();
-  const verifiedJson = (verifyResponse.fields as Record<string, unknown>).PurchaseLineItemsJSON as string | undefined;
-  if (verifiedJson !== json) {
-    throw new Error("Line items failed to save to SharePoint. Please retry.");
-  }
-
-  invalidateTicketsCache();
-  return mapToTicket(verifyResponse);
-}
-
 // Get count of pending approvals (for header badge)
 export async function getPendingApprovalsCount(client: Client): Promise<number> {
   // Fetch all tickets and count pending approvals client-side
@@ -725,92 +643,14 @@ export async function getPendingApprovalsCount(client: Client): Promise<number> 
   return pendingCount;
 }
 
-// Count of approved purchase items awaiting an order (for header badge).
-// Reuses the cached ticket fetch so this is cheap when called alongside
-// other ticket consumers.
-export async function getUnorderedItemCount(client: Client): Promise<number> {
-  const tickets = await getAllTicketsCached(client);
-  let count = 0;
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest || ticket.approvalStatus !== "Approved") continue;
-    if (ticket.purchaseStatus === "Received" || ticket.purchaseStatus === "Denied") continue;
-    for (const item of ticket.purchaseLineItems ?? []) {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) count++;
-    }
-  }
-  return count;
-}
-
-// Count of ordered purchase items awaiting receipt (for header badge).
-export async function getUnreceivedItemCount(client: Client): Promise<number> {
-  const tickets = await getAllTicketsCached(client);
-  let count = 0;
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
-    for (const item of ticket.purchaseLineItems ?? []) {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) continue;
-      const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
-      if (!fullyReceived) count++;
-    }
-  }
-  return count;
-}
-
-// Bulk-update line items across multiple tickets. Each entry's lineItems
-// replaces the entire array on its ticket (the JSON column is per-ticket
-// so partial updates aren't possible — caller must construct the full
-// new array, mutating only the slots they care about). Status flip is
-// optional per ticket — caller decides whether allItemsOrdered/Received
-// is satisfied for that ticket.
-//
-// Returns one BulkLineItemResult per input — `success` is true if the
-// PATCH+verify pair completed, otherwise `error` carries the message.
-// Promise.allSettled ensures one ticket's failure doesn't block others.
-export interface BulkLineItemUpdate {
-  ticketId: string;
-  lineItems: PurchaseLineItem[];
-  purchaseStatus?: string;
-  notes?: string;
-}
-
-export interface BulkLineItemResult {
-  ticketId: string;
-  success: boolean;
-  error?: string;
-  ticket?: Ticket;
-}
-
-export async function bulkUpdateLineItems(
-  client: Client,
-  updates: BulkLineItemUpdate[],
-): Promise<BulkLineItemResult[]> {
-  const settled = await Promise.allSettled(
-    updates.map((u) =>
-      updateTicketLineItems(client, u.ticketId, u.lineItems, {
-        purchaseStatus: u.purchaseStatus,
-        notes: u.notes,
-      }),
-    ),
-  );
-  return settled.map((res, i) => {
-    const ticketId = updates[i].ticketId;
-    if (res.status === "fulfilled") {
-      return { ticketId, success: true, ticket: res.value };
-    }
-    const err = res.reason as { message?: string } | undefined;
-    return { ticketId, success: false, error: err?.message || "Unknown error" };
-  });
-}
-
 // Send email notification via Graph API
 // Email Function URL - if set, uses Azure Function for sending emails (app-only auth)
 // If not set, falls back to /me/sendMail (delegated auth, requires user mailbox)
 const EMAIL_FUNCTION_URL = process.env.NEXT_PUBLIC_EMAIL_FUNCTION_URL || "";
 
 // Azure Function that builds + sends the approval-request email with signed action links.
+// The function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_APPROVAL_REQUEST_URL || "";
 
 // Ask the server to send the signed approval-request email to the GM group.

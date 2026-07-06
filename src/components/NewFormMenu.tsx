@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { creatableModules } from "@/shared/formModules";
 import type { UserPermissions } from "@/types/rbac";
@@ -24,24 +24,56 @@ function PlusIcon() {
  * The header "+ New" entry point, driven by the form-module manifest.
  *
  * With a single creatable module (the default, ticket-only state) this renders a
- * plain link. With more than one (e.g. once the CDW/purchase modules are present) it
- * becomes a small dropdown — each row a module with its label + one-line description.
- * The app shell stays free of per-type branching.
+ * plain link. With more than one it becomes a dropdown — each row a module with its
+ * label + one-line description. Keyboard support: ArrowDown opens/moves, ArrowUp
+ * moves, Escape closes and restores focus to the trigger, Enter activates natively.
  */
 export default function NewFormMenu({ permissions }: NewFormMenuProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const modules = creatableModules(permissions);
 
-  // Close on outside mousedown (matches the other popovers in the app shell).
+  // Move focus into the menu when it opens so arrow keys work immediately.
   useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    if (open) {
+      menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    }
   }, [open]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []
+      );
+      if (items.length === 0) return;
+      const idx = items.indexOf(document.activeElement as HTMLElement);
+      const delta = e.key === "ArrowDown" ? 1 : -1;
+      const next = idx === -1
+        ? (delta === 1 ? 0 : items.length - 1)
+        : (idx + delta + items.length) % items.length;
+      items[next]?.focus();
+      return;
+    }
+    if (e.key === "Tab") {
+      // Let focus move on naturally, but don't leave a stranded open menu.
+      setOpen(false);
+    }
+  };
 
   // Behavior-preserving: one module → a plain link, identical to the old "+ New".
   if (modules.length <= 1) {
@@ -55,8 +87,9 @@ export default function NewFormMenu({ permissions }: NewFormMenuProps) {
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" onKeyDown={handleKeyDown}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
@@ -76,29 +109,34 @@ export default function NewFormMenu({ permissions }: NewFormMenuProps) {
         </svg>
       </button>
       {open && (
-        <div
-          role="menu"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-72 bg-bg-card border border-border rounded-lg shadow-lg overflow-hidden py-1"
-        >
-          {modules.map((m) => (
-            <Link
-              key={m.id}
-              href={m.newHref}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-3.5 py-2.5 hover:bg-brand-primary/[0.08] transition-colors"
-            >
-              <span className="block text-sm font-bold text-text-primary">
-                {m.newLabel ?? `New ${m.label}`}
-              </span>
-              {m.newDescription && (
-                <span className="block text-[12.5px] text-text-secondary mt-0.5">
-                  {m.newDescription}
+        <>
+          {/* Click-outside backdrop */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            ref={menuRef}
+            role="menu"
+            className="absolute left-0 top-[calc(100%+6px)] z-20 w-72 bg-bg-card border border-border rounded-lg shadow-lg overflow-hidden py-1"
+          >
+            {modules.map((m) => (
+              <Link
+                key={m.id}
+                href={m.newHref}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="block px-3.5 py-2.5 hover:bg-brand-primary/[0.08] transition-colors"
+              >
+                <span className="block text-sm font-bold text-text-primary">
+                  {m.newLabel ?? `New ${m.label}`}
                 </span>
-              )}
-            </Link>
-          ))}
-        </div>
+                {m.newDescription && (
+                  <span className="block text-[12.5px] text-text-secondary mt-0.5">
+                    {m.newDescription}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

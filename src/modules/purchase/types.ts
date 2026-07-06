@@ -45,6 +45,7 @@ export interface PurchaseRequest {
   justification?: string;
   project?: string;
   notes?: string;
+  needByDate?: string; // ISO date (yyyy-mm-dd) — drives the need-by reminder emails
   // Ordering / receiving audit
   purchasedDate?: string;
   purchasedByEmail?: string;
@@ -74,14 +75,20 @@ export interface PurchaseRequest {
 
 // Writable subset used on create/update (maps to SharePoint columns). Line items
 // are written as JSON via a dedicated helper, so they're excluded here.
-export type PurchaseWritable = Partial<
-  Pick<
-    PurchaseRequest,
+// participantEmails is string[] in the model; toFields serializes it to the
+// ";"-delimited ParticipantEmails text column.
+// A value of null clears the stored column (the same null-to-clear convention
+// graphClient.ts uses for ticket columns) — the edit form relies on this so a
+// blanked field doesn't silently keep its old value. Omitted (undefined) keys
+// are left untouched.
+export type PurchaseWritable = {
+  [K in
     | "title"
     | "purchaseStatus"
     | "justification"
     | "project"
     | "notes"
+    | "needByDate"
     | "purchasedDate"
     | "purchasedByEmail"
     | "receivedDate"
@@ -95,10 +102,10 @@ export type PurchaseWritable = Partial<
     | "approvalNotes"
     | "requesterName"
     | "requesterEmail"
+    | "participantEmails"
     | "sourceTicketNumber"
-    | "sourceTicketId"
-  >
->;
+    | "sourceTicketId"]?: PurchaseRequest[K] | null;
+};
 
 export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   title: "Title",
@@ -106,6 +113,7 @@ export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   justification: "PurchaseJustification",
   project: "PurchaseProject",
   notes: "PurchaseNotes",
+  needByDate: "NeedByDate",
   purchasedDate: "PurchasedDate",
   purchasedByEmail: "PurchasedByEmail",
   receivedDate: "ReceivedDate",
@@ -119,6 +127,7 @@ export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   approvalNotes: "ApprovalNotes",
   requesterName: "RequesterName",
   requesterEmail: "RequesterEmail",
+  participantEmails: "ParticipantEmails",
   sourceTicketNumber: "SourceTicketNumber",
   sourceTicketId: "SourceTicketId",
 };
@@ -169,6 +178,7 @@ export function mapToPurchase(item: SharePointListItem): PurchaseRequest {
     justification: str("PurchaseJustification"),
     project: str("PurchaseProject"),
     notes: str("PurchaseNotes"),
+    needByDate: str("NeedByDate"),
     purchasedDate: str("PurchasedDate"),
     purchasedByEmail: str("PurchasedByEmail"),
     receivedDate: str("ReceivedDate"),

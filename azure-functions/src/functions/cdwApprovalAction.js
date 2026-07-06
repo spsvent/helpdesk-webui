@@ -1,6 +1,6 @@
 const { app } = require("@azure/functions");
 const { verifyToken } = require("../lib/approvalToken");
-const { actionToDecision, isTerminalStatus } = require("../lib/decisionFields");
+const { actionToDecision, isTerminalStatus, decisionConflict } = require("../lib/decisionFields");
 const { buildCdwDecisionFields, cdwDecisionRecipients } = require("../lib/cdwDecisionFields");
 const { config, getGraphClient, sendMail } = require("../lib/graphHelpers");
 const { cdwDecisionEmail } = require("../lib/cdwEmailTemplates");
@@ -90,21 +90,23 @@ app.http("cdwApprovalAction", {
       if (action === "changes" && !note) {
         return { status: 400, headers: corsHeaders, jsonBody: { ok: false, reason: "note_required" } };
       }
-      if (isTerminalStatus(fields.CdwStatus)) {
-        return {
-          status: 409,
-          headers: corsHeaders,
-          jsonBody: { ok: false, reason: "already_decided", decidedBy: fields.ApprovedByName, decidedDate: fields.ApprovalDate },
-        };
+      // Pending-only gate (mirror of sendCdwApprovalRequest's mint-side check):
+      // decided briefs report already_decided; anything else non-pending (Draft,
+      // Changes Requested — i.e. pulled back for revision) reports not_pending, so
+      // a stale 14-day Approve link can't approve a half-revised brief.
+      const conflict = decisionConflict(fields.CdwStatus, "Pending Approval", fields);
+      if (conflict) {
+        return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...conflict } };
       }
 
       const nowIso = new Date().toISOString();
       const patch = buildCdwDecisionFields(decision, approverName, approverEmail, note || undefined, nowIso);
 
       // Optimistic concurrency: condition the write on the ETag we just read so two
-      // near-simultaneous clicks can't both pass the terminal check and both write.
-      // On 412: if a terminal decision won, report already_decided; if a non-terminal
-      // change won, re-read and retry once.
+      // near-simultaneous clicks can't both pass the pending gate and both write.
+      // On 412: re-run the gate on the fresh item — if a concurrent write decided or
+      // un-pended the brief, report that; if it's still pending (an unrelated field
+      // changed), retry once against the fresh ETag.
       let etag = fields.__etag;
       for (let attempt = 0; ; attempt++) {
         try {
@@ -116,12 +118,9 @@ app.http("cdwApprovalAction", {
         } catch (e) {
           if (e.statusCode !== 412) throw e;
           const fresh = await getCdwFields(client, tid);
-          if (isTerminalStatus(fresh.CdwStatus)) {
-            return {
-              status: 409,
-              headers: corsHeaders,
-              jsonBody: { ok: false, reason: "already_decided", decidedBy: fresh.ApprovedByName, decidedDate: fresh.ApprovalDate },
-            };
+          const freshConflict = decisionConflict(fresh.CdwStatus, "Pending Approval", fresh);
+          if (freshConflict) {
+            return { status: 409, headers: corsHeaders, jsonBody: { ok: false, ...freshConflict } };
           }
           if (attempt >= 1) {
             return { status: 409, headers: corsHeaders, jsonBody: { ok: false, reason: "conflict_retry" } };
@@ -146,8 +145,10 @@ app.http("cdwApprovalAction", {
 
       return { status: 200, headers: corsHeaders, jsonBody: { ok: true, decision, briefTitle: verify.Title } };
     } catch (error) {
+      // Log the detail server-side only — this endpoint is anonymous, and
+      // error.message can leak Graph/config internals.
       context.error("cdwApprovalAction failed:", error);
-      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error", details: error.message } };
+      return { status: 500, headers: corsHeaders, jsonBody: { ok: false, reason: "server_error" } };
     }
   },
 });

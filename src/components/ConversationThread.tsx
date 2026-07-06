@@ -17,10 +17,15 @@ interface ConversationThreadProps {
   /** Ticket attachments, used to enrich "[System] attachment uploaded" comments. */
   attachments?: Attachment[];
   getPreviewUrl?: (name: string) => Promise<string | null>;
+  /** Whether a thumbnail can render inline cheaply (native format, or HEIC with a rendition). */
+  canThumbnail?: (name: string) => boolean;
   /** Open the full-size lightbox for an image attachment. */
   onOpenImage?: (name: string) => void;
-  /** Scroll the details pane to the Attachments section. */
-  onScrollToAttachments?: () => void;
+  /**
+   * Scroll the details pane to the Attachments section — or, when a filename
+   * is given, to that specific file's row in the list.
+   */
+  onScrollToAttachments?: (name?: string) => void;
 }
 
 function formatTimestamp(dateString: string): string {
@@ -57,8 +62,9 @@ function formatBytes(bytes: number): string {
 interface AttachmentEnrichment {
   attachments?: Attachment[];
   getPreviewUrl?: (name: string) => Promise<string | null>;
+  canThumbnail?: (name: string) => boolean;
   onOpenImage?: (name: string) => void;
-  onScrollToAttachments?: () => void;
+  onScrollToAttachments?: (name?: string) => void;
 }
 
 // Renders the body of a recognized "[System]" attachment comment: a summary
@@ -69,6 +75,7 @@ function AttachmentCommentBody({
   body,
   attachments = [],
   getPreviewUrl,
+  canThumbnail,
   onOpenImage,
   onScrollToAttachments,
 }: { info: AttachmentCommentInfo; body: string } & AttachmentEnrichment) {
@@ -98,7 +105,7 @@ function AttachmentCommentBody({
         {onScrollToAttachments && (
           <button
             type="button"
-            onClick={onScrollToAttachments}
+            onClick={() => onScrollToAttachments()}
             className="text-brand-primary hover:underline"
           >
             View attachments
@@ -127,6 +134,7 @@ function AttachmentCommentBody({
               <AttachmentThumbnail
                 attachment={a}
                 getPreviewUrl={getPreviewUrl}
+                previewable={canThumbnail ? canThumbnail(a.name) : undefined}
                 onOpen={() => onOpenImage(a.name)}
                 sizeClass="w-[132px] h-[88px]"
               />
@@ -145,7 +153,7 @@ function AttachmentCommentBody({
           <li key={a.name} className="min-w-0">
             <button
               type="button"
-              onClick={onScrollToAttachments}
+              onClick={() => onScrollToAttachments?.(a.name)}
               className="inline-flex items-center gap-1.5 text-sm text-brand-primary hover:underline max-w-full"
               title="Jump to this file in the Attachments list"
               aria-label={`Jump to ${a.name} in the attachments list`}
@@ -241,12 +249,14 @@ export default function ConversationThread({
   loading,
   attachments,
   getPreviewUrl,
+  canThumbnail,
   onOpenImage,
   onScrollToAttachments,
 }: ConversationThreadProps) {
   const enrichment: AttachmentEnrichment = {
     attachments,
     getPreviewUrl,
+    canThumbnail,
     onOpenImage,
     onScrollToAttachments,
   };
@@ -273,20 +283,12 @@ export default function ConversationThread({
     ? comments.slice(1)
     : comments;
 
-  // For purchase requests with an empty description, the user filled out a
-  // Justification instead — show that in the description slot. Otherwise fall
-  // back to the description (which may itself be empty → "No description provided").
-  const hasDescriptionText = effectiveDescription && effectiveDescription.trim().length > 0;
-  const usePurchaseJustification =
-    !hasDescriptionText && ticket.isPurchaseRequest && ticket.purchaseJustification?.trim();
-  const slotContent = usePurchaseJustification
-    ? ticket.purchaseJustification!
-    : effectiveDescription || "<em>No description provided</em>";
-  const slotLabel = usePurchaseJustification ? "Justification" : "Description";
+  const slotContent = effectiveDescription || "<em>No description provided</em>";
+  const slotLabel = "Description";
 
   return (
     <div className="space-y-2">
-      {/* Description (or Justification for purchase requests) as first "comment" */}
+      {/* Description as first "comment" */}
       <CommentCard
         author={descriptionAuthor}
         content={slotContent}

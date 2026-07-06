@@ -39,8 +39,13 @@ const statusConfig: Record<PurchaseStatus, { label: string; className: string }>
 };
 
 export default function PurchaseStatusBadge({ status, size = "md" }: PurchaseStatusBadgeProps) {
-  const config = statusConfig[status];
-  if (!config) return null;
+  // mapToPurchase casts the raw column value, so a hand-edited list value can
+  // arrive here outside PurchaseStatus — show it in a neutral badge rather than
+  // rendering nothing (the old guard) or crashing.
+  const config = statusConfig[status] ?? {
+    label: status,
+    className: "bg-gray-100 text-gray-600 border border-gray-300",
+  };
 
   const sizeClasses = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
 

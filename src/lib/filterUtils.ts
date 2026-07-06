@@ -114,19 +114,6 @@ export function filterTickets(
       return false;
     }
 
-    // Purchase request filter
-    if (filters.isPurchaseRequest !== undefined) {
-      if (filters.isPurchaseRequest && !ticket.isPurchaseRequest) return false;
-      if (!filters.isPurchaseRequest && ticket.isPurchaseRequest) return false;
-    }
-
-    // Purchase status filter
-    if (filters.purchaseStatus && filters.purchaseStatus.length > 0) {
-      if (!ticket.purchaseStatus || !filters.purchaseStatus.includes(ticket.purchaseStatus)) {
-        return false;
-      }
-    }
-
     // Approval status filter
     if (filters.approvalStatus && filters.approvalStatus.length > 0) {
       if (!filters.approvalStatus.includes(ticket.approvalStatus)) {
@@ -221,12 +208,71 @@ export function isDateInRange(dateString: string, range: DateRange): boolean {
 }
 
 /**
+ * Is the ticket list currently showing Resolved & Closed tickets?
+ * True when either status is explicitly selected — or when the status filter
+ * is empty, because an empty set means "show all statuses" (which includes
+ * Resolved and Closed). Drives the "Show resolved & closed" checkbox.
+ */
+export function isShowingResolvedClosed(status: Ticket["status"][]): boolean {
+  return (
+    status.length === 0 ||
+    status.includes("Resolved") ||
+    status.includes("Closed")
+  );
+}
+
+/**
+ * Toggle "Show resolved & closed" — returns the next status filter set.
+ *
+ * - Currently showing (checked) → hide both: drop Resolved/Closed from the
+ *   selection. If that would leave the set empty (which means "show all",
+ *   i.e. they'd come right back), fall back to the default active statuses.
+ * - Currently hidden (unchecked) → show both, preserving whatever statuses
+ *   are already selected.
+ */
+export function toggleResolvedClosedStatuses(
+  status: Ticket["status"][]
+): Ticket["status"][] {
+  if (isShowingResolvedClosed(status)) {
+    const remaining = status.filter((s) => s !== "Resolved" && s !== "Closed");
+    return remaining.length > 0 ? remaining : [...DEFAULT_FILTERS.status];
+  }
+  return Array.from(new Set<Ticket["status"]>([...status, "Resolved", "Closed"]));
+}
+
+/**
+ * Clear the "Awaiting Approval" filter (set by the pendingApprovals preset).
+ *
+ * The preset replaces the whole filter state (status: [], sort: "recent"), so
+ * just dropping `approvalStatus` would strand an odd "all statuses, newest
+ * first" view. Restore the default status/sort for any field still carrying
+ * that preset residue, while preserving the user's search text and anything
+ * they've deliberately changed since (e.g. hand-picked statuses).
+ */
+export function clearApprovalFilter(filters: TicketFilters): TicketFilters {
+  const next: TicketFilters = { ...filters, approvalStatus: undefined };
+  if (filters.status.length === 0) next.status = [...DEFAULT_FILTERS.status];
+  if (filters.sort === "recent") next.sort = DEFAULT_FILTERS.sort;
+  return next;
+}
+
+/**
+ * Is the status filter meaningfully narrowed by the user? The default status
+ * set (active tickets only) is the baseline view, not an "active filter", so
+ * it shouldn't badge the More-filters button or render a summary pill.
+ * An empty set means "all statuses" — also not a narrowing.
+ */
+export function isStatusFilterActive(status: Ticket["status"][]): boolean {
+  return status.length > 0 && !arraysEqual(status, DEFAULT_FILTERS.status);
+}
+
+/**
  * Count active filters (excluding search and sort)
  */
 export function getActiveFilterCount(filters: TicketFilters): number {
   let count = 0;
 
-  if (filters.status.length > 0) count++;
+  if (isStatusFilterActive(filters.status)) count++;
   if (filters.priority.length > 0) count++;
   if (filters.problemType) count++;
   if (filters.problemTypeSub) count++;
@@ -295,7 +341,7 @@ export function filtersMatchDefault(filters: TicketFilters): boolean {
 export function getActiveFilterSummary(filters: TicketFilters): string[] {
   const labels: string[] = [];
 
-  if (filters.status.length > 0) {
+  if (isStatusFilterActive(filters.status)) {
     labels.push(`Status: ${filters.status.join(", ")}`);
   }
   if (filters.priority.length > 0) {

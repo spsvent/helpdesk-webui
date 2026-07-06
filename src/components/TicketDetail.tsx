@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useMsal } from "@azure/msal-react";
-import { Ticket, Comment, Attachment, PurchaseLineItem } from "@/types/ticket";
-import { isImageAttachment } from "@/lib/attachmentComments";
+import { Ticket, Comment, Attachment } from "@/types/ticket";
+import { isImageAttachment, isBrowserPreviewable } from "@/lib/attachmentComments";
+import { buildRenditionView, isHeic, renditionName } from "@/lib/heicRenditions";
+import { convertHeicToJpeg, isConvertibleSize, isHeicConvertEnabled } from "@/lib/heicConvertService";
 import {
   getGraphClient,
   getComments,
@@ -11,7 +13,6 @@ import {
   getTicket,
   requestApproval,
   processApprovalDecision,
-  updateTicketLineItems,
   getAttachments,
   uploadAttachment,
   deleteAttachment,
@@ -22,16 +23,10 @@ import {
 import {
   sendDecisionEmail,
   sendCommentEmail,
-  sendPurchaseApprovedEmail,
-  sendPurchaseOrderedEmail,
-  sendPurchaseReceivedEmail,
-  getGeneralManagerMembers,
 } from "@/lib/emailService";
-import { sendEmail } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncCommentAdded } from "@/lib/vikunjaSyncService";
-import { allItemsOrdered, allItemsReceived } from "@/lib/lineItemHelpers";
 import ConversationThread from "./ConversationThread";
 import DetailsPanel from "./DetailsPanel";
 import ImageLightbox from "./ImageLightbox";
@@ -96,15 +91,115 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const previewInflight = useRef<Map<string, Promise<string | null>>>(new Map());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [highlightAttachments, setHighlightAttachments] = useState(false);
+  // Name of the single attachment row to highlight after a "jump to file" link
+  // (null → highlight the whole section instead).
+  const [highlightedAttachment, setHighlightedAttachment] = useState<string | null>(null);
   const attachmentsSectionRef = useRef<HTMLDivElement>(null);
-  const pendingScrollRef = useRef(false);
+  // Deferred mobile scroll: holds the target of a scroll requested while the
+  // Details tab wasn't mounted yet ({} → the section, { name } → that file's row).
+  const pendingScrollRef = useRef<{ name?: string } | null>(null);
+  // Highlight-clearing timer — kept in a ref so a second jump restarts the
+  // window instead of a stale timeout cutting the new highlight short.
+  const highlightTimeoutRef = useRef<number | null>(null);
 
-  const imageAttachments = useMemo(
-    () => attachments.filter((a) => isImageAttachment(a.name)),
+  const heicConvertEnabled = isHeicConvertEnabled();
+
+  // Hide generated HEIC→JPEG renditions from the list and map each back to its
+  // HEIC original so previews can use the rendition as the image source.
+  const { visible: displayAttachments, renditionByOriginal } = useMemo(
+    () => buildRenditionView(attachments),
     [attachments]
   );
 
-  // Download (once, cached) an attachment and return an object URL for preview.
+  // Read the latest rendition map + ticket id from refs inside otherwise-stable
+  // callbacks: adding a rendition rebuilds the map, but we don't want that to
+  // churn getPreviewUrl/canThumbnail identities and re-run child effects; and
+  // in-flight async work needs to tell whether the user has since switched tickets.
+  const renditionRef = useRef(renditionByOriginal);
+  renditionRef.current = renditionByOriginal;
+  const ticketIdRef = useRef(ticket.id);
+  ticketIdRef.current = ticket.id;
+
+  // Attachment sizes by name, so the HEIC-conversion paths can skip files the
+  // converter would reject (over its size cap) without downloading them first.
+  const attachmentSizes = useMemo(
+    () => new Map(attachments.map((a) => [a.name, a.size])),
+    [attachments]
+  );
+  const attachmentSizeRef = useRef(attachmentSizes);
+  attachmentSizeRef.current = attachmentSizes;
+
+  const imageAttachments = useMemo(
+    () => displayAttachments.filter((a) => isImageAttachment(a.name)),
+    [displayAttachments]
+  );
+
+  // Can a thumbnail render inline without triggering a (potentially slow)
+  // conversion? Natively-previewable formats, or a HEIC that already has a
+  // rendition. HEIC without a rendition stays an icon until opened in the lightbox.
+  const canThumbnail = useCallback(
+    (name: string) =>
+      isBrowserPreviewable(name) || (isHeic(name) && renditionRef.current.has(name)),
+    []
+  );
+
+  // Can the lightbox show this inline (converting a HEIC on demand if needed)?
+  // Oversized HEICs (beyond the converter's cap) get the download fallback.
+  const canPreview = useCallback(
+    (name: string) =>
+      isBrowserPreviewable(name) ||
+      (isHeic(name) &&
+        (renditionRef.current.has(name) ||
+          (heicConvertEnabled && isConvertibleSize(attachmentSizeRef.current.get(name))))),
+    [heicConvertEnabled]
+  );
+
+  // Resolve an attachment name to a displayable image blob, converting HEIC via
+  // the backend (and persisting the rendition) the first time it's needed.
+  const fetchPreviewBlob = useCallback(
+    async (name: string): Promise<Blob | null> => {
+      if (!accounts[0]) return null;
+      const client = getGraphClient(instance, accounts[0]);
+      const tid = ticket.id;
+
+      if (!isHeic(name)) {
+        return downloadAttachment(client, tid, name, instance, accounts[0]);
+      }
+
+      // HEIC: prefer an existing rendition; otherwise convert on demand.
+      const existing = renditionRef.current.get(name);
+      if (existing) {
+        return downloadAttachment(client, tid, existing.name, instance, accounts[0]);
+      }
+      if (!heicConvertEnabled) return null;
+      // The converter caps its input size — skip the download + round trip for
+      // oversized files so they fall back to the download-only path immediately.
+      if (!isConvertibleSize(attachmentSizeRef.current.get(name))) return null;
+
+      const heicBlob = await downloadAttachment(client, tid, name, instance, accounts[0]);
+      if (!heicBlob) return null;
+      const jpeg = await convertHeicToJpeg(heicBlob);
+      if (!jpeg) return null;
+
+      // Persist the rendition so future previews (and thumbnails) skip conversion.
+      // Only fold it into state if we're still on the ticket it belongs to.
+      const rn = renditionName(name);
+      const file = new File([jpeg], rn, { type: "image/jpeg" });
+      uploadAttachment(client, tid, file, instance, accounts[0])
+        .then((att) => {
+          if (att && ticketIdRef.current === tid) {
+            setAttachments((prev) => (prev.some((p) => p.name === att.name) ? prev : [...prev, att]));
+          }
+        })
+        .catch((e) => console.error("Failed to store HEIC rendition:", e));
+
+      return jpeg;
+    },
+    [instance, accounts, ticket.id, heicConvertEnabled]
+  );
+
+  // Download (once, cached) a preview and return an object URL, keyed by the
+  // original attachment name so callers don't need to know about renditions.
   const getPreviewUrl = useCallback(
     async (name: string): Promise<string | null> => {
       const cached = previewCache.current.get(name);
@@ -113,25 +208,48 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       if (inflight) return inflight;
       if (!accounts[0]) return null;
 
-      const promise = (async () => {
+      const tid = ticket.id;
+      // `let` + self-reference: the finally block runs only after the async
+      // body has awaited at least once, so `promise` is assigned by then.
+      let promise: Promise<string | null> | undefined;
+      promise = (async () => {
         try {
-          const client = getGraphClient(instance, accounts[0]);
-          const blob = await downloadAttachment(client, ticket.id, name, instance, accounts[0]);
+          const blob = await fetchPreviewBlob(name);
           if (!blob) return null;
           const url = URL.createObjectURL(blob);
+          // The cache/inflight maps are keyed by name only and outlive ticket
+          // switches (the cleanup effect below revokes+clears them per ticket).
+          // If the user switched tickets while this download was in flight,
+          // caching now would poison the NEW ticket's cache with this ticket's
+          // bytes — and leak an object URL nobody would revoke. Drop it instead.
+          if (ticketIdRef.current !== tid) {
+            URL.revokeObjectURL(url);
+            return null;
+          }
           previewCache.current.set(name, url);
           return url;
         } catch (e) {
           console.error("Failed to load attachment preview:", e);
           return null;
         } finally {
-          previewInflight.current.delete(name);
+          // Only remove our own entry: after a ticket switch clears the map,
+          // the new ticket may have an in-flight download under the same name.
+          if (previewInflight.current.get(name) === promise) {
+            previewInflight.current.delete(name);
+          }
         }
       })();
       previewInflight.current.set(name, promise);
       return promise;
     },
-    [instance, accounts, ticket.id]
+    [accounts, fetchPreviewBlob, ticket.id]
+  );
+
+  // Synchronous cache peek so the lightbox can show an already-fetched image
+  // on its very first frame (no spinner flash when paging back to it).
+  const peekPreviewUrl = useCallback(
+    (name: string): string | null => previewCache.current.get(name) ?? null,
+    []
   );
 
   // Revoke cached object URLs and close the lightbox when the ticket changes.
@@ -154,30 +272,48 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     [imageAttachments]
   );
 
-  const doScrollToAttachments = useCallback(() => {
-    const el = attachmentsSectionRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    setHighlightAttachments(true);
-    window.setTimeout(() => setHighlightAttachments(false), 1600);
+  // Scroll to the Attachments section — or, when a filename is given and its
+  // row is rendered, to that specific row (with a row-level highlight). Falls
+  // back to the section-level highlight when the name isn't in the list.
+  const doScrollToAttachments = useCallback((name?: string) => {
+    const section = attachmentsSectionRef.current;
+    if (!section) return;
+    const row = name
+      ? section.querySelector<HTMLElement>(`[data-attachment-name="${CSS.escape(name)}"]`)
+      : null;
+    (row ?? section).scrollIntoView({ behavior: "smooth", block: row ? "center" : "start" });
+    setHighlightAttachments(!row);
+    setHighlightedAttachment(row && name ? name : null);
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightAttachments(false);
+      setHighlightedAttachment(null);
+      highlightTimeoutRef.current = null;
+    }, 1600);
   }, []);
 
-  const scrollToAttachments = useCallback(() => {
-    // On mobile the Attachments live in the "Details" tab — switch to it first,
-    // then scroll once the panel has mounted (handled by the effect below).
-    if (isMobile && mobileDetailView !== "details") {
-      pendingScrollRef.current = true;
-      setMobileDetailView("details");
-      return;
-    }
-    doScrollToAttachments();
-  }, [isMobile, mobileDetailView, doScrollToAttachments]);
+  const scrollToAttachments = useCallback(
+    (name?: string) => {
+      // On mobile the Attachments live in the "Details" tab — switch to it first,
+      // then scroll once the panel has mounted (handled by the effect below).
+      if (isMobile && mobileDetailView !== "details") {
+        pendingScrollRef.current = { name };
+        setMobileDetailView("details");
+        return;
+      }
+      doScrollToAttachments(name);
+    },
+    [isMobile, mobileDetailView, doScrollToAttachments]
+  );
 
   // Perform a deferred scroll after the mobile Details panel becomes visible.
   useEffect(() => {
     if (mobileDetailView === "details" && pendingScrollRef.current) {
-      pendingScrollRef.current = false;
-      const id = window.setTimeout(() => doScrollToAttachments(), 60);
+      const { name } = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+      const id = window.setTimeout(() => doScrollToAttachments(name), 60);
       return () => window.clearTimeout(id);
     }
   }, [mobileDetailView, doScrollToAttachments]);
@@ -299,8 +435,12 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id, accounts, instance]);
 
-  // Fetch attachments when ticket changes
+  // Fetch attachments when ticket changes. The cancelled flag prevents a slow
+  // fetch from landing another ticket's attachment list (or clobbering the new
+  // ticket's loading state) if the user switches tickets before it resolves.
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAttachments = async () => {
       if (!accounts[0]) return;
 
@@ -308,15 +448,19 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       try {
         const client = getGraphClient(instance, accounts[0]);
         const ticketAttachments = await getAttachments(client, ticket.id, instance, accounts[0]);
-        setAttachments(ticketAttachments);
+        if (!cancelled) setAttachments(ticketAttachments);
       } catch (e) {
-        console.error("Failed to fetch attachments:", e);
+        if (!cancelled) console.error("Failed to fetch attachments:", e);
       } finally {
-        setAttachmentsLoading(false);
+        if (!cancelled) setAttachmentsLoading(false);
       }
     };
 
     fetchAttachments();
+
+    return () => {
+      cancelled = true;
+    };
   }, [ticket.id, accounts, instance]);
 
   // Handle adding a new comment
@@ -447,9 +591,21 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
     try {
       const client = getGraphClient(instance, accounts[0]);
-      const success = await deleteAttachment(client, ticket.id, filename, instance, accounts[0]);
+      const tid = ticket.id;
+      const success = await deleteAttachment(client, tid, filename, instance, accounts[0]);
       if (success) {
         setAttachments((prev) => prev.filter((a) => a.name !== filename));
+        // Also remove any generated HEIC→JPEG rendition so it isn't orphaned.
+        const rendition = renditionRef.current.get(filename);
+        if (rendition) {
+          deleteAttachment(client, tid, rendition.name, instance, accounts[0])
+            .then((ok) => {
+              if (ok && ticketIdRef.current === tid) {
+                setAttachments((prev) => prev.filter((a) => a.name !== rendition.name));
+              }
+            })
+            .catch((e) => console.error("Failed to delete HEIC rendition:", e));
+        }
       }
     } catch (e) {
       console.error("Failed to delete attachment:", e);
@@ -536,15 +692,14 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
   // Handle approval decision
   const handleApprovalDecision = async (
-    decision: "Approved" | "Denied" | "Changes Requested" | "Approved with Changes" | "Approved & Ordered",
+    decision: "Approved" | "Denied" | "Changes Requested",
     notes?: string,
-    options?: { keptItems?: PurchaseLineItem[]; orderItems?: PurchaseLineItem[] },
   ) => {
     if (!accounts[0]) return;
 
     // Pre-flight: snapshot the decision so a renewal redirect doesn't lose it.
     const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
-      onBeforeRedirect: () => saveDraft(`approval:${ticket.id}`, { decision, notes, options }),
+      onBeforeRedirect: () => saveDraft(`approval:${ticket.id}`, { decision, notes }),
     });
     if (!tokenOk) return;
 
@@ -560,42 +715,8 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       approverName,
       approverEmail,
       notes,
-      ticket.isPurchaseRequest || false
     );
     onUpdate(updatedTicket);
-
-    // If GM removed items via the checklist on "Approve with Changes", rewrite
-    // line items now and log the change. Skip if no kept items array passed
-    // (e.g. plain Approve, Deny, etc.).
-    if (options?.keptItems && options.keptItems.length > 0 && ticket.purchaseLineItems) {
-      const removedItems = ticket.purchaseLineItems.filter(
-        (originalItem) => !options.keptItems!.includes(originalItem)
-      );
-      const further = await updateTicketLineItems(client, ticket.id, options.keptItems);
-      onUpdate(further);
-      logActivity(client, {
-        eventType: "purchase_items_changed",
-        ticketId: ticket.id,
-        ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
-        actor: approverEmail,
-        actorName: approverName,
-        description: `Items modified during approval by ${approverName}`,
-        details: JSON.stringify({
-          removed: removedItems,
-          kept: options.keptItems,
-        }),
-      }).catch((e) => console.error("Failed to log items change:", e));
-    }
-
-    // If GM filled per-item order details on "Approve & Order", write them
-    // and flip status to Ordered if every item is fully filled.
-    if (options?.orderItems && options.orderItems.length > 0) {
-      const newStatus = allItemsOrdered(options.orderItems) ? "Ordered" : "Approved";
-      const further = await updateTicketLineItems(client, ticket.id, options.orderItems, {
-        purchaseStatus: newStatus,
-      });
-      onUpdate(further);
-    }
 
     // Only log, comment, and notify AFTER the status has been verified saved
     logActivity(client, {
@@ -650,142 +771,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         .catch((e) => console.error(`Failed to send decision email to ${email}:`, e))
     );
     await Promise.all(emailPromises);
-
-    if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes")) {
-      sendPurchaseApprovedEmail(client, updatedTicket, approverName)
-        .catch((e) => console.error("Failed to send purchase approved email:", e));
-    }
-
-    // For "Approve & Ordered", the GM is purchasing themselves — alert the
-    // inventory team (who will receive the items) and other GMs (FYI). The
-    // requester is already covered by sendDecisionEmail above.
-    if (ticket.isPurchaseRequest && decision === "Approved & Ordered") {
-      sendPurchaseOrderedEmail(client, updatedTicket, approverName)
-        .catch((e) => console.error("Failed to send purchase ordered email to inventory:", e));
-      // Alert other GMs (excluding the approver) that the order was placed
-      try {
-        const gms = await getGeneralManagerMembers(client);
-        const subject = `[Order Placed] Ticket #${updatedTicket.ticketNumber || updatedTicket.id}: ${updatedTicket.title}`;
-        const body = `<p>${approverName} approved this purchase request and placed the order directly.</p>
-          <p>View ticket: <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}?ticket=${updatedTicket.id}">#${updatedTicket.ticketNumber || updatedTicket.id}</a></p>`;
-        await Promise.all(
-          gms
-            .filter((m) => m.email.toLowerCase() !== approverEmail.toLowerCase())
-            .map((m) =>
-              sendEmail(client, m.email, subject, body, `ticket-${updatedTicket.id}`).catch(
-                (e) => console.error(`Failed to alert GM ${m.email}:`, e),
-              ),
-            ),
-        );
-      } catch (e) {
-        console.error("Failed to alert GMs of order placement:", e);
-      }
-    }
-
-    if (ticket.isPurchaseRequest && (decision === "Approved" || decision === "Approved with Changes" || decision === "Approved & Ordered")) {
-      sendNewTicketTeamsNotification(client, updatedTicket, { force: true });
-    }
-  };
-
-  // Handle marking a purchase request as purchased
-  const handleMarkPurchased = async (orderItems: PurchaseLineItem[], notes?: string) => {
-    if (!accounts[0]) return;
-
-    const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
-      onBeforeRedirect: () => saveDraft(`purchase:${ticket.id}`, { orderItems, notes }),
-    });
-    if (!tokenOk) return;
-
-    const client = getGraphClient(instance, accounts[0]);
-    const purchaserEmail = accounts[0].username;
-    const purchaserName = accounts[0].name || accounts[0].username;
-
-    const allOrdered = allItemsOrdered(orderItems);
-    const newStatus = allOrdered ? "Ordered" : "Approved";
-
-    const updatedTicket = await updateTicketLineItems(client, ticket.id, orderItems, {
-      purchaseStatus: newStatus,
-      notes,
-    });
-    onUpdate(updatedTicket);
-
-    // Log activity with per-item data
-    const vendorSummary = Array.from(new Set(orderItems.map((i) => i.vendor).filter(Boolean))).join(", ");
-    logActivity(client, {
-      eventType: "purchase_ordered",
-      ticketId: ticket.id,
-      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
-      actor: purchaserEmail,
-      actorName: purchaserName,
-      description: `Marked as purchased: ${orderItems.length} item${orderItems.length === 1 ? "" : "s"} from ${vendorSummary || "unspecified vendor"}`,
-      details: JSON.stringify({ orderItems }),
-    }).catch((e) => console.error("Failed to log purchase activity:", e));
-
-    // Internal comment summarizing the order
-    const itemLines = orderItems
-      .map((it, idx) => `  ${idx + 1}. ${it.name || it.url || "item"} ×${it.qty} — ${it.vendor ?? "?"} (${it.orderNum ?? "?"})`)
-      .join("\n");
-    const commentText = `**Purchased** by ${purchaserName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
-    const purchaseComment = await addComment(client, parseInt(ticket.id), commentText, true);
-    setComments((prev) => [...prev, purchaseComment]);
-
-    // Send email to inventory team
-    sendPurchaseOrderedEmail(client, updatedTicket, purchaserName)
-      .catch((e) => console.error("Failed to send purchase ordered email:", e));
-  };
-
-  // Handle marking a purchase as received (per-item)
-  const handleMarkReceived = async (receivedItems: PurchaseLineItem[], notes?: string) => {
-    if (!accounts[0]) return;
-
-    const tokenOk = await ensureFreshToken(instance, accounts[0], graphScopes, {
-      onBeforeRedirect: () => saveDraft(`receive:${ticket.id}`, { receivedItems, notes }),
-    });
-    if (!tokenOk) return;
-
-    const client = getGraphClient(instance, accounts[0]);
-    const receiverEmail = accounts[0].username;
-    const receiverName = accounts[0].name || accounts[0].username;
-
-    const allReceived = allItemsReceived(receivedItems);
-    const newStatus = allReceived ? "Received" : "Ordered";
-
-    const updatedTicket = await updateTicketLineItems(client, ticket.id, receivedItems, {
-      purchaseStatus: newStatus,
-      notes,
-    });
-    onUpdate(updatedTicket);
-
-    // Log activity with per-item received data
-    logActivity(client, {
-      eventType: "purchase_received",
-      ticketId: ticket.id,
-      ticketNumber: ticket.ticketNumber?.toString() || ticket.id,
-      actor: receiverEmail,
-      actorName: receiverName,
-      description: allReceived
-        ? `All ${receivedItems.length} item${receivedItems.length === 1 ? "" : "s"} received`
-        : `Partial receipt: ${receivedItems.filter((i) => (i.receivedQty ?? 0) > 0).length} of ${receivedItems.length} items`,
-      details: JSON.stringify({ receivedItems }),
-    }).catch((e) => console.error("Failed to log receive activity:", e));
-
-    // Internal comment summarizing receipt
-    const itemLines = receivedItems
-      .map(
-        (it, idx) =>
-          `  ${idx + 1}. ${it.name || it.url || "item"}: received ${it.receivedQty ?? 0}/${it.qty} on ${it.receivedDate ?? "-"}`,
-      )
-      .join("\n");
-    const commentText = `**${allReceived ? "All Received" : "Partial Receipt"}** by ${receiverName}\n\n${itemLines}${notes ? `\n\nNotes: ${notes}` : ""}`;
-    const receiveComment = await addComment(client, parseInt(ticket.id), commentText, true);
-    setComments((prev) => [...prev, receiveComment]);
-
-    // Email original requester only when fully received (avoid noise on partials)
-    if (allReceived) {
-      sendPurchaseReceivedEmail(client, updatedTicket, receiverName).catch((e) =>
-        console.error("Failed to send purchase received email:", e),
-      );
-    }
   };
 
   return (
@@ -796,13 +781,11 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-1">
               <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
-                ticket.isPurchaseRequest
-                  ? "bg-purple-100 text-purple-700"
-                  : ticket.category === "Problem"
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-sky-100 text-sky-700"
+                ticket.category === "Problem"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-sky-100 text-sky-700"
               }`}>
-                {ticket.isPurchaseRequest ? "Purchase Request" : ticket.category}
+                {ticket.category}
               </span>
               {ticket.location && (
                 <span className="px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap bg-gray-100 text-gray-600">
@@ -919,7 +902,6 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
                   <ApprovalActionPanel
                     ticket={ticket}
-                    isPurchaseRequest={ticket.isPurchaseRequest || false}
                     onDecision={handleApprovalDecision}
                   />
                 </div>
@@ -929,8 +911,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                 ticket={ticket}
                 comments={comments}
                 loading={loading}
-                attachments={attachments}
+                attachments={displayAttachments}
                 getPreviewUrl={getPreviewUrl}
+                canThumbnail={canThumbnail}
                 onOpenImage={openLightbox}
                 onScrollToAttachments={scrollToAttachments}
               />
@@ -976,9 +959,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               onUpdate={onUpdate}
               canEdit={canEditThisTicket}
               onRequestApproval={handleRequestApproval}
-              onMarkPurchased={handleMarkPurchased}
-              onMarkReceived={handleMarkReceived}
-              attachments={attachments}
+              attachments={displayAttachments}
               attachmentsLoading={attachmentsLoading}
               onUploadAttachment={handleUploadAttachment}
               onDeleteAttachment={handleDeleteAttachment}
@@ -987,6 +968,7 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
               getAttachmentPreviewUrl={getPreviewUrl}
               attachmentsSectionRef={attachmentsSectionRef}
               highlightAttachments={highlightAttachments}
+              highlightAttachmentName={highlightedAttachment}
               onMergeComplete={handleMergeComplete}
               saveRef={detailsPanelSaveRef}
             />
@@ -1000,6 +982,9 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           images={imageAttachments}
           index={lightboxIndex}
           getPreviewUrl={getPreviewUrl}
+          peekPreviewUrl={peekPreviewUrl}
+          canPreview={canPreview}
+          canPreloadNeighbor={canThumbnail}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
           onDownload={handleDownloadAttachment}

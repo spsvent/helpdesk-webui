@@ -6,7 +6,7 @@ import type { QueueRow } from "@/lib/lineItemQueue";
 import { groupByVendor } from "@/lib/lineItemQueue";
 
 type Tab = "awaiting" | "recent";
-type SortKey = "vendor" | "ticket" | "cost";
+type SortKey = "vendor" | "ticket" | "cost" | "orderDate";
 
 interface LineItemQueueProps {
   mode: "order" | "receive";
@@ -16,8 +16,10 @@ interface LineItemQueueProps {
   loading?: boolean;
 }
 
+// Keyed on provenance too: ticket and purchase-module ids come from different
+// SharePoint lists, so the bare item id can collide across sources.
 function rowKey(r: QueueRow): string {
-  return `${r.ticketId}-${r.itemIndex}`;
+  return `${r.source}-${r.ticketId}-${r.itemIndex}`;
 }
 
 // Friendly fallback for the Item column when the requester didn't fill in a
@@ -37,6 +39,17 @@ function deriveItemLabel(row: QueueRow): string {
   return `Item ${row.itemIndex + 1}`;
 }
 
+// Compact M/D for the queue. Formats date-only strings by splitting the string
+// (not via Date()) to avoid a timezone off-by-one; full ISO datetimes fall back
+// to the locale's numeric month/day.
+function shortDate(s: string | undefined): string {
+  if (!s) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${+m[2]}/${+m[3]}`;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+}
+
 export default function LineItemQueue({
   mode,
   awaitingRows,
@@ -45,7 +58,8 @@ export default function LineItemQueue({
   loading = false,
 }: LineItemQueueProps) {
   const [tab, setTab] = useState<Tab>("awaiting");
-  const [sortKey, setSortKey] = useState<SortKey>("vendor");
+  // Default sort per queue: Awaiting Order → ticket #; Awaiting Receipt → order date (oldest first).
+  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "ticket");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const rows = tab === "awaiting" ? awaitingRows : recentRows;
@@ -56,6 +70,11 @@ export default function LineItemQueue({
     copy.sort((a, b) => {
       if (sortKey === "vendor") return a.displayVendor.localeCompare(b.displayVendor);
       if (sortKey === "ticket") return (a.ticketNumber ?? 0) - (b.ticketNumber ?? 0);
+      if (sortKey === "orderDate") {
+        const at = a.orderedAt ? new Date(a.orderedAt).getTime() : Infinity;
+        const bt = b.orderedAt ? new Date(b.orderedAt).getTime() : Infinity;
+        return at - bt; // earliest order first
+      }
       return b.item.qty * b.item.cost - a.item.qty * a.item.cost;
     });
     return copy;
@@ -108,8 +127,12 @@ export default function LineItemQueue({
   // Column count drives colSpan on group-divider rows when grouping by vendor.
   // Columns: select(only when !isRecent) + ticket + item + qty + vendor + $/ea + subtotal + extras
   const orderExtras = mode === "order" && !isRecent ? 1 : mode === "order" && isRecent ? 2 : 0;
-  const receiveExtras = mode === "receive" && !isRecent ? 2 : mode === "receive" && isRecent ? 2 : 0;
-  const colCount = (isRecent ? 0 : 1) + 6 + orderExtras + receiveExtras;
+  // Receive queue extras: Awaiting Receipt → Requestor + Order # + Ordered + Delivery (4);
+  // Recently Received → Received + On + Received by (3).
+  const receiveExtras = mode === "receive" && !isRecent ? 4 : mode === "receive" && isRecent ? 3 : 0;
+  // Order queue also shows Requester + Approval context columns.
+  const reqCols = mode === "order" ? 2 : 0;
+  const colCount = (isRecent ? 0 : 1) + 6 + reqCols + orderExtras + receiveExtras;
 
   const renderHeaderRow = () => (
     <tr className="bg-bg-subtle text-text-secondary">
@@ -126,6 +149,21 @@ export default function LineItemQueue({
       <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
         Ticket
       </th>
+      {mode === "order" && (
+        <>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Requester
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Approval
+          </th>
+        </>
+      )}
+      {mode === "receive" && !isRecent && (
+        <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+          Requestor
+        </th>
+      )}
       <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
         Item
       </th>
@@ -162,6 +200,9 @@ export default function LineItemQueue({
             Order #
           </th>
           <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Ordered
+          </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
             Delivery
           </th>
         </>
@@ -174,6 +215,9 @@ export default function LineItemQueue({
           <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
             On
           </th>
+          <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider font-semibold">
+            Received by
+          </th>
         </>
       )}
     </tr>
@@ -185,7 +229,7 @@ export default function LineItemQueue({
     return (
       <tr
         key={k}
-        className={`border-t border-border ${isSelected ? "bg-indigo-50" : ""}`}
+        className={`border-t border-border [&>td]:align-top ${isSelected ? "bg-indigo-50" : ""}`}
       >
         {!isRecent && (
           <td className="px-3 py-2">
@@ -198,13 +242,49 @@ export default function LineItemQueue({
           </td>
         )}
         <td className="px-3 py-2 text-xs">
-          <Link
-            href={`/?ticket=${r.ticketId}`}
-            className="text-brand-primary hover:underline"
-          >
-            #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
-          </Link>
+          {r.source === "purchase" ? (
+            <Link
+              href={`/purchase/?id=${r.ticketId}`}
+              className="text-brand-primary hover:underline"
+              title={r.ticketTitle}
+            >
+              PR {r.ticketNumber != null ? `#${r.ticketNumber}` : r.ticketId}
+            </Link>
+          ) : (
+            <Link
+              href={`/?ticket=${r.ticketId}`}
+              className="text-brand-primary hover:underline"
+            >
+              #{r.ticketNumber ?? r.ticketId.slice(0, 8)}
+            </Link>
+          )}
         </td>
+        {mode === "order" && (
+          <>
+            <td className="px-3 py-2 text-xs">
+              <div className="text-text-primary">{r.requester || "—"}</div>
+              <div className="text-text-secondary">
+                {[r.department, r.requestedDate ? `req ${shortDate(r.requestedDate)}` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </div>
+            </td>
+            <td className="px-3 py-2 text-xs whitespace-nowrap">
+              <div className="text-text-primary">appr {shortDate(r.approvedDate)}</div>
+              <div
+                className="text-text-secondary truncate max-w-[11rem]"
+                title={r.approver || undefined}
+              >
+                {r.approver ? `by ${r.approver}` : "—"}
+              </div>
+            </td>
+          </>
+        )}
+        {mode === "receive" && !isRecent && (
+          <td className="px-3 py-2 text-xs text-text-primary truncate max-w-[10rem]" title={r.requester || undefined}>
+            {r.requester || "—"}
+          </td>
+        )}
         <td className="px-3 py-2">
           {r.item.url ? (
             <a
@@ -238,6 +318,7 @@ export default function LineItemQueue({
         {mode === "receive" && !isRecent && (
           <>
             <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{shortDate(r.orderedAt)}</td>
             <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
           </>
         )}
@@ -247,6 +328,9 @@ export default function LineItemQueue({
               {r.item.receivedQty ?? 0} / {r.item.qty}
             </td>
             <td className="px-3 py-2 text-xs">{r.item.receivedDate ?? "—"}</td>
+            <td className="px-3 py-2 text-xs text-text-secondary truncate max-w-[11rem]" title={r.receivedBy || undefined}>
+              {r.receivedBy || "—"}
+            </td>
           </>
         )}
       </tr>
@@ -295,6 +379,7 @@ export default function LineItemQueue({
             >
               <option value="vendor">Vendor</option>
               <option value="ticket">Ticket #</option>
+              <option value="orderDate">Order date (oldest first)</option>
               <option value="cost">Subtotal (high → low)</option>
             </select>
           </label>

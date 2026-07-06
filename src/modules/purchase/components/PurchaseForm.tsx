@@ -4,14 +4,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient, getTicket, updateTicket, addComment } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
+// Ticket-specific helpers for the convert-from-ticket bridge (?fromTicket=…) —
+// deliberately NOT part of the @/shared/graph facade (they're Tickets-list
+// bound). This is the one sanctioned deep import from a module into the ticket
+// client; everything else must go through the facade.
+import { getTicket, updateTicket, addComment } from "@/lib/graphClient";
 import { useRBAC } from "@/contexts/RBACContext";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { PurchaseLineItem } from "../types";
+import { PurchaseLineItem, PurchaseRequest } from "../types";
 import { validateLineItem } from "../lineItems";
-import { canCreatePurchase } from "../access";
-import { createPurchase, isPurchaseConfigured, triggerPurchaseApprovalRequest } from "../purchaseService";
+import { canCreatePurchase, canEditPurchase, isPurchaseEditable } from "../access";
+import {
+  createPurchase,
+  getPurchase,
+  isPurchaseConfigured,
+  submitForApproval,
+  triggerPurchaseApprovalRequest,
+  updateLineItems,
+  updatePurchase,
+} from "../purchaseService";
 import LineItemsField from "./LineItemsField";
 
 const DRAFT_KEY = "purchase-new";
@@ -28,40 +41,75 @@ interface DraftShape {
   title: string;
   justification: string;
   project: string;
+  needByDate: string;
   lineItems: PurchaseLineItem[];
 }
 
-export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string } = {}) {
+// Without purchaseId this is the "new request" form (optionally prefilled from a
+// ticket via fromTicketId); with one it edits an existing request (Fix for the
+// "Changes Requested" dead end — edit, then resubmit for approval).
+export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketId?: string; purchaseId?: string } = {}) {
   const router = useRouter();
   const { instance, accounts } = useMsal();
   const { permissions, loading: rbacLoading } = useRBAC();
   const account = accounts[0];
   const isConvert = !!fromTicketId;
+  const isEdit = !!purchaseId;
 
   const [title, setTitle] = useState("");
   const [justification, setJustification] = useState("");
   const [project, setProject] = useState("");
+  const [needByDate, setNeedByDate] = useState("");
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<null | "save" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-fatal: the request saved/submitted but the approver email didn't go out.
+  // Holds the saved request's id so the warning can link to its detail page.
+  const [emailWarningId, setEmailWarningId] = useState<string | null>(null);
   const [sourceTicket, setSourceTicket] = useState<SourceTicket | null>(null);
-  const [loadingTicket, setLoadingTicket] = useState(isConvert);
+  const [loadingTicket, setLoadingTicket] = useState(isConvert || isEdit);
+  // The request being edited, for the ownership/status authorization checks.
+  const [editTarget, setEditTarget] = useState<PurchaseRequest | null>(null);
 
-  // Restore a draft (new mode only — conversions prefill from the ticket instead).
+  // Restore a draft (new mode only — conversions prefill from the ticket, edits
+  // hydrate from the existing request instead).
   useEffect(() => {
-    if (isConvert) return;
+    if (isConvert || isEdit) return;
     const d = loadDraft<DraftShape>(DRAFT_KEY);
     if (d) {
       setTitle(d.title || "");
       setJustification(d.justification || "");
       setProject(d.project || "");
+      setNeedByDate(d.needByDate || "");
       if (d.lineItems?.length) setLineItems(d.lineItems);
     }
-  }, [isConvert]);
+  }, [isConvert, isEdit]);
 
   useEffect(() => {
-    if (!isConvert) saveDraft(DRAFT_KEY, { title, justification, project, lineItems });
-  }, [isConvert, title, justification, project, lineItems]);
+    if (!isConvert && !isEdit) saveDraft(DRAFT_KEY, { title, justification, project, needByDate, lineItems });
+  }, [isConvert, isEdit, title, justification, project, needByDate, lineItems]);
+
+  // Edit mode: hydrate from the existing request.
+  useEffect(() => {
+    if (!purchaseId || !account) return;
+    (async () => {
+      try {
+        const client = getGraphClient(instance, account);
+        const pr = await getPurchase(client, purchaseId);
+        setEditTarget(pr);
+        setTitle(pr.title);
+        setJustification(pr.justification || "");
+        setProject(pr.project || "");
+        setNeedByDate(pr.needByDate || "");
+        setLineItems(pr.lineItems.length ? pr.lineItems : [{ qty: 1, cost: 0 }]);
+      } catch (e) {
+        console.error("[PurchaseForm] load for edit failed:", e);
+        setError("Could not load this request for editing.");
+      } finally {
+        setLoadingTicket(false);
+      }
+    })();
+  }, [purchaseId, account, instance]);
 
   // Convert mode: load the source ticket and prefill from it.
   useEffect(() => {
@@ -94,19 +142,56 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
     return null;
   }
 
-  async function handleSubmit() {
+  // resubmit=false (edit mode only) saves the changes without re-entering the
+  // approval queue — the owner can keep revising and resubmit from the detail page.
+  async function handleSubmit(resubmit = true) {
     const v = validate();
     if (v) return setError(v);
     if (!account) return setError("You must be signed in.");
     setError(null);
-    setSubmitting(true);
+    setEmailWarningId(null);
+    setSubmitting(resubmit ? "submit" : "save");
     try {
       const client = getGraphClient(instance, account);
       const items = lineItems.filter((i) => i.name?.trim() || i.url?.trim());
+
+      // Edit mode: save field + line-item changes onto the existing record, then
+      // optionally resubmit (submitForApproval flips it back to Pending and
+      // re-triggers the approver email).
+      if (isEdit) {
+        await updatePurchase(client, purchaseId!, {
+          title: title.trim(),
+          justification: justification.trim(),
+          // null (not undefined) so blanking the optional Project field on edit
+          // actually clears the stored column instead of keeping the old value.
+          project: project.trim() || null,
+          needByDate: needByDate || null,
+        });
+        await updateLineItems(client, purchaseId!, items);
+        if (resubmit) {
+          const { emailSent } = await submitForApproval(
+            client,
+            purchaseId!,
+            editTarget?.requesterName || account.name || account.username || ""
+          );
+          if (!emailSent) {
+            // The save + resubmit landed; only the approver email failed. Stay here
+            // so the warning is seen (navigating would drop it) and point at the
+            // detail page's re-send affordance.
+            setEmailWarningId(purchaseId!);
+            setSubmitting(null);
+            return;
+          }
+        }
+        router.push(`/purchase/?id=${purchaseId}`);
+        return;
+      }
+
       const pr = await createPurchase(client, {
         title: title.trim(),
         justification: justification.trim(),
         project: project.trim() || undefined,
+        needByDate: needByDate || undefined,
         // Converted requests keep the original ticket's requester; otherwise the submitter.
         requesterName: sourceTicket?.requesterName || account.name || account.username || "",
         requesterEmail: sourceTicket?.requesterEmail || account.username || "",
@@ -115,7 +200,7 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
         sourceTicketNumber: sourceTicket?.number,
         lineItems: items,
       });
-      await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
+      const emailSent = await triggerPurchaseApprovalRequest(pr.id, pr.requesterName);
 
       // Convert: resolve the source ticket and link it to the new PR (best-effort).
       // Comments are keyed by the ticket's item id (getComments is called with
@@ -132,11 +217,18 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       }
 
       clearDraft(DRAFT_KEY);
+      if (!emailSent) {
+        // The request was created; only the approver email failed. Stay here so the
+        // warning is seen and point at the detail page's re-send affordance.
+        setEmailWarningId(pr.id);
+        setSubmitting(null);
+        return;
+      }
       router.push(`/purchase/?id=${pr.id}`);
     } catch (e) {
       console.error("[PurchaseForm] submit failed:", e);
-      setError("Could not submit the purchase request. Please try again.");
-      setSubmitting(false);
+      setError(isEdit ? "Could not save the purchase request. Please try again." : "Could not submit the purchase request. Please try again.");
+      setSubmitting(null);
     }
   }
 
@@ -149,8 +241,21 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
       </div>
     );
   }
-  if (!canCreatePurchase(permissions)) {
+  if (!isEdit && !canCreatePurchase(permissions)) {
     return <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">You don’t have permission to create purchase requests.</div>;
+  }
+
+  // Editing requires ownership AND an editable status (Pending/Approved/Denied
+  // requests are immutable — see isPurchaseEditable).
+  if (isEdit && editTarget && (!canEditPurchase(editTarget, permissions) || !isPurchaseEditable(editTarget))) {
+    return (
+      <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">
+        {canEditPurchase(editTarget, permissions)
+          ? "This request can’t be edited in its current status."
+          : "You can only edit your own purchase requests."}
+        <Link href={`/purchase/?id=${purchaseId}`} className="mt-3 block text-brand-primary underline">Back</Link>
+      </div>
+    );
   }
 
   const inputClass = "w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary";
@@ -158,10 +263,12 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-semibold text-text-primary">
-        {isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
+        {isEdit ? "Edit Purchase Request" : isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
       </h1>
       <p className="mt-1 text-sm text-text-secondary">
-        {isConvert && sourceTicket?.number != null
+        {isEdit
+          ? "Update the request, then resubmit it for approval (or save your changes and resubmit later from the request page)."
+          : isConvert && sourceTicket?.number != null
           ? `From ticket #${sourceTicket.number}. Add the items needed and submit — the original ticket will be resolved and linked to this request.`
           : "Add the items you need and submit for approval. Once a General Manager approves it, the purchasing team can order it."}
       </p>
@@ -187,16 +294,48 @@ export default function PurchaseForm({ fromTicketId }: { fromTicketId?: string }
           <input id="pr-proj" className={`mt-1 ${inputClass}`} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional project / budget code" />
         </div>
 
+        <div>
+          <label htmlFor="pr-needby" className="block text-sm font-medium text-text-primary">Need-by date</label>
+          <p className="mt-0.5 text-xs text-text-secondary">Optional. If set, reminders go out daily starting 9 days before this date until it&apos;s approved and ordered.</p>
+          <input id="pr-needby" type="date" className={`mt-1 ${inputClass}`} value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} />
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
-        >
-          {submitting ? "Submitting…" : "Submit for Approval"}
-        </button>
+        {emailWarningId && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            <p>
+              Submitted — but the approval email could not be sent. Use “Re-send approval request” on
+              the request page.
+            </p>
+            <Link href={`/purchase/?id=${emailWarningId}`} className="mt-1 inline-block font-medium underline">
+              Go to the request
+            </Link>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => handleSubmit(true)}
+            disabled={submitting !== null}
+            className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
+          >
+            {submitting === "submit"
+              ? isEdit ? "Resubmitting…" : "Submitting…"
+              : isEdit ? "Save & Resubmit for Approval" : "Submit for Approval"}
+          </button>
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => handleSubmit(false)}
+              disabled={submitting !== null}
+              className="px-4 py-2 bg-bg-subtle text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40 transition-colors disabled:opacity-50"
+            >
+              {submitting === "save" ? "Saving…" : "Save without Resubmitting"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

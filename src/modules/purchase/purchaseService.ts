@@ -5,8 +5,10 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
 import { ensureList, type SharePointColumnDef } from "@/shared/ensureList";
-import { getAttachments, uploadAttachment, deleteAttachment } from "@/lib/graphClient";
-import { SharePointListResponse } from "@/shared/spTypes";
+import { fetchAllListItems } from "@/shared/listItems";
+import { guardedDecisionPatch, type DecisionReadResult } from "@/shared/decisionConflict";
+import { serializeParticipantEmails } from "@/lib/participants";
+import { getAttachments, uploadAttachment, deleteAttachment } from "@/shared/graph";
 import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
@@ -16,9 +18,12 @@ import {
   PURCHASE_COLUMN_MAP,
   mapToPurchase,
 } from "./types";
+import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const PURCHASE_LIST_ID = process.env.NEXT_PUBLIC_PURCHASE_LIST_ID || "";
+// The Azure Function is authLevel "function": this URL must carry the key as
+// ?code=<function-key> (same pattern as NEXT_PUBLIC_EMAIL_FUNCTION_URL).
 const SEND_PURCHASE_APPROVAL_REQUEST_URL = process.env.NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL || "";
 
 export const PURCHASE_LIST_NAME = "PurchaseRequests";
@@ -45,7 +50,9 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   (Object.keys(w) as (keyof PurchaseWritable)[]).forEach((k) => {
     const value = w[k];
-    if (value !== undefined) fields[PURCHASE_COLUMN_MAP[k]] = value;
+    if (value === undefined) return;
+    // participantEmails is string[] in the model but a ";"-delimited text column.
+    fields[PURCHASE_COLUMN_MAP[k]] = Array.isArray(value) ? serializeParticipantEmails(value) : value;
   });
   return fields;
 }
@@ -54,9 +61,30 @@ function toFields(w: PurchaseWritable): Record<string, unknown> {
 
 export async function listPurchases(client: Client): Promise<PurchaseRequest[]> {
   if (!PURCHASE_LIST_ID) return [];
+  // Paged (fetchAllListItems follows @odata.nextLink): the migration runner builds
+  // its idempotency set from this, so a truncated read would duplicate records.
   const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items?$expand=fields&$top=1000&$orderby=createdDateTime desc`;
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  return (response.value || []).map(mapToPurchase);
+  const items = await fetchAllListItems(client, endpoint);
+  return items.map(mapToPurchase);
+}
+
+// Purchase requests awaiting an approval decision — the purchase half of the home
+// page's merged "Approvals" view/badge. Mirrors the ticket count (ApprovalStatus
+// "Pending"); "Changes Requested" is excluded since it needs the requester, not the
+// approver. Only meaningful for approvers (canApprovePurchase) — the caller gates.
+export async function listPendingPurchaseApprovals(client: Client): Promise<PurchaseRequest[]> {
+  const all = await listPurchases(client);
+  return all.filter((p) => p.approvalStatus === "Pending");
+}
+
+// Header-badge counts (Awaiting Order / Awaiting Receipt). Reuse the same row
+// builders the /orders and /receiving queues use so the numbers always match the
+// pages. Purchases moved off the Tickets list, so these read the PurchaseRequests list.
+export async function getUnorderedItemCount(client: Client): Promise<number> {
+  return purchaseUnorderedRows(await listPurchases(client)).length;
+}
+export async function getUnreceivedItemCount(client: Client): Promise<number> {
+  return purchaseUnreceivedRows(await listPurchases(client)).length;
 }
 
 export async function getPurchase(client: Client, id: string): Promise<PurchaseRequest> {
@@ -64,6 +92,15 @@ export async function getPurchase(client: Client, id: string): Promise<PurchaseR
     .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
     .get();
   return mapToPurchase(item);
+}
+
+// Raw column values for one purchase item — the migration's verify step compares
+// these against the source ticket (verifyMigration wants columns, not the model).
+export async function getPurchaseFields(client: Client, id: string): Promise<Record<string, unknown>> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  return item.fields as Record<string, unknown>;
 }
 
 // A purchase request is visible to admins, purchasers, inventory (the fulfillment
@@ -143,9 +180,28 @@ export async function bulkUpdateLineItems(
   );
 }
 
+// Fresh read of the approval gate + ETag for the concurrency-guarded decision
+// write (mirror of getPurchaseFields in the purchaseApprovalAction Function).
+async function readDecisionState(client: Client, id: string): Promise<DecisionReadResult> {
+  const item = await client
+    .api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}?$expand=fields`)
+    .get();
+  const pr = mapToPurchase(item);
+  return {
+    status: pr.approvalStatus,
+    decidedBy: pr.approvedByName,
+    etag: (item["@odata.etag"] as string) || "*",
+  };
+}
+
 // Record an approver decision (in-app). Ports the purchase branch of
 // processApprovalDecision (graphClient.ts:614-633): maps the decision onto both the
 // approval gate and the fulfillment status.
+//
+// Concurrency: mirrors the emailed-link Function — a fresh read + pending-only gate
+// + an If-Match–conditioned PATCH (guardedDecisionPatch). If the request was already
+// decided by email or another GM, this throws DecisionConflictError instead of
+// silently overwriting that decision from a stale tab.
 export async function recordDecision(
   client: Client,
   id: string,
@@ -184,21 +240,36 @@ export async function recordDecision(
       patch.approvalStatus = "Changes Requested";
       break;
   }
-  return updatePurchase(client, id, patch);
+
+  if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
+  const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`;
+  await guardedDecisionPatch({
+    read: () => readDecisionState(client, id),
+    patch: (etag) => client.api(endpoint).header("If-Match", etag).patch({ fields: toFields(patch) }),
+    pendingStatus: "Pending",
+  });
+  return getPurchase(client, id);
+}
+
+// Result of a submit/resubmit: the saved request plus whether the approver email
+// actually went out — callers surface a non-fatal warning when it didn't.
+export interface SubmitForApprovalResult {
+  purchase: PurchaseRequest;
+  emailSent: boolean;
 }
 
 export async function submitForApproval(
   client: Client,
   id: string,
   requesterName: string
-): Promise<PurchaseRequest> {
+): Promise<SubmitForApprovalResult> {
   const updated = await updatePurchase(client, id, {
     purchaseStatus: "Pending Approval",
     approvalStatus: "Pending",
     approvalRequestedDate: new Date().toISOString().slice(0, 10),
   });
-  await triggerPurchaseApprovalRequest(id, requesterName);
-  return updated;
+  const emailSent = await triggerPurchaseApprovalRequest(id, requesterName);
+  return { purchase: updated, emailSent };
 }
 
 // POST to the Azure Function that mints kind:'purchase' tokens + emails GM approvers.
@@ -253,6 +324,7 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   MEMO("PurchaseJustification"),
   TEXT("PurchaseProject"),
   MEMO("PurchaseNotes"),
+  DATE("NeedByDate"),
   DATE("PurchasedDate"),
   TEXT("PurchasedByEmail"),
   DATE("ReceivedDate"),
@@ -273,6 +345,12 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   MEMO("ParticipantEmails"),
   NUM("SourceTicketNumber"),
   TEXT("SourceTicketId"),
+  // Server-written by the sendPurchaseApprovalRequest Azure Function: last time
+  // the approval-request email went out (its re-send cooldown stamp). Never
+  // written by the SPA. Lists created before this column tolerate its absence.
+  { name: "ApprovalRequestSentAt", dateTime: { format: "dateTime", displayAs: "default" } },
+  // Server-written by the purchaseReminders timer function to throttle repeat reminders.
+  { name: "LastReminderSent", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
 export async function ensurePurchaseList(client: Client): Promise<string> {

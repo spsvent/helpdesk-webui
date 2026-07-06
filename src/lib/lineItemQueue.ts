@@ -1,12 +1,21 @@
-// Pure helpers for the Awaiting Order / Awaiting Receipt queue pages.
-// Flatten line items across tickets, infer vendor from URL hostname, group by vendor.
+// Shared row shape + helpers for the Awaiting Order / Awaiting Receipt queues.
+//
+// Purchase requests were extracted into their own module; the queue pages now read
+// exclusively from the PurchaseRequests list (src/modules/purchase/queueRows.ts),
+// which builds these QueueRow objects. This file keeps only the cross-cutting bits
+// that aren't purchase-module-specific: the row shape, vendor inference, and the
+// vendor grouping used by the table render.
 
-import type { Ticket, PurchaseLineItem } from "@/types/ticket";
+import type { PurchaseLineItem } from "@/types/ticket";
 
-// One row of the flat queue. Carries the parent ticket context plus the
-// item itself (and its index within the parent's lineItems array, so a
-// bulk write can target the correct slot).
+// One row of the flat queue. Carries the parent record context plus the item itself
+// (and its index within the parent's lineItems array, so a bulk write can target the
+// correct slot).
 export interface QueueRow {
+  // Row provenance. Today every row is source:"purchase" (the PurchaseRequests
+  // list); the field is retained so the queue can carry future producers without a
+  // shape change, and because item ids are not unique across lists.
+  source: "ticket" | "purchase";
   ticketId: string;
   ticketNumber: number | undefined;
   ticketTitle: string;
@@ -16,6 +25,16 @@ export interface QueueRow {
   // Display vendor: explicit item.vendor if present, otherwise inferred from URL.
   // Used for grouping and the visible "Vendor" column.
   displayVendor: string;
+  // Order-date proxy (record purchased/modified date) for the Awaiting Receipt sort.
+  orderedAt?: string;
+  // Parent-request context, shown in the queue's Requester + Approval columns.
+  requester?: string;
+  department?: string;
+  requestedDate?: string; // when the request was created
+  approvedDate?: string;
+  approver?: string;
+  // Who marked the item(s) received (record-level receiver). Shown in Recently Received.
+  receivedBy?: string;
 }
 
 const HOSTNAME_TO_VENDOR: Record<string, string> = {
@@ -56,98 +75,6 @@ export function inferVendorFromUrl(url: string | undefined): string {
   } catch {
     return "(Unspecified)";
   }
-}
-
-function buildRow(ticket: Ticket, item: PurchaseLineItem, idx: number): QueueRow {
-  const explicit = item.vendor?.trim();
-  return {
-    ticketId: ticket.id,
-    ticketNumber: ticket.ticketNumber,
-    ticketTitle: ticket.title,
-    ticketDueDate: ticket.dueDate,
-    itemIndex: idx,
-    item,
-    displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
-  };
-}
-
-// An item is "awaiting order" when the ticket has been approved AND the item
-// hasn't been ordered yet. We treat presence of either vendor or orderNum as
-// "ordered" since Approve & Order may set them and the Purchaser flow requires
-// both to mark complete.
-export function flattenUnorderedItems(tickets: Ticket[]): QueueRow[] {
-  const rows: QueueRow[] = [];
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    if (ticket.approvalStatus !== "Approved") continue;
-    const status = ticket.purchaseStatus;
-    // Skip tickets fully done (Received) or denied
-    if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
-    const items = ticket.purchaseLineItems ?? [];
-    items.forEach((item, idx) => {
-      const hasVendor = Boolean(item.vendor?.trim());
-      const hasOrderNum = Boolean(item.orderNum?.trim());
-      if (hasVendor && hasOrderNum) return; // already ordered
-      rows.push(buildRow(ticket, item, idx));
-    });
-  }
-  return rows;
-}
-
-// An item is "awaiting receipt" when it HAS been ordered (vendor + orderNum)
-// but hasn't been received (no receivedDate or partial receivedQty).
-export function flattenUnreceivedItems(tickets: Ticket[]): QueueRow[] {
-  const rows: QueueRow[] = [];
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    if (ticket.purchaseStatus === "Pending Approval" || ticket.purchaseStatus === "Denied") continue;
-    const items = ticket.purchaseLineItems ?? [];
-    items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) return;
-      const fullyReceived = Boolean(item.receivedDate) && (item.receivedQty ?? 0) >= item.qty;
-      if (fullyReceived) return;
-      rows.push(buildRow(ticket, item, idx));
-    });
-  }
-  return rows;
-}
-
-// Recently-completed history view: items ordered (or received) in the last
-// `daysBack` days. Used by the page's "Recently" tab.
-export function flattenRecentlyOrdered(tickets: Ticket[], daysBack = 30): QueueRow[] {
-  const cutoff = Date.now() - daysBack * 86400000;
-  const rows: QueueRow[] = [];
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    const items = ticket.purchaseLineItems ?? [];
-    items.forEach((item, idx) => {
-      const ordered = Boolean(item.vendor?.trim() && item.orderNum?.trim());
-      if (!ordered) return;
-      // Use ticket modified date as a proxy — line items don't carry their
-      // own ordered-on timestamp.
-      const when = ticket.modified ? new Date(ticket.modified).getTime() : 0;
-      if (when < cutoff) return;
-      rows.push(buildRow(ticket, item, idx));
-    });
-  }
-  return rows;
-}
-
-export function flattenRecentlyReceived(tickets: Ticket[], daysBack = 30): QueueRow[] {
-  const cutoff = Date.now() - daysBack * 86400000;
-  const rows: QueueRow[] = [];
-  for (const ticket of tickets) {
-    if (!ticket.isPurchaseRequest) continue;
-    const items = ticket.purchaseLineItems ?? [];
-    items.forEach((item, idx) => {
-      if (!item.receivedDate) return;
-      const when = new Date(item.receivedDate).getTime();
-      if (Number.isNaN(when) || when < cutoff) return;
-      rows.push(buildRow(ticket, item, idx));
-    });
-  }
-  return rows;
 }
 
 // Group rows by displayVendor for the table render.

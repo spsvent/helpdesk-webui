@@ -16,6 +16,8 @@ interface AttachmentListProps {
   getPreviewUrl?: (name: string) => Promise<string | null>;
   canDelete?: boolean;
   loading?: boolean;
+  /** Briefly ring-highlight this attachment's row (jump-to-file links). */
+  highlightName?: string | null;
 }
 
 export default function AttachmentList({
@@ -26,6 +28,7 @@ export default function AttachmentList({
   getPreviewUrl,
   canDelete = false,
   loading = false,
+  highlightName = null,
 }: AttachmentListProps) {
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
@@ -75,7 +78,10 @@ export default function AttachmentList({
       {attachments.map((attachment) => (
         <li
           key={attachment.name}
-          className="flex items-center gap-2 p-2 bg-bg-subtle rounded-lg group"
+          data-attachment-name={attachment.name}
+          className={`flex items-center gap-2 p-2 bg-bg-subtle rounded-lg group transition-shadow ${
+            highlightName === attachment.name ? "ring-2 ring-brand-blue" : ""
+          }`}
         >
           {getPreviewUrl && isImageAttachment(attachment.name) ? (
             <AttachmentThumbnail

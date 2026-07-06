@@ -19,24 +19,20 @@
   When a request is marked as a purchase request, add a button to add additional products to the same request, and hide/remove some of the normal request fields. Plan needed.
 - [ ] **Integrate preexisting SharePoint purchase request system** — _2026-05-06_
   Integrate the preexisting purchase request SharePoint systems with our new Help Desk integrated purchase request system. Ask user for more details when ready to start.
-- [ ] **HEIC image preview support (or convert to JPG)** — _2026-07-01_
-  Browsers can't decode HEIC/HEIF (the default iPhone photo format — the most common attachment on
-  field tickets) or TIFF, so the attachment thumbnails + lightbox fall back to a download-only tile
-  for these (see `isBrowserPreviewable` in `src/lib/attachmentComments.ts`, `AttachmentThumbnail.tsx`,
-  `ImageLightbox.tsx`). Make these previewable, in rough order of preference:
-  1. **Backend conversion to JPG on upload** — generate a web-viewable `.jpg` rendition (and/or a
-     small thumbnail) server-side when a HEIC/HEIF/TIFF is attached (e.g. an Azure Function using
-     `libheif`/`sharp`/ImageMagick), store it alongside the original, and point the preview at the
-     rendition while keeping the untouched original for download. Cleanest UX; needs server compute
-     + storage and a place to hang the conversion (the SPA is a static export, so this is a Function).
-  2. **Client-side decode** — render previews in-browser with a library such as `heic2any` /
-     `libheif-js` (WASM). No backend, but adds bundle weight and can be slow/janky on large photos;
-     evaluate perf before committing.
-  3. **Fallback if neither is feasible — warn at upload time.** In `AttachmentUpload.tsx` (and the
-     staged-file flow in `src/app/new/page.tsx` / `StagedAttachmentList.tsx`), detect `.heic`/`.heif`
-     on selection and show a non-blocking flag: "HEIC images can't be previewed in the browser —
-     convert to JPG first if you want an inline preview." Still allow the upload; this is purely an
-     expectation-setting nudge. Cheap; ship this regardless if 1 or 2 slips.
+- [x] **HEIC image preview support (backend JPG conversion)** — _2026-07-01_ — done in feature/heic-preview-support
+  Browsers (except Safari/iOS) can't decode HEIC/HEIF (the default iPhone photo format — the most
+  common attachment on field tickets), so the attachment thumbnails + lightbox previously fell back
+  to a download-only tile. **Implemented option 1 (backend conversion):** a stateless Azure Function
+  `convertHeic` (in `helpdesk-notify-func`, using `heic-convert`) takes raw HEIC bytes and returns
+  JPEG bytes. The SPA sends the HEIC, stores the JPEG back on the ticket as a hidden sibling
+  attachment (`<name>.HEIC.jpg`), and previews that. Conversion happens lazily the first time a HEIC
+  is opened in the lightbox; the rendition is cached so thumbnails/reopens are instant. Gated on
+  `NEXT_PUBLIC_HEIC_CONVERT_URL` — HEIC degrades to the download-only tile when unset. See
+  `src/lib/heicRenditions.ts`, `src/lib/heicConvertService.ts`, `azure-functions/src/functions/convertHeic.js`.
+  Follow-ups considered but not done: (a) **native-first** — Safari/iOS can render HEIC directly, so
+  those users could skip the conversion round-trip entirely; (b) **client-side decode** (`heic-to`
+  WASM) to avoid the backend; (c) a **batch backfill** of pre-existing HEIC attachments (today they
+  convert lazily on first view). TIFF is still download-only.
 
 ## Low Priority
 - [ ] **Per-item approval state** — _2026-04-28_
@@ -49,3 +45,13 @@
   When items are purchased/ordered, automatically look at the page it was purchased from to gather info for the inventory team — and even pull manuals and warranty info. Each vendor will be different but we could start small. Some may have an API we can use for that kind of stuff.
 - [ ] **Snipe-IT integration for received assets** — _2026-05-08_
   Items marked as received are loaded into Snipe-IT. Explore further connections possible with Snipe-IT to better track assets purchased.
+- [ ] **Search box + filters on the Recently Ordered / Received queues** — _2026-07-03_
+  The "Recently Ordered" (and by extension "Recently Received") list in the order/receiving queues
+  (`src/components/LineItemQueue.tsx`) is an unbounded history view that will grow too large to scan.
+  Add a search box (item name / vendor / requester / order #) and filters so it stays usable at scale.
+- [ ] **CDW "Send the approved final to:" — nudge toward groups over individuals** — _2026-07-03_
+  In the New CDW form, when an individual's email is entered in the "Send the approved final to:"
+  field, show a side tip suggesting a group that person belongs to (e.g. "Marketing includes Jane —
+  consider sending to the Marketing group instead"). Goal is to encourage using distribution/security
+  groups rather than naming individuals. Would look up the entered user's group memberships via Graph
+  (`/users/{id}/memberOf`) and surface matching groups as a lightweight, dismissible suggestion.

@@ -107,4 +107,54 @@ function purchaseApprovedForPurchaserEmail(fields, approverName) {
   return shell("Purchase Approved — Ready to Order", body);
 }
 
-module.exports = { purchaseApprovalRequestEmail, purchaseDecisionEmail, purchaseApprovedForPurchaserEmail };
+// One row in a reminder digest: a linked request title + a light summary line.
+function reminderDigestRow(fields) {
+  const items = parseItems(fields);
+  const total = items.reduce((s, it) => s + (it.qty || 0) * (it.cost || 0), 0);
+  const who = fields.RequesterName ? ` · ${escapeHtml(fields.RequesterName)}` : "";
+  const needBy = fields.NeedByDate
+    ? ` · <span style="color:#b45309;">needed by ${escapeHtml(fields.NeedByDate)}</span>`
+    : "";
+  return `<tr><td style="padding:8px;border-bottom:1px solid #eee;">
+    <a href="${config.appUrl}/purchase?id=${fields.id}" style="color:#1e3a5f;font-weight:600;">${escapeHtml(fields.Title || "Untitled")}</a>
+    <div style="color:#6b7280;font-size:13px;">${items.length} item${items.length === 1 ? "" : "s"} · est. $${total.toFixed(2)}${who}${needBy}</div>
+  </td></tr>`;
+}
+
+// Daily DIGEST reminder (purchaseReminders.js): ONE email per audience summarizing
+// every request that needs that action, instead of one email per request.
+//   approval → General Managers · order → Purchasers · receive → Inventory / requester
+// `records` is an array of SharePoint `fields` objects (each with .id set).
+function purchaseReminderDigestEmail(kind, records) {
+  const copy = {
+    approval: {
+      headline: "Purchase Requests Awaiting Approval",
+      noun: "awaiting your approval",
+      cta: { href: `${config.appUrl}/purchase`, label: "Review Purchase Requests" },
+    },
+    order: {
+      headline: "Approved Purchases Awaiting Order",
+      noun: "approved and not yet ordered",
+      cta: { href: `${config.appUrl}/orders`, label: "Open the order queue" },
+    },
+    receive: {
+      headline: "Items Awaiting Receipt",
+      noun: "with items not yet marked received",
+      cta: { href: `${config.appUrl}/receiving`, label: "Open the receiving queue" },
+    },
+  }[kind];
+  if (!copy || !records.length) return null;
+  const n = records.length;
+  const rows = records.map(reminderDigestRow).join("");
+  const body = `<p>There ${n === 1 ? "is" : "are"} <strong>${n}</strong> purchase request${n === 1 ? "" : "s"} ${copy.noun}:</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0;">${rows}</table>
+    <div class="actions"><a href="${copy.cta.href}" class="btn btn-view">${copy.cta.label}</a></div>`;
+  return shell(copy.headline, body);
+}
+
+module.exports = {
+  purchaseApprovalRequestEmail,
+  purchaseDecisionEmail,
+  purchaseApprovedForPurchaserEmail,
+  purchaseReminderDigestEmail,
+};

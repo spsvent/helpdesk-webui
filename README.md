@@ -35,6 +35,25 @@ A React/Next.js web application for viewing and managing helpdesk tickets stored
 | Hosting | Azure Static Web Apps (Free tier) |
 | CI/CD | GitHub Actions |
 
+## Trust Model
+
+- The SPA writes to SharePoint with the signed-in user's **delegated Graph token**
+  (`Sites.ReadWrite.All`). All in-app permission checks — RBAC roles, module access rules,
+  edit/status gates — run **client-side**: they shape the UI but are not a security boundary,
+  since a user can replay their own token against the Graph API directly.
+- The **effective write boundary is the SharePoint list ACL**: whatever the signed-in account
+  can write via Graph, it can write regardless of what the UI hides or disables.
+- The only **server-enforced** gate is the email-approval path: the Azure Functions mint
+  signed, expiring, single-purpose action tokens and verify them (plus a pending-status gate
+  and `If-Match` conditional PATCH) before recording a decision; the Functions themselves
+  require a function key.
+- In-app approval decisions use the same fresh-read + pending gate + `If-Match` PATCH, which
+  prevents stale-tab overwrites and double decisions — but it executes client-side, so it
+  mitigates accidents, not a hostile user with a valid token.
+- Moving to server-side enforcement would mean routing writes through an authenticated API
+  (e.g. the Function App) that re-applies the RBAC rules and writes with an app-only identity,
+  while tightening the SharePoint list ACL so end users lose direct write access.
+
 ## Key URLs & IDs
 
 | Resource | Value |

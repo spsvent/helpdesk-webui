@@ -4,6 +4,7 @@
 // PR items, verify, mark source migrated) lives in the admin action and calls this.
 
 import { SharePointListItem } from "@/shared/spTypes";
+import { parseParticipantEmails } from "@/lib/participants";
 import { CreatePurchaseInput } from "./purchaseService";
 import { PurchaseApprovalStatus, PurchaseStatus, parsePurchaseLineItems } from "./types";
 
@@ -32,6 +33,9 @@ function requesterName(item: SharePointListItem): string {
 export function mapTicketItemToPurchase(item: SharePointListItem): CreatePurchaseInput {
   const f = item.fields as Record<string, unknown>;
   const str = (c: string) => (f[c] as string | undefined) || undefined;
+  // Carry the ticket's notification audience over (";"-delimited column → array;
+  // omitted when empty so no blank column is written).
+  const participants = parseParticipantEmails(f.ParticipantEmails as string | undefined);
 
   return {
     lineItems: parsePurchaseLineItems(f),
@@ -53,6 +57,7 @@ export function mapTicketItemToPurchase(item: SharePointListItem): CreatePurchas
     approvalNotes: str("ApprovalNotes"),
     requesterName: requesterName(item),
     requesterEmail: requesterEmail(item),
+    participantEmails: participants.length > 0 ? participants : undefined,
     sourceTicketNumber: f.TicketNumber as number | undefined,
     sourceTicketId: item.id,
   };

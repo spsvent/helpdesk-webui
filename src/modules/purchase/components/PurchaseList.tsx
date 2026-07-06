@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMsal } from "@azure/msal-react";
-import { getGraphClient } from "@/lib/graphClient";
+import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PurchaseRequest } from "../types";
@@ -11,7 +11,6 @@ import { canCreatePurchase } from "../access";
 import { ensurePurchaseList, isPurchaseConfigured, listPurchases, visiblePurchase } from "../purchaseService";
 import { computeEstimatedTotal } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
-import MigrationPanel from "./MigrationPanel";
 
 export default function PurchaseList() {
   const { instance, accounts } = useMsal();
@@ -66,6 +65,25 @@ export default function PurchaseList() {
         )}
       </div>
 
+      {isPurchaseConfigured() && permissions?.role === "admin" && (
+        <div className="mt-2 text-right">
+          <button
+            type="button"
+            onClick={handleSetup}
+            disabled={setupBusy}
+            title="Add any missing columns to the PurchaseRequests list (idempotent — safe to run anytime)"
+            className="text-xs text-text-secondary underline hover:text-text-primary disabled:opacity-50"
+          >
+            {setupBusy ? "Repairing list…" : "Repair list columns"}
+          </button>
+          {setupResult === "error" ? (
+            <p className="mt-1 text-xs text-red-700">Could not update the list.</p>
+          ) : setupResult ? (
+            <p className="mt-1 text-xs text-green-700">List columns are up to date.</p>
+          ) : null}
+        </div>
+      )}
+
       {!isPurchaseConfigured() && (
         <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-2">
           <p>The PurchaseRequests list isn’t configured yet. Set <code className="mx-1">NEXT_PUBLIC_PURCHASE_LIST_ID</code> after creating it.</p>
@@ -83,8 +101,6 @@ export default function PurchaseList() {
           )}
         </div>
       )}
-
-      {permissions?.role === "admin" && isPurchaseConfigured() && <MigrationPanel />}
 
       {loading ? (
         <div className="p-8"><LoadingSpinner /></div>

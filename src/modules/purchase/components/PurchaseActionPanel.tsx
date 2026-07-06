@@ -14,6 +14,7 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
   const [orderItems, setOrderItems] = useState<PurchaseLineItem[]>(pr.lineItems ?? []);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Restore an order draft snapshotted before a renewal redirect, then clear it (one-shot).
   // Re-expand the panel so the restored order details are visible.
@@ -28,13 +29,15 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Vendor is required to mark an item ordered; Order # is optional.
   const isValid =
     orderItems.length > 0 &&
-    orderItems.every((item) => Boolean(item.vendor?.trim() && item.orderNum?.trim()));
+    orderItems.every((item) => Boolean(item.vendor?.trim()));
 
   const handleSubmit = async () => {
     if (!isValid) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       await onMarkPurchased(orderItems, notes.trim() || undefined);
       setIsExpanded(false);
@@ -42,6 +45,7 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
       setNotes("");
     } catch (error) {
       console.error("Failed to mark as purchased:", error);
+      setError("Could not save the order details. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -90,7 +94,7 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
             />
             <input
               type="text"
-              placeholder="Order # *"
+              placeholder="Order # (optional)"
               value={item.orderNum ?? ""}
               onChange={(e) => {
                 const updated = [...orderItems];
@@ -139,6 +143,8 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
           className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-2">
         <button

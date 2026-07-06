@@ -524,38 +524,6 @@ export function isVisibleWithApprovalGate(
 }
 
 // ============================================
-// Purchase Workflow Permission Functions
-// ============================================
-
-/**
- * Check if user can mark a purchase request as purchased
- * - Must be a purchaser or admin
- * - Ticket must be a purchase request with status "Approved" or "Approved with Changes"
- */
-export function canPurchase(
-  permissions: UserPermissions,
-  ticket: Ticket
-): boolean {
-  if (!permissions.isPurchaser) return false;
-  if (!ticket.isPurchaseRequest) return false;
-  return ticket.purchaseStatus === "Approved" || ticket.purchaseStatus === "Approved with Changes";
-}
-
-/**
- * Check if user can mark a purchase request as received
- * - Must be inventory or admin
- * - Ticket must be a purchase request with status "Purchased" or "Ordered"
- */
-export function canMarkReceived(
-  permissions: UserPermissions,
-  ticket: Ticket
-): boolean {
-  if (!permissions.isInventory) return false;
-  if (!ticket.isPurchaseRequest) return false;
-  return ticket.purchaseStatus === "Purchased" || ticket.purchaseStatus === "Ordered";
-}
-
-// ============================================
 // Staff email resolution (internal-note gating)
 // ============================================
 
