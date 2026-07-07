@@ -57,6 +57,30 @@ export function formatRelativeDate(dateString: string): string {
 }
 
 /**
+ * Format a date as a clean "Mon D, YYYY" with no time component.
+ *
+ * Tolerates both shapes the app stores for approval/date columns: date-only
+ * ("2026-07-02", written by in-app decisions) and full ISO
+ * ("2026-07-02T21:31:37Z", written by the email-approval Function). Date-only
+ * strings are built from their calendar parts so they aren't shifted to the
+ * previous day by UTC-midnight parsing in negative-offset timezones. Returns the
+ * raw input unchanged if it can't be parsed.
+ */
+export function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  const date = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
  * Format a date with month, day, year, and time
  */
 export function formatDateTime(dateString: string): string {
