@@ -208,7 +208,12 @@ export async function recordDecision(
   decision: PurchaseDecision,
   approverName: string,
   approverEmail: string,
-  notes?: string
+  notes?: string,
+  // For "Approved with Changes": the trimmed set of line items that survive the GM's
+  // edits (dropped items are removed from the order). Written in the same guarded
+  // PATCH as the decision so the approved record and its kept items can't diverge.
+  // Ignored for every other decision.
+  keptLineItems?: PurchaseLineItem[]
 ): Promise<PurchaseRequest> {
   const patch: PurchaseWritable = {
     approvedByName: approverName,
@@ -243,9 +248,16 @@ export async function recordDecision(
 
   if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
   const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`;
+  // "Approved with Changes" also rewrites the line items; fold the JSON into the same
+  // guarded patch so the trimmed order lands atomically with the approval.
+  const extraFields: Record<string, unknown> =
+    decision === "Approved with Changes" && keptLineItems
+      ? { PurchaseLineItemsJSON: serializeLineItems(keptLineItems) }
+      : {};
   await guardedDecisionPatch({
     read: () => readDecisionState(client, id),
-    patch: (etag) => client.api(endpoint).header("If-Match", etag).patch({ fields: toFields(patch) }),
+    patch: (etag) =>
+      client.api(endpoint).header("If-Match", etag).patch({ fields: { ...toFields(patch), ...extraFields } }),
     pendingStatus: "Pending",
   });
   return getPurchase(client, id);
