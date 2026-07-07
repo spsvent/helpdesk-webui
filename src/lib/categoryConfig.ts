@@ -26,7 +26,8 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
     Equipment: ["Maintenance", "New Equipment Request"],
     Other: [],
   },
-  "Grounds Keeping": {
+  // Facilities: Grounds Keeping + Janitorial merged into one department (2026-07).
+  Facilities: {
     "Vegetation Management": [
       "Tree Care",
       "Shrub & Hedge Maintenance",
@@ -71,9 +72,6 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
       "Damaged/Broken Furniture",
       "Missing Furniture",
     ],
-    "General Grounds": ["Lost Item", "Out of Place Item", "Other/Miscellaneous"],
-  },
-  Janitorial: {
     "Cleaning Services": [
       "Restroom Cleaning",
       "Surface/Floor Cleaning",
@@ -85,7 +83,7 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
       "Trash/Recycling Full",
       "Dispenser/Equipment Issue",
     ],
-    "General Janitorial": ["Lost Item", "Out of Place Item", "Other/Miscellaneous"],
+    "General Facilities": ["Lost Item", "Out of Place Item", "Other/Miscellaneous"],
   },
   Marketing: {
     "Graphic Design/Sign Request": [],

@@ -20,8 +20,7 @@ export const DEPARTMENT_GROUP_MAP: Record<string, string> = {
   Tech: "7e1b9f86-5fc0-4f83-a6d2-e52167d0e4cf", // IT/AV
   Operations: "12c1b657-305b-4fb3-8534-bcf1fe5cd326",
   Marketing: "7114b9f5-734e-4c0d-a46d-0c96679d51c0",
-  "Grounds Keeping": "b9dbaa5a-5bda-4ca0-bcb6-bd2f3783739f", // Grounds
-  Janitorial: "0334654b-6c6a-4a29-9f00-7dcd09c34b3d",
+  Facilities: "b9dbaa5a-5bda-4ca0-bcb6-bd2f3783739f", // Grounds Keeping + Janitorial merged into Facilities (renamed group)
   HR: "bcd1cb4f-d182-4f0e-8ace-fdee41e005f8", // HR Manager
   "Customer Service": "aa6020eb-e4b4-46ce-a720-945cf2bf5d8d", // Admissions
   // "Other" - handled specially: any support staff can edit

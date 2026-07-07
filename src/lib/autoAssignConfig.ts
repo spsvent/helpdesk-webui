@@ -63,16 +63,11 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
     groupId: "12c1b657-305b-4fb3-8534-bcf1fe5cd326",
   },
 
-  // Grounds Keeping assignments
+  // Facilities assignments (Grounds Keeping + Janitorial merged 2026-07)
   {
-    department: "Grounds Keeping",
-    assignTo: "grounds@skyparksantasvillage.com",
-  },
-
-  // Janitorial assignments
-  {
-    department: "Janitorial",
-    assignTo: "janitorial@skyparksantasvillage.com",
+    department: "Facilities",
+    assignTo: "facilities@skyparksantasvillage.com",
+    groupId: "b9dbaa5a-5bda-4ca0-bcb6-bd2f3783739f",
   },
 
   // Marketing assignments
