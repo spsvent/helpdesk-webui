@@ -7,6 +7,7 @@ import { getGraphClient } from "@/shared/graph";
 import { useRBAC } from "@/contexts/RBACContext";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ResendApprovalButton from "@/components/ResendApprovalButton";
+import { formatDate } from "@/lib/dateUtils";
 import { PurchaseLineItem, PurchaseRequest } from "../types";
 import {
   getPurchase,
@@ -186,7 +187,7 @@ export default function PurchaseDetail({ id }: { id: string }) {
 
       {(pr.approvalStatus === "Approved" || pr.approvalStatus === "Denied") && pr.approvedByName && (
         <div className="mt-4 rounded-lg border border-border p-4 text-sm">
-          <p><span className="font-medium">{pr.approvalStatus}</span> by {pr.approvedByName}{pr.approvalDate ? ` on ${pr.approvalDate}` : ""}</p>
+          <p><span className="font-medium">{pr.approvalStatus}</span> by {pr.approvedByName}{pr.approvalDate ? ` on ${formatDate(pr.approvalDate)}` : ""}</p>
           {pr.approvalNotes && <p className="mt-1 text-text-secondary">“{pr.approvalNotes}”</p>}
         </div>
       )}
@@ -211,7 +212,7 @@ export default function PurchaseDetail({ id }: { id: string }) {
         {pr.needByDate && (
           <div className="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1">
             <dt className="text-sm font-medium text-text-secondary">Need-by date</dt>
-            <dd className="sm:col-span-2 text-sm text-text-primary">{pr.needByDate}</dd>
+            <dd className="sm:col-span-2 text-sm text-text-primary">{formatDate(pr.needByDate)}</dd>
           </div>
         )}
       </dl>
