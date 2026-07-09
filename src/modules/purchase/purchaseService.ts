@@ -333,6 +333,13 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
     defaultValue: { value: "Pending Approval" },
   },
   { name: "PurchaseLineItemsJSON", text: { allowMultipleLines: true } },
+  // Recurring order-sheet tagging (unset/"adhoc" on ordinary requests).
+  TEXT("Department"),
+  {
+    name: "OrderType",
+    choice: { allowTextEntry: false, choices: ["adhoc", "catalog"], displayAs: "dropDownMenu" },
+    defaultValue: { value: "adhoc" },
+  },
   MEMO("PurchaseJustification"),
   TEXT("PurchaseProject"),
   MEMO("PurchaseNotes"),

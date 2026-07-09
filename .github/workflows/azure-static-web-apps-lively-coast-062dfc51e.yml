@@ -60,6 +60,8 @@ jobs:
           NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendcdwapprovalrequest?code=${{ secrets.FUNC_HOST_CODE }}"
           # Purchase Request form module. NEXT_PUBLIC_PURCHASE_LIST_ID filled after the list is created.
           NEXT_PUBLIC_PURCHASE_LIST_ID: "510ef7d1-2c9d-480b-9aa8-e9a8b1ddf82c"
+          # Order Catalog (recurring order sheets) — master list of standard reorder items.
+          NEXT_PUBLIC_ORDER_CATALOG_LIST_ID: "75f93bfc-acec-427a-bdb7-013f0c83f531"
           NEXT_PUBLIC_PURCHASE_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/purchaseapprovalaction"
           NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendpurchaseapprovalrequest?code=${{ secrets.FUNC_HOST_CODE }}"
           # HEIC → JPEG converter: enables inline preview of iPhone HEIC photos. Blank = download-only fallback.

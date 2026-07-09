@@ -19,6 +19,12 @@ export type PurchaseStatus =
 // The approval gate (kept alongside purchaseStatus, mirroring the current model).
 export type PurchaseApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Changes Requested";
 
+// How the request was created: a one-off ad-hoc request, or a recurring order
+// sheet built from the OrderCatalog. Drives the quiet-notification behaviour
+// (catalog orders skip the immediate approval email) and the separate purchaser
+// view. Absent/legacy records read as "adhoc".
+export type PurchaseOrderType = "adhoc" | "catalog";
+
 export interface PurchaseLineItem {
   // Entered by requester
   url?: string;
@@ -35,6 +41,14 @@ export interface PurchaseLineItem {
   // Entered by Inventory on receipt
   receivedDate?: string; // ISO date
   receivedQty?: number;
+
+  // Set when the line originated from the order catalog (recurring order sheets).
+  // The values are snapshotted from the catalog at order time so historical orders
+  // keep their price/label even as the catalog changes; catalogItemId still links
+  // back for vendor grouping + reorder history.
+  catalogItemId?: string;
+  sku?: string; // vendor product code, copied from the catalog
+  unit?: string; // pack / size label copied from the catalog (e.g. "CASE", "1 GAL")
 }
 
 export interface PurchaseRequest {
@@ -42,6 +56,9 @@ export interface PurchaseRequest {
   title: string;
   purchaseStatus: PurchaseStatus;
   lineItems: PurchaseLineItem[];
+  // Recurring order-sheet tagging (unset on ad-hoc requests):
+  department?: string; // owning area, matches OrderCatalogItem.department
+  orderType?: PurchaseOrderType; // "adhoc" (default) | "catalog"
   justification?: string;
   project?: string;
   notes?: string;
@@ -85,6 +102,8 @@ export type PurchaseWritable = {
   [K in
     | "title"
     | "purchaseStatus"
+    | "department"
+    | "orderType"
     | "justification"
     | "project"
     | "notes"
@@ -110,6 +129,8 @@ export type PurchaseWritable = {
 export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   title: "Title",
   purchaseStatus: "PurchaseStatus",
+  department: "Department",
+  orderType: "OrderType",
   justification: "PurchaseJustification",
   project: "PurchaseProject",
   notes: "PurchaseNotes",
@@ -175,6 +196,8 @@ export function mapToPurchase(item: SharePointListItem): PurchaseRequest {
     title: (f.Title as string) || "",
     purchaseStatus: (f.PurchaseStatus as PurchaseStatus) || "Pending Approval",
     lineItems: parsePurchaseLineItems(f),
+    department: str("Department"),
+    orderType: (f.OrderType as PurchaseOrderType) || "adhoc",
     justification: str("PurchaseJustification"),
     project: str("PurchaseProject"),
     notes: str("PurchaseNotes"),
