@@ -89,6 +89,27 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
     assignTo: "guestservices@skyparksantasvillage.com",
   },
 
+  // Food & Beverage assignments (includes Pub + Coffee-Bakery)
+  {
+    department: "Food & Beverage",
+    assignTo: "FandB@skyparksantasvillage.com",
+    groupId: "35604eba-ec1a-4f35-9ad9-e5e838762362",
+  },
+
+  // Campground assignments
+  {
+    department: "Campground",
+    assignTo: "CampRVResort@skyparksantasvillage.com",
+    groupId: "2cf46062-5288-4852-929f-0be941e4d758",
+  },
+
+  // Retail assignments
+  {
+    department: "Retail",
+    assignTo: "retail@skyparksantasvillage.com",
+    groupId: "d02e0b0d-9f77-4c82-8354-2efe790607a7",
+  },
+
   // Inventory assignments
   {
     department: "Inventory",

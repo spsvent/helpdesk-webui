@@ -90,6 +90,31 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
   },
   HR: {},
   "Customer Service": {},
+  "Food & Beverage": {
+    "Dining/Restaurant": [],
+    "Bar/Pub": [],
+    "Coffee & Bakery": [],
+    "Kitchen Equipment": [],
+    "Food Safety/Sanitation": [],
+    Supplies: [],
+    Other: [],
+  },
+  Campground: {
+    "Sites & Hookups": [],
+    "Restrooms/Showers": [],
+    "Cabins/Lodging": [],
+    Reservations: [],
+    "Grounds & Amenities": [],
+    Utilities: [],
+    Other: [],
+  },
+  Retail: {
+    "Merchandise/Stock": [],
+    "Displays & Signage": [],
+    Inventory: [],
+    "Store Facilities": [],
+    Other: [],
+  },
   Inventory: {
     "Stock Issues": [
       "Low Stock Alert",
