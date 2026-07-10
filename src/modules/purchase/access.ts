@@ -55,10 +55,19 @@ export function canCancelPurchase(pr: PurchaseRequest, perms: UserPermissions | 
   return isPurchaseActor(pr, perms) && !isPurchaseTerminal(pr.purchaseStatus);
 }
 
-// Edit a request at any live point in the flow (broader than the pre-approval
-// isPurchaseEditable gate below). Post-order edits require a reason at save time.
+// Edit a request past the pre-approval window (broader than the isPurchaseEditable
+// gate below). Admins/approvers and purchasers may edit at any live stage. The
+// requester (owner) may edit only BEFORE the request is approved — once it has been
+// approved, the owner is locked out and only an admin/approver or purchaser can
+// change the order. Post-order edits require a reason at save time.
 export function canEditPurchaseAnytime(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
-  return isPurchaseActor(pr, perms) && !isPurchaseTerminal(pr.purchaseStatus);
+  if (!perms) return false;
+  if (isPurchaseTerminal(pr.purchaseStatus)) return false;
+  if (perms.role === "admin" || perms.isPurchaser) return true;
+  // Owner: allowed only while the request hasn't been approved yet.
+  if (pr.approvalStatus === "Approved") return false;
+  const me = perms.email.toLowerCase();
+  return [pr.createdByEmail, pr.requesterEmail].some((e) => e && e.toLowerCase() === me);
 }
 
 // Owner (creator/requester) or admin — for editing a draft/changes-requested request.
