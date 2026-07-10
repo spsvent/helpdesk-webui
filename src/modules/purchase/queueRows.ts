@@ -24,9 +24,11 @@ function buildRow(pr: PurchaseRequest, item: PurchaseLineItem, idx: number): Que
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
     // Order-date proxy for the Awaiting Receipt sort (no per-item ordered timestamp exists).
     orderedAt: pr.purchasedDate || pr.modified,
-    // Request context for the queue's Requester + Approval columns. Purchase
-    // requests have no department (a ticket-only concept), so it's left blank.
+    // Request context for the queue's Requester + Approval columns. Recurring
+    // order-sheet requests carry a department + per-item SKU; ad-hoc ones don't.
     requester: pr.requesterName || pr.createdByName,
+    department: pr.department,
+    sku: item.sku,
     requestedDate: pr.created,
     approvedDate: pr.approvalDate,
     approver: pr.approvedByName,

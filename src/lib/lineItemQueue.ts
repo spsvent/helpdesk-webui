@@ -30,6 +30,9 @@ export interface QueueRow {
   // Parent-request context, shown in the queue's Requester + Approval columns.
   requester?: string;
   department?: string;
+  // Vendor product code, for catalog (recurring order-sheet) items. Shown under the
+  // item name so a purchaser can order by SKU; blank for ad-hoc requests.
+  sku?: string;
   requestedDate?: string; // when the request was created
   approvedDate?: string;
   approver?: string;
