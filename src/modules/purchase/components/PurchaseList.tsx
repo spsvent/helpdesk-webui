@@ -9,6 +9,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { PurchaseRequest } from "../types";
 import { canCreatePurchase } from "../access";
 import { ensurePurchaseList, isPurchaseConfigured, listPurchases, visiblePurchase } from "../purchaseService";
+import { isCatalogConfigured } from "../catalogService";
 import { computeEstimatedTotal } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 
@@ -59,9 +60,16 @@ export default function PurchaseList() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text-primary">Purchase Requests</h1>
         {canCreatePurchase(permissions) && (
-          <Link href="/purchase/new" className="px-3 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors">
-            + New Purchase Request
-          </Link>
+          <div className="flex items-center gap-2">
+            {isCatalogConfigured() && (
+              <Link href="/purchase/order-sheet" className="px-3 py-1.5 border border-border text-text-primary text-sm rounded-lg font-medium hover:bg-bg-subtle transition-colors">
+                + Order Sheet
+              </Link>
+            )}
+            <Link href="/purchase/new" className="px-3 py-1.5 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light transition-colors">
+              + New Purchase Request
+            </Link>
+          </div>
         )}
       </div>
 
