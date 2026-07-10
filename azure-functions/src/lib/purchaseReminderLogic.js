@@ -85,7 +85,10 @@ function receiveDue(items, orderedAt, nowMs) {
 function reminderPlan(req, nowMs) {
   const items = Array.isArray(req.lineItems) ? req.lineItems : [];
   const win = inNeedByWindow(req.needByDate, nowMs);
-  const cadenceDays = win ? 1 : 3;
+  // Recurring order sheets (orderType "catalog") remind daily — they have no need-by
+  // date to tighten cadence, but shouldn't sit unhandled for long.
+  const isCatalog = req.orderType === "catalog";
+  const cadenceDays = win || isCatalog ? 1 : 3;
   const reminders = [];
 
   if (req.approvalStatus === "Pending") {
@@ -95,11 +98,15 @@ function reminderPlan(req, nowMs) {
     }
   }
 
-  // Order nudge: an approved request with something still unordered, but only inside
-  // the need-by window — approved requests already surface in the /orders queue, so
-  // we only actively email purchasers when a deadline is approaching.
-  if (req.approvalStatus === "Approved" && win && hasUnorderedItem(items)) {
-    reminders.push("order");
+  // Order nudge: an approved request with something still unordered. Ad-hoc requests
+  // only email purchasers inside the need-by window (they already surface in the
+  // /orders queue). Recurring order sheets have no need-by date, so instead nudge
+  // once they've sat more than 4 days since submission.
+  if (req.approvalStatus === "Approved" && hasUnorderedItem(items)) {
+    const submittedDays = daysSince(req.approvalRequestedDate, nowMs);
+    if (win || (isCatalog && submittedDays != null && submittedDays > PENDING_NUDGE_DAYS)) {
+      reminders.push("order");
+    }
   }
 
   if (hasOrderedUnreceivedItem(items) && receiveDue(items, req.orderedAt, nowMs)) {

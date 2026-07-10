@@ -58,8 +58,9 @@ export default function LineItemQueue({
   loading = false,
 }: LineItemQueueProps) {
   const [tab, setTab] = useState<Tab>("awaiting");
-  // Default sort per queue: Awaiting Order → ticket #; Awaiting Receipt → order date (oldest first).
-  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "ticket");
+  // Default sort per queue: Awaiting Order → group by vendor (purchasers order by
+  // store/vendor); Awaiting Receipt → order date (oldest first).
+  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "vendor");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const rows = tab === "awaiting" ? awaitingRows : recentRows;
@@ -298,6 +299,11 @@ export default function LineItemQueue({
             </a>
           ) : (
             <span className="text-text-primary">{deriveItemLabel(r)}</span>
+          )}
+          {r.sku && (
+            <div className="text-[11px] text-text-secondary font-mono" title="Vendor product code">
+              SKU {r.sku}
+            </div>
           )}
         </td>
         <td className="text-center px-3 py-2 tabular-nums">{r.item.qty}</td>

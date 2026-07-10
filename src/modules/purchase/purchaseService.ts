@@ -13,6 +13,7 @@ import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
   PurchaseLineItem,
+  PurchaseMessage,
   PurchaseRequest,
   PurchaseWritable,
   PURCHASE_COLUMN_MAP,
@@ -34,6 +35,26 @@ export function isPurchaseConfigured(): boolean {
 
 export function serializeLineItems(items: PurchaseLineItem[]): string {
   return JSON.stringify(items);
+}
+
+// Append a message to a request's thread. Re-reads the thread immediately before
+// writing (to shrink the lost-update window when two people post at once), then
+// writes with a verify re-read. Callers send the notification email separately.
+export async function postPurchaseMessage(
+  client: Client,
+  id: string,
+  message: PurchaseMessage
+): Promise<PurchaseRequest> {
+  if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
+  const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`;
+  const current = await getPurchase(client, id);
+  const thread = [...(current.thread ?? []), message];
+  const json = JSON.stringify(thread);
+  await client.api(endpoint).patch({ fields: { PurchaseThreadJSON: json } });
+  const verify = await client.api(`${endpoint}?$expand=fields`).get();
+  const saved = (verify.fields as Record<string, unknown>).PurchaseThreadJSON as string | undefined;
+  if (saved !== json) throw new Error("Message failed to save to SharePoint. Please retry.");
+  return mapToPurchase(verify);
 }
 
 // The decisions an approver can make on a purchase request.
@@ -333,6 +354,15 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
     defaultValue: { value: "Pending Approval" },
   },
   { name: "PurchaseLineItemsJSON", text: { allowMultipleLines: true } },
+  // Purchaser <-> requester/approver message thread (JSON array of messages).
+  { name: "PurchaseThreadJSON", text: { allowMultipleLines: true } },
+  // Recurring order-sheet tagging (unset/"adhoc" on ordinary requests).
+  TEXT("Department"),
+  {
+    name: "OrderType",
+    choice: { allowTextEntry: false, choices: ["adhoc", "catalog"], displayAs: "dropDownMenu" },
+    defaultValue: { value: "adhoc" },
+  },
   MEMO("PurchaseJustification"),
   TEXT("PurchaseProject"),
   MEMO("PurchaseNotes"),

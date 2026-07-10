@@ -52,6 +52,38 @@ test("order nudge: approved + unordered item, only inside need-by window", () =>
   assert.deepEqual(inside.reminders, ["order"]);
 });
 
+test("catalog order: order nudge after 4 days without a need-by date, daily cadence", () => {
+  const items = [{ qty: 1, cost: 5 }]; // no vendor => unordered
+  // Ad-hoc approved+unordered with no need-by: no order nudge, 3-day cadence.
+  const adhoc = reminderPlan({ approvalStatus: "Approved", approvalRequestedDate: daysAgo(6), lineItems: items }, NOW);
+  assert.deepEqual(adhoc.reminders, []);
+  assert.equal(adhoc.cadenceDays, 3);
+
+  // Catalog approved+unordered, 6 days since submit: order nudge + daily cadence.
+  const catalog = reminderPlan(
+    { approvalStatus: "Approved", orderType: "catalog", approvalRequestedDate: daysAgo(6), lineItems: items },
+    NOW
+  );
+  assert.deepEqual(catalog.reminders, ["order"]);
+  assert.equal(catalog.cadenceDays, 1);
+
+  // Catalog approved but only 3 days in: not yet.
+  const early = reminderPlan(
+    { approvalStatus: "Approved", orderType: "catalog", approvalRequestedDate: daysAgo(3), lineItems: items },
+    NOW
+  );
+  assert.deepEqual(early.reminders, []);
+});
+
+test("catalog order pending: approval nudge after 4 days, daily cadence", () => {
+  const plan = reminderPlan(
+    { approvalStatus: "Pending", orderType: "catalog", approvalRequestedDate: daysAgo(5), lineItems: [] },
+    NOW
+  );
+  assert.deepEqual(plan.reminders, ["approval"]);
+  assert.equal(plan.cadenceDays, 1);
+});
+
 test("receive nudge: expected delivery passed", () => {
   const items = [{ qty: 1, vendor: "Amazon", expectedDelivery: daysAgo(1) }];
   const plan = reminderPlan({ approvalStatus: "Approved", lineItems: items, orderedAt: daysAgo(2) }, NOW);
