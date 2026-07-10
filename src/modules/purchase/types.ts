@@ -14,7 +14,11 @@ export type PurchaseStatus =
   | "Ordered"
   | "Purchased"
   | "Received"
-  | "Denied";
+  | "Denied"
+  // Terminal state reached via an explicit cancel (owner/admin/purchaser) at any
+  // point in the flow. A reason is required once the request is past ordering
+  // (see purchaseRequiresReason in access.ts).
+  | "Cancelled";
 
 // The approval gate (kept alongside purchaseStatus, mirroring the current model).
 export type PurchaseApprovalStatus = "None" | "Pending" | "Approved" | "Denied" | "Changes Requested";
@@ -86,6 +90,11 @@ export interface PurchaseRequest {
   approvedByEmail?: string;
   approvalDate?: string;
   approvalNotes?: string;
+  // Cancellation audit (set when purchaseStatus === "Cancelled")
+  cancelReason?: string;
+  cancelledByName?: string;
+  cancelledByEmail?: string;
+  cancelledDate?: string; // ISO date (yyyy-mm-dd)
   // Submitter + audience
   requesterName: string;
   requesterEmail: string;
@@ -131,6 +140,10 @@ export type PurchaseWritable = {
     | "approvedByEmail"
     | "approvalDate"
     | "approvalNotes"
+    | "cancelReason"
+    | "cancelledByName"
+    | "cancelledByEmail"
+    | "cancelledDate"
     | "requesterName"
     | "requesterEmail"
     | "participantEmails"
@@ -158,6 +171,10 @@ export const PURCHASE_COLUMN_MAP: Record<keyof PurchaseWritable, string> = {
   approvedByEmail: "ApprovedByEmail",
   approvalDate: "ApprovalDate",
   approvalNotes: "ApprovalNotes",
+  cancelReason: "CancelReason",
+  cancelledByName: "CancelledByName",
+  cancelledByEmail: "CancelledByEmail",
+  cancelledDate: "CancelledDate",
   requesterName: "RequesterName",
   requesterEmail: "RequesterEmail",
   participantEmails: "ParticipantEmails",
@@ -238,6 +255,10 @@ export function mapToPurchase(item: SharePointListItem): PurchaseRequest {
     approvedByEmail: str("ApprovedByEmail"),
     approvalDate: str("ApprovalDate"),
     approvalNotes: str("ApprovalNotes"),
+    cancelReason: str("CancelReason"),
+    cancelledByName: str("CancelledByName"),
+    cancelledByEmail: str("CancelledByEmail"),
+    cancelledDate: str("CancelledDate"),
     requesterName: str("RequesterName") || item.createdBy?.user?.displayName || "",
     requesterEmail: str("RequesterEmail") || item.createdBy?.user?.email || "",
     participantEmails: splitEmails(f.ParticipantEmails),

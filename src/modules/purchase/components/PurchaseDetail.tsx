@@ -16,13 +16,22 @@ import {
   updateLineItems,
   visiblePurchase,
 } from "../purchaseService";
-import { canApprovePurchase, canEditPurchase, canPurchase, canReceive, isPurchaseEditable } from "../access";
+import {
+  canApprovePurchase,
+  canCancelPurchase,
+  canEditPurchase,
+  canEditPurchaseAnytime,
+  canPurchase,
+  canReceive,
+  isPurchaseEditable,
+} from "../access";
 import { allItemsOrdered, allItemsReceived } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 import LineItemsTable from "./LineItemsTable";
 import PurchaseApprovalPanel from "./PurchaseApprovalPanel";
 import PurchaseActionPanel from "./PurchaseActionPanel";
 import ReceiveActionPanel from "./ReceiveActionPanel";
+import CancelPurchasePanel from "./CancelPurchasePanel";
 import PurchaseThread from "./PurchaseThread";
 
 export default function PurchaseDetail({ id }: { id: string }) {
@@ -109,6 +118,10 @@ export default function PurchaseDetail({ id }: { id: string }) {
   // Owner edit/resubmit escape hatch (mirrors CdwDetail): only while the request
   // is out of the approval gate — "Changes Requested" or never submitted.
   const canEdit = canEditPurchase(pr, permissions) && isPurchaseEditable(pr);
+  // Edit at any live point in the flow (owner/admin/purchaser). Only surfaced as a
+  // separate affordance when the pre-approval canEdit block above isn't already showing.
+  const showAnytimeEdit = canEditPurchaseAnytime(pr, permissions) && !canEdit;
+  const showCancel = canCancelPurchase(pr, permissions);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -122,6 +135,17 @@ export default function PurchaseDetail({ id }: { id: string }) {
         Requested by {pr.requesterName || pr.createdByName || "—"}
         {pr.sourceTicketNumber ? ` · migrated from ticket #${pr.sourceTicketNumber}` : ""}
       </p>
+
+      {pr.purchaseStatus === "Cancelled" && (
+        <div className="mt-4 rounded-lg border border-gray-300 bg-gray-50 p-4 text-sm">
+          <p className="text-text-primary">
+            <span className="font-medium">Cancelled</span>
+            {pr.cancelledByName ? ` by ${pr.cancelledByName}` : ""}
+            {pr.cancelledDate ? ` on ${formatDate(pr.cancelledDate)}` : ""}
+          </p>
+          {pr.cancelReason && <p className="mt-1 text-text-secondary">“{pr.cancelReason}”</p>}
+        </div>
+      )}
 
       {conflictNotice && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
@@ -190,6 +214,20 @@ export default function PurchaseDetail({ id }: { id: string }) {
         <div className="mt-4 rounded-lg border border-border p-4 text-sm">
           <p><span className="font-medium">{pr.approvalStatus}</span> by {pr.approvedByName}{pr.approvalDate ? ` on ${formatDate(pr.approvalDate)}` : ""}</p>
           {pr.approvalNotes && <p className="mt-1 text-text-secondary">“{pr.approvalNotes}”</p>}
+        </div>
+      )}
+
+      {(showAnytimeEdit || showCancel) && (
+        <div className="mt-4 flex flex-wrap items-start gap-2">
+          {showAnytimeEdit && (
+            <Link
+              href={`/purchase/edit/?id=${pr.id}`}
+              className="px-4 py-2 bg-bg-card text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40"
+            >
+              Edit request
+            </Link>
+          )}
+          {showCancel && <CancelPurchasePanel pr={pr} onCancelled={setPr} />}
         </div>
       )}
 
