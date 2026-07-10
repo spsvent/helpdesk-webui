@@ -2543,8 +2543,37 @@ const helpSections: HelpSection[] = [
           open it and click <strong>Edit</strong>, make your changes, then either{" "}
           <strong>Save &amp; Resubmit for Approval</strong> (re-enters the approval queue and
           re-emails the approvers) or <strong>Save without Resubmitting</strong> to keep revising.
-          Requests that are pending, approved, or denied can&apos;t be edited. If the approval
-          email didn&apos;t go out, use <strong>Re-send approval request</strong> on the request page.
+          If the approval email didn&apos;t go out, use <strong>Re-send approval request</strong> on
+          the request page.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Editing at any point</h4>
+        <p>
+          The <strong>requester</strong>, an <strong>admin/GM</strong>, or a{" "}
+          <strong>purchaser</strong> can edit a request at <strong>any live stage</strong> of the
+          flow — not just while changes were requested. Open the request and click{" "}
+          <strong>Edit request</strong>. For a request that has already been approved, editing just
+          saves your changes (it does <em>not</em> re-enter the approval queue).
+        </p>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-2">
+          <p className="text-sm text-yellow-800">
+            <strong>Reason required after ordering:</strong> once a request is{" "}
+            <strong>Ordered</strong>, <strong>Purchased</strong>, or <strong>Received</strong>,
+            editing it requires a <strong>reason</strong>. The reason is recorded on the request&apos;s
+            message thread and emailed to everyone involved (requester, approver, purchaser, and
+            inventory).
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Cancelling a request</h4>
+        <p>
+          The same people (requester, admin/GM, or purchaser) can <strong>cancel</strong> a request
+          at any live stage using <strong>Cancel request</strong> on the request page. Cancelling
+          marks it <strong>Cancelled</strong> (a terminal status) and removes it from the order and
+          receiving queues. A <strong>reason is required</strong> if the request has already been
+          ordered (Ordered/Purchased/Received) and optional before that; everyone involved is
+          notified. Already-<strong>Denied</strong> or already-<strong>Cancelled</strong> requests
+          can&apos;t be cancelled or edited.
         </p>
         <h4 className="font-semibold text-text-primary mt-6">After approval</h4>
         <p>

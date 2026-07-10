@@ -42,8 +42,8 @@ export function purchaseUnorderedRows(prs: PurchaseRequest[]): QueueRow[] {
   for (const pr of prs) {
     if (pr.approvalStatus !== "Approved") continue;
     const status = pr.purchaseStatus;
-    // Skip requests fully done (Received) or denied
-    if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
+    // Skip requests fully done (Received), denied, cancelled, or not yet approved
+    if (status === "Received" || status === "Denied" || status === "Cancelled" || status === "Pending Approval") continue;
     pr.lineItems.forEach((item, idx) => {
       if (item.vendor?.trim()) return; // already ordered (vendor present; order # optional)
       rows.push(buildRow(pr, item, idx));
@@ -56,7 +56,7 @@ export function purchaseUnorderedRows(prs: PurchaseRequest[]): QueueRow[] {
 export function purchaseUnreceivedRows(prs: PurchaseRequest[]): QueueRow[] {
   const rows: QueueRow[] = [];
   for (const pr of prs) {
-    if (pr.purchaseStatus === "Pending Approval" || pr.purchaseStatus === "Denied") continue;
+    if (pr.purchaseStatus === "Pending Approval" || pr.purchaseStatus === "Denied" || pr.purchaseStatus === "Cancelled") continue;
     pr.lineItems.forEach((item, idx) => {
       const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
@@ -73,6 +73,7 @@ export function purchaseRecentlyOrderedRows(prs: PurchaseRequest[], daysBack = 3
   const cutoff = Date.now() - daysBack * 86400000;
   const rows: QueueRow[] = [];
   for (const pr of prs) {
+    if (pr.purchaseStatus === "Cancelled") continue;
     pr.lineItems.forEach((item, idx) => {
       const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;

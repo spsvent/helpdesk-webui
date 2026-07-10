@@ -30,6 +30,63 @@ export async function notifyPurchaseDecision(
   );
 }
 
+// Notify everyone involved that a request was cancelled. Best-effort: individual
+// send failures are logged, not thrown. The actor is excluded (they just did it).
+export async function notifyPurchaseCancelled(
+  client: Client,
+  pr: PurchaseRequest,
+  actorName: string,
+  actorEmail: string,
+  reason?: string
+): Promise<void> {
+  const actor = actorEmail?.trim().toLowerCase();
+  const recipients = purchaseThreadParticipants(pr).filter((e) => e.toLowerCase() !== actor);
+  if (recipients.length === 0) return;
+  const reasonHtml = reason ? `<p><span class="label">Reason:</span> ${escapeHtml(reason)}</p>` : "";
+  const html = emailShell(
+    "Purchase Request Cancelled",
+    `<p><strong>${escapeHtml(actorName)}</strong> cancelled the purchase request <strong>${escapeHtml(pr.title)}</strong>.</p>
+      ${reasonHtml}
+      <div class="actions"><a href="${APP_URL}/purchase?id=${pr.id}" class="btn">Open the Request</a></div>`,
+    "SkyPark Help Desk — Purchase Request"
+  );
+  await Promise.all(
+    recipients.map((to) =>
+      sendEmail(client, to, `[Cancelled] Purchase Request: ${pr.title}`, html).catch((e) =>
+        console.error("[notifyPurchaseCancelled] failed for", to, e)
+      )
+    )
+  );
+}
+
+// Notify everyone involved that an already-ordered request was edited. Best-effort.
+export async function notifyPurchaseEdited(
+  client: Client,
+  pr: PurchaseRequest,
+  actorName: string,
+  actorEmail: string,
+  reason?: string
+): Promise<void> {
+  const actor = actorEmail?.trim().toLowerCase();
+  const recipients = purchaseThreadParticipants(pr).filter((e) => e.toLowerCase() !== actor);
+  if (recipients.length === 0) return;
+  const reasonHtml = reason ? `<p><span class="label">Reason:</span> ${escapeHtml(reason)}</p>` : "";
+  const html = emailShell(
+    "Purchase Request Edited",
+    `<p><strong>${escapeHtml(actorName)}</strong> edited the purchase request <strong>${escapeHtml(pr.title)}</strong> after it was ordered.</p>
+      ${reasonHtml}
+      <div class="actions"><a href="${APP_URL}/purchase?id=${pr.id}" class="btn">Open the Request</a></div>`,
+    "SkyPark Help Desk — Purchase Request"
+  );
+  await Promise.all(
+    recipients.map((to) =>
+      sendEmail(client, to, `[Edited] Purchase Request: ${pr.title}`, html).catch((e) =>
+        console.error("[notifyPurchaseEdited] failed for", to, e)
+      )
+    )
+  );
+}
+
 // Everyone involved in a request (requester, approver, purchaser, inventory,
 // creator, extra participants) — deduped, for message-thread notifications.
 export function purchaseThreadParticipants(pr: PurchaseRequest): string[] {

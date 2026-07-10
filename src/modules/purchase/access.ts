@@ -23,6 +23,44 @@ export function canReceive(pr: PurchaseRequest, perms: UserPermissions | null): 
   return !!perms?.isInventory && ["Ordered", "Purchased"].includes(pr.purchaseStatus);
 }
 
+// Fulfillment statuses where money has been committed, so a cancel or a post-order
+// edit must carry a reason (per the workflow: "a reason is required if it's already
+// been ordered"). Everything before ordering can be changed freely.
+const REASON_REQUIRED_STATUSES: PurchaseRequest["purchaseStatus"][] = ["Ordered", "Purchased", "Received"];
+
+export function purchaseRequiresReason(status: PurchaseRequest["purchaseStatus"]): boolean {
+  return REASON_REQUIRED_STATUSES.includes(status);
+}
+
+// Terminal states — nothing more can happen to the request, so cancel/edit are off.
+function isPurchaseTerminal(status: PurchaseRequest["purchaseStatus"]): boolean {
+  return status === "Cancelled" || status === "Denied";
+}
+
+// Who may cancel or edit a request at ANY point in the flow: the owner
+// (creator/requester), an admin/GM, or a purchaser (they own post-approval
+// fulfillment). Blocked once the request is already terminal (Cancelled/Denied).
+function isPurchaseActor(
+  pr: Pick<PurchaseRequest, "createdByEmail" | "requesterEmail">,
+  perms: UserPermissions | null
+): boolean {
+  if (!perms) return false;
+  if (perms.role === "admin" || perms.isPurchaser) return true;
+  const me = perms.email.toLowerCase();
+  return [pr.createdByEmail, pr.requesterEmail].some((e) => e && e.toLowerCase() === me);
+}
+
+// Cancel a request at any live point in the flow.
+export function canCancelPurchase(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
+  return isPurchaseActor(pr, perms) && !isPurchaseTerminal(pr.purchaseStatus);
+}
+
+// Edit a request at any live point in the flow (broader than the pre-approval
+// isPurchaseEditable gate below). Post-order edits require a reason at save time.
+export function canEditPurchaseAnytime(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
+  return isPurchaseActor(pr, perms) && !isPurchaseTerminal(pr.purchaseStatus);
+}
+
 // Owner (creator/requester) or admin — for editing a draft/changes-requested request.
 export function canEditPurchase(
   pr: Pick<PurchaseRequest, "createdByEmail" | "requesterEmail">,
