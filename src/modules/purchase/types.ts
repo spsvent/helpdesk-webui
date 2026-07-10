@@ -51,6 +51,16 @@ export interface PurchaseLineItem {
   unit?: string; // pack / size label copied from the catalog (e.g. "CASE", "1 GAL")
 }
 
+// A message on a purchase request's thread — the purchaser's line to the original
+// requester + approver (and back) once a request is approved ("out of stock, OK to
+// substitute?"). Stored as a JSON array in PurchaseThreadJSON.
+export interface PurchaseMessage {
+  author: string; // display name of who posted
+  email: string; // author email — attributes the message + excludes them from its notification
+  text: string;
+  at: string; // ISO timestamp
+}
+
 export interface PurchaseRequest {
   id: string;
   title: string;
@@ -80,6 +90,8 @@ export interface PurchaseRequest {
   requesterName: string;
   requesterEmail: string;
   participantEmails?: string[];
+  // Purchaser <-> requester/approver message thread.
+  thread?: PurchaseMessage[];
   // Provenance (set for records migrated off the Tickets list)
   sourceTicketNumber?: number;
   sourceTicketId?: string;
@@ -181,6 +193,19 @@ export function parsePurchaseLineItems(fields: Record<string, unknown>): Purchas
   return [];
 }
 
+export function parseThread(fields: Record<string, unknown>): PurchaseMessage[] {
+  const json = fields.PurchaseThreadJSON as string | undefined;
+  if (json && json.trim()) {
+    try {
+      const parsed = JSON.parse(json);
+      if (Array.isArray(parsed)) return parsed as PurchaseMessage[];
+    } catch (e) {
+      console.warn("[parseThread] bad PurchaseThreadJSON, ignoring:", e);
+    }
+  }
+  return [];
+}
+
 function splitEmails(v: unknown): string[] {
   return typeof v === "string" && v.trim()
     ? v.split(/[;,]/).map((e) => e.trim()).filter(Boolean)
@@ -216,6 +241,7 @@ export function mapToPurchase(item: SharePointListItem): PurchaseRequest {
     requesterName: str("RequesterName") || item.createdBy?.user?.displayName || "",
     requesterEmail: str("RequesterEmail") || item.createdBy?.user?.email || "",
     participantEmails: splitEmails(f.ParticipantEmails),
+    thread: parseThread(f),
     sourceTicketNumber: num("SourceTicketNumber"),
     sourceTicketId: str("SourceTicketId"),
     created: item.createdDateTime,

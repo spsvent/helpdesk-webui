@@ -23,6 +23,7 @@ import LineItemsTable from "./LineItemsTable";
 import PurchaseApprovalPanel from "./PurchaseApprovalPanel";
 import PurchaseActionPanel from "./PurchaseActionPanel";
 import ReceiveActionPanel from "./ReceiveActionPanel";
+import PurchaseThread from "./PurchaseThread";
 
 export default function PurchaseDetail({ id }: { id: string }) {
   const { instance, accounts } = useMsal();
@@ -223,6 +224,8 @@ export default function PurchaseDetail({ id }: { id: string }) {
       {canReceive(pr, permissions) && (
         <div className="mt-4"><ReceiveActionPanel pr={pr} onMarkReceived={handleMarkReceived} /></div>
       )}
+
+      <PurchaseThread pr={pr} onUpdate={setPr} />
     </div>
   );
 }
