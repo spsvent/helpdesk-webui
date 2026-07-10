@@ -2547,13 +2547,13 @@ const helpSections: HelpSection[] = [
           the request page.
         </p>
 
-        <h4 className="font-semibold text-text-primary mt-6">Editing at any point</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Editing after submission</h4>
         <p>
-          The <strong>requester</strong>, an <strong>admin/GM</strong>, or a{" "}
-          <strong>purchaser</strong> can edit a request at <strong>any live stage</strong> of the
-          flow — not just while changes were requested. Open the request and click{" "}
-          <strong>Edit request</strong>. For a request that has already been approved, editing just
-          saves your changes (it does <em>not</em> re-enter the approval queue).
+          Before a request is approved, the <strong>requester</strong> (or an admin) can edit it.
+          <strong> Once it has been approved</strong>, the requester is locked out — only an{" "}
+          <strong>admin/GM (approver)</strong> or a <strong>purchaser</strong> can edit an approved
+          request. Open the request and click <strong>Edit request</strong>. Editing an already-approved
+          request just saves your changes (it does <em>not</em> re-enter the approval queue).
         </p>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-2">
           <p className="text-sm text-yellow-800">
@@ -2567,13 +2567,14 @@ const helpSections: HelpSection[] = [
 
         <h4 className="font-semibold text-text-primary mt-6">Cancelling a request</h4>
         <p>
-          The same people (requester, admin/GM, or purchaser) can <strong>cancel</strong> a request
-          at any live stage using <strong>Cancel request</strong> on the request page. Cancelling
-          marks it <strong>Cancelled</strong> (a terminal status) and removes it from the order and
-          receiving queues. A <strong>reason is required</strong> if the request has already been
-          ordered (Ordered/Purchased/Received) and optional before that; everyone involved is
-          notified. Already-<strong>Denied</strong> or already-<strong>Cancelled</strong> requests
-          can&apos;t be cancelled or edited.
+          The <strong>requester</strong>, an <strong>admin/GM</strong>, or a{" "}
+          <strong>purchaser</strong> can <strong>cancel</strong> a request at any live stage using{" "}
+          <strong>Cancel request</strong> on the request page. Cancelling marks it{" "}
+          <strong>Cancelled</strong> (a terminal status) and removes it from the order and receiving
+          queues. A <strong>reason is required</strong> if the request has already been ordered
+          (Ordered/Purchased/Received) and optional before that; everyone involved is notified.
+          Already-<strong>Denied</strong> or already-<strong>Cancelled</strong> requests can&apos;t
+          be cancelled or edited.
         </p>
         <h4 className="font-semibold text-text-primary mt-6">After approval</h4>
         <p>
