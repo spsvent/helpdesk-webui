@@ -2716,6 +2716,93 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "recurring-order-sheets",
+    title: "Recurring Order Sheets",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Departments that reorder the same supplies every week (janitorial, office,
+          food &amp; beverage, and so on) can order from a shared{" "}
+          <strong>Order Sheet</strong> instead of filling out a purchase request by
+          hand.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Placing a recurring order
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Go to <strong>Purchase</strong> and click{" "}
+            <strong>&quot;+ Order Sheet&quot;</strong>.
+          </li>
+          <li>
+            The list opens filtered to <strong>your department</strong> (plus shared
+            items). Switch the department, category, or vendor filters, or search, to
+            order other things.
+          </li>
+          <li>
+            Type the quantity you need next to each item. Only items with a quantity
+            are ordered.
+          </li>
+          <li>
+            When you enter a quantity, a small hint shows the{" "}
+            <strong>last time that item was ordered</strong> and how many — a quick
+            guide for how much to reorder.
+          </li>
+          <li>
+            Click <strong>Submit Order</strong>. It goes to a General Manager for
+            approval.
+          </li>
+        </ol>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Order sheets are quiet — they don&apos;t send an
+            approval email. Approvers and purchasers see them via a badge, and a
+            reminder digest goes out only if an order sits unhandled for more than a
+            few days.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Ordering by vendor (purchasers)
+        </h4>
+        <p>
+          The Order Queue groups approved items by <strong>vendor / store</strong> by
+          default and shows each item&apos;s <strong>SKU</strong> and department, so
+          you can order everything from one supplier together.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Managing the catalog (admins &amp; purchasers)
+        </h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            From <strong>Purchase</strong>, click{" "}
+            <strong>&quot;Manage catalog&quot;</strong>.
+          </li>
+          <li>
+            Add, edit, price, or retire items. Set each item&apos;s department,
+            category, vendor, SKU, size, and unit price.
+          </li>
+          <li>
+            Deactivate items to remove them from order sheets without losing order
+            history; reactivate them anytime.
+          </li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Messages on a request
+        </h4>
+        <p>
+          Every purchase request has a <strong>Messages</strong> section at the
+          bottom. A purchaser can ask the requester and approver a question (for
+          example, &quot;out of stock — OK to substitute?&quot;), and everyone on the
+          request is emailed so they can read and answer.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: "request-visibility",
     title: "Request Visibility by Job Title",
     content: (

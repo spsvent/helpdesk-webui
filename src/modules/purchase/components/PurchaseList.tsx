@@ -61,6 +61,11 @@ export default function PurchaseList() {
         <h1 className="text-xl font-semibold text-text-primary">Purchase Requests</h1>
         {canCreatePurchase(permissions) && (
           <div className="flex items-center gap-2">
+            {isCatalogConfigured() && (permissions?.role === "admin" || permissions?.isPurchaser) && (
+              <Link href="/purchase/catalog" className="text-sm text-text-secondary hover:text-text-primary underline">
+                Manage catalog
+              </Link>
+            )}
             {isCatalogConfigured() && (
               <Link href="/purchase/order-sheet" className="px-3 py-1.5 border border-border text-text-primary text-sm rounded-lg font-medium hover:bg-bg-subtle transition-colors">
                 + Order Sheet
