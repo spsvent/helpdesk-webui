@@ -76,6 +76,7 @@ async function runPurchaseReminders(context) {
       purchaseStatus: fields.PurchaseStatus,
       needByDate: fields.NeedByDate,
       approvalRequestedDate: fields.ApprovalRequestedDate,
+      orderType: fields.OrderType,
       lineItems: parseItems(fields),
       orderedAt: fields.PurchasedDate || item.lastModifiedDateTime,
     };
