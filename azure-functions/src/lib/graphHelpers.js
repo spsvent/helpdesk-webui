@@ -61,6 +61,21 @@ async function getGroupMemberEmails(client, groupId) {
   }
 }
 
+// The SMTP address of a mail-enabled (Microsoft 365) group, or null if the group
+// isn't mail-enabled / can't be read. Lets a digest be sent to the group's shared
+// address — so members subscribe/unsubscribe it in Outlook (keeping membership and
+// any app role) — instead of blasting each member's personal inbox directly.
+async function getGroupMail(client, groupId) {
+  if (!groupId) return null;
+  try {
+    const g = await client.api(`/groups/${groupId}`).select("mail,mailEnabled").get();
+    return g && g.mailEnabled && g.mail ? g.mail : null;
+  } catch (e) {
+    console.error("getGroupMail failed:", e.message);
+    return null;
+  }
+}
+
 // Like getGroupMemberEmails but returns { email, displayName } for correct attribution.
 async function getGroupMembers(client, groupId) {
   if (!groupId) return [];
@@ -75,4 +90,4 @@ async function getGroupMembers(client, groupId) {
   }
 }
 
-module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMembers };
+module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMembers, getGroupMail };

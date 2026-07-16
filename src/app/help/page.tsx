@@ -2742,6 +2742,20 @@ const helpSections: HelpSection[] = [
             discrepancies. This creates a record for follow-up if needed.
           </p>
         </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Daily reminder:</strong> Each morning the help desk emails an{" "}
+            <strong>&quot;Items Awaiting Receipt&quot;</strong> digest of anything
+            still waiting to be checked in. It is sent to the shared{" "}
+            <strong>Inventory</strong> group address, so the whole inventory team is
+            covered. To keep it out of your personal inbox while keeping your access
+            and the Receiving queue, <strong>unsubscribe</strong> from the Inventory
+            group in Outlook (open the group → <strong>•••</strong> →{" "}
+            <strong>Unsubscribe</strong>). You stay a member — you just stop getting
+            the group&apos;s mail in your inbox.
+          </p>
+        </div>
       </div>
     ),
   },

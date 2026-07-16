@@ -1,5 +1,5 @@
 const { app } = require("@azure/functions");
-const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
+const { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMail } = require("../lib/graphHelpers");
 const { purchaseReminderDigestEmail } = require("../lib/purchaseEmailTemplates");
 const { reminderPlan, shouldSend } = require("../lib/purchaseReminderLogic");
 
@@ -12,6 +12,11 @@ const { reminderPlan, shouldSend } = require("../lib/purchaseReminderLogic");
 // Recipients come from the same Entra groups the approval flow uses (GENERAL_MANAGERS_/
 // PURCHASER_/INVENTORY_GROUP_ID). If an audience is empty, that digest simply isn't sent
 // (and its records aren't stamped, so they'll be picked up once the group is configured).
+//
+// The receive digest is delivered to the Inventory group's shared SMTP address (when the
+// group is mail-enabled) rather than to each member individually — so a member can keep
+// their membership/role but unsubscribe the digest in Outlook. It falls back to individual
+// member emails if the group isn't mail-enabled.
 
 const TERMINAL = new Set(["Received", "Denied"]);
 
@@ -53,11 +58,17 @@ async function runPurchaseReminders(context) {
   const client = await getGraphClient();
 
   // Resolve each audience once per run (empty array if the group id isn't configured).
-  const [gmEmails, purchaserEmails, inventoryEmails] = await Promise.all([
+  // Inventory (receive) is delivered to the group's shared address so members can
+  // subscribe/unsubscribe it in Outlook; fall back to member emails if the group isn't
+  // mail-enabled, so a misconfigured group still nudges someone rather than no one.
+  const [gmEmails, purchaserEmails, inventoryMail] = await Promise.all([
     getGroupMemberEmails(client, config.generalManagersGroupId),
     getGroupMemberEmails(client, config.purchaserGroupId),
-    getGroupMemberEmails(client, config.inventoryGroupId),
+    getGroupMail(client, config.inventoryGroupId),
   ]);
+  const inventoryRecipients = inventoryMail
+    ? [inventoryMail]
+    : await getGroupMemberEmails(client, config.inventoryGroupId);
 
   const items = await fetchPurchaseRequests(client);
   context.log(`purchaseReminders: evaluating ${items.length} purchase request(s).`);
@@ -118,7 +129,7 @@ async function runPurchaseReminders(context) {
 
   // Receive → one digest to Inventory (everything), plus one digest per requester
   // (only their own items), so nobody gets a per-item flood.
-  await sendDigest("receive", buckets.receive, inventoryEmails);
+  await sendDigest("receive", buckets.receive, inventoryRecipients);
   const byRequester = new Map();
   for (const rec of buckets.receive) {
     const email = rec.fields.RequesterEmail;
