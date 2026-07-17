@@ -2699,6 +2699,17 @@ const helpSections: HelpSection[] = [
           </li>
         </ol>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Adjust expected delivery:</strong> In the{" "}
+            <strong>Awaiting Receipt</strong> tab, the <strong>Delivery</strong>{" "}
+            column is editable — pick a new date to update an item&apos;s expected
+            delivery and it saves automatically. Any Inventory team member can do
+            this (you can also change it on the purchase request&apos;s detail page).
+            Keeping delivery dates accurate is what drives the receiving reminders.
+          </p>
+        </div>
+
         <h4 className="font-semibold text-text-primary mt-6">
           Confirming Receipt of an Order
         </h4>

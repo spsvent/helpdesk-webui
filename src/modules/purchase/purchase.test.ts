@@ -3,7 +3,7 @@ import type { Client } from "@microsoft/microsoft-graph-client";
 import { mapToPurchase, parsePurchaseLineItems } from "./types";
 import { isSafeItemUrl, validateLineItem } from "./lineItems";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
-import { canEditPurchase, isPurchaseEditable } from "./access";
+import { canEditExpectedDelivery, canEditPurchase, isPurchaseEditable } from "./access";
 import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
 import type { PurchaseRequest } from "./types";
 import { fetchAllListItems } from "@/shared/listItems";
@@ -104,6 +104,29 @@ describe("canEditPurchase / isPurchaseEditable (edit + resubmit gate)", () => {
     expect(isPurchaseEditable({ approvalStatus: "Denied", purchaseStatus: "Denied" })).toBe(false);
     // A migrated record that already moved through fulfillment isn't editable.
     expect(isPurchaseEditable({ approvalStatus: "None", purchaseStatus: "Received" })).toBe(false);
+  });
+});
+
+describe("canEditExpectedDelivery (inline delivery-date edit gate)", () => {
+  const ordered = { purchaseStatus: "Ordered" as const };
+  const purchased = { purchaseStatus: "Purchased" as const };
+
+  it("inventory, purchasers, and admins may edit while Ordered/Purchased", () => {
+    expect(canEditExpectedDelivery(ordered, perms({ isInventory: true }))).toBe(true);
+    expect(canEditExpectedDelivery(purchased, perms({ isInventory: true }))).toBe(true);
+    expect(canEditExpectedDelivery(ordered, perms({ isPurchaser: true }))).toBe(true);
+    expect(canEditExpectedDelivery(ordered, perms({ role: "admin" }))).toBe(true);
+  });
+
+  it("unprivileged users (plain requester) cannot", () => {
+    expect(canEditExpectedDelivery(ordered, perms({ email: "buyer@x.com" }))).toBe(false);
+    expect(canEditExpectedDelivery(ordered, null)).toBe(false);
+  });
+
+  it("blocked outside the in-flight window (pre-order, received, terminal)", () => {
+    for (const status of ["Pending Approval", "Approved", "Received", "Cancelled", "Denied"] as const) {
+      expect(canEditExpectedDelivery({ purchaseStatus: status }, perms({ isInventory: true }))).toBe(false);
+    }
   });
 });
 

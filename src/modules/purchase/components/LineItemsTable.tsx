@@ -3,12 +3,16 @@
 
 import { PurchaseLineItem } from "../types";
 import { computeEstimatedTotal, computeActualTotal, isSafeItemUrl } from "../lineItems";
+import InlineDateEdit from "@/components/InlineDateEdit";
 
 interface LineItemsTableProps {
   items: PurchaseLineItem[];
   showOrderColumns?: boolean;     // vendor / orderNum / actualCost / expectedDelivery
   showReceivedColumns?: boolean;  // receivedQty / receivedDate
   compact?: boolean;              // smaller padding / fonts (for approval banner)
+  // When provided, the Delivery cell becomes an inline autosaving date editor
+  // (Inventory/purchasers adjusting expected delivery). Omitted → read-only text.
+  onSetExpectedDelivery?: (itemIndex: number, iso: string) => void | Promise<void>;
 }
 
 export default function LineItemsTable({
@@ -16,6 +20,7 @@ export default function LineItemsTable({
   showOrderColumns = false,
   showReceivedColumns = false,
   compact = false,
+  onSetExpectedDelivery,
 }: LineItemsTableProps) {
   if (items.length === 0) return null;
 
@@ -73,7 +78,17 @@ export default function LineItemsTable({
                   <td className={padding}>{item.vendor ?? "—"}</td>
                   <td className={padding}>{item.orderNum ?? "—"}</td>
                   <td className={`text-right ${padding}`}>{item.actualCost != null ? `$${item.actualCost.toFixed(2)}` : "—"}</td>
-                  <td className={padding}>{item.expectedDelivery ?? "—"}</td>
+                  <td className={padding}>
+                    {onSetExpectedDelivery ? (
+                      <InlineDateEdit
+                        value={item.expectedDelivery}
+                        onSave={(iso) => onSetExpectedDelivery(idx, iso)}
+                        ariaLabel={`Expected delivery for ${item.name || item.url || `item ${idx + 1}`}`}
+                      />
+                    ) : (
+                      item.expectedDelivery ?? "—"
+                    )}
+                  </td>
                 </>
               )}
               {showReceivedColumns && (
