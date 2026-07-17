@@ -11,6 +11,7 @@ import { QueueRow } from "@/lib/lineItemQueue";
 import {
   listPurchases,
   bulkUpdateLineItems as bulkUpdatePurchaseItems,
+  updateLineItems as updatePurchaseLineItems,
   BulkLineItemUpdate as PurchaseBulkUpdate,
 } from "@/modules/purchase/purchaseService";
 import { allItemsReceived as allPurchaseItemsReceived } from "@/modules/purchase/lineItems";
@@ -108,6 +109,21 @@ export default function ReceivingPage() {
     await fetchAll();
   };
 
+  // Inline edit of a single line item's expected delivery date from the queue.
+  // Patches just that item and swaps the updated request into local state (no full
+  // refetch). Throws on failure so the inline cell can surface a retry hint.
+  const handleSetExpectedDelivery = async (row: QueueRow, iso: string) => {
+    if (!accounts[0]) return;
+    const pr = purchases.find((p) => p.id === row.ticketId);
+    if (!pr) return;
+    const items = pr.lineItems.map((it, i) =>
+      i === row.itemIndex ? { ...it, expectedDelivery: iso || undefined } : it
+    );
+    const client = getGraphClient(instance, accounts[0]);
+    const updated = await updatePurchaseLineItems(client, pr.id, items);
+    setPurchases((prev) => prev.map((p) => (p.id === pr.id ? updated : p)));
+  };
+
   if (!isAuthenticated || rbacLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -170,6 +186,7 @@ export default function ReceivingPage() {
           recentRows={recentRows}
           loading={loading}
           onBulkAction={(selected) => setDialogRows(selected)}
+          onSetExpectedDelivery={handleSetExpectedDelivery}
         />
       </main>
 

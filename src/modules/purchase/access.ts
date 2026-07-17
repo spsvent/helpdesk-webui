@@ -23,6 +23,21 @@ export function canReceive(pr: PurchaseRequest, perms: UserPermissions | null): 
   return !!perms?.isInventory && ["Ordered", "Purchased"].includes(pr.purchaseStatus);
 }
 
+// Who may adjust a line item's expected delivery date in place: Inventory (the
+// supervisor + every group member), purchasers, and admins/GMs. Allowed only while
+// the order is in flight — Ordered/Purchased but not yet fully received — since that
+// is the window the receiving queue and reminder cadence care about. Pre-order the
+// date is set through the ordering flow; once Received/terminal there's nothing to
+// adjust. Mirrors canReceive's status gate so the two stay aligned.
+export function canEditExpectedDelivery(
+  pr: Pick<PurchaseRequest, "purchaseStatus">,
+  perms: UserPermissions | null
+): boolean {
+  if (!perms) return false;
+  const privileged = perms.role === "admin" || !!perms.isPurchaser || !!perms.isInventory;
+  return privileged && ["Ordered", "Purchased"].includes(pr.purchaseStatus);
+}
+
 // Fulfillment statuses where money has been committed, so a cancel or a post-order
 // edit must carry a reason (per the workflow: "a reason is required if it's already
 // been ordered"). Everything before ordering can be changed freely.

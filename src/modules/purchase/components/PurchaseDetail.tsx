@@ -19,6 +19,7 @@ import {
 import {
   canApprovePurchase,
   canCancelPurchase,
+  canEditExpectedDelivery,
   canEditPurchase,
   canEditPurchaseAnytime,
   canPurchase,
@@ -74,6 +75,14 @@ export default function PurchaseDetail({ id }: { id: string }) {
     const client = getGraphClient(instance, account);
     const status = allItemsReceived(receivedItems) ? "Received" : pr.purchaseStatus;
     setPr(await updateLineItems(client, pr.id, receivedItems, { purchaseStatus: status, notes }));
+  }
+  // Inline delivery-date edit (Inventory/purchasers). Patches just that line item's
+  // expectedDelivery — no status change. Throws on failure so the cell can flag it.
+  async function handleSetExpectedDelivery(idx: number, iso: string) {
+    if (!account || !pr) return;
+    const client = getGraphClient(instance, account);
+    const items = pr.lineItems.map((it, i) => (i === idx ? { ...it, expectedDelivery: iso || undefined } : it));
+    setPr(await updateLineItems(client, pr.id, items));
   }
 
   // Put a bounced ("Changes Requested") or never-submitted request back into the
@@ -232,7 +241,14 @@ export default function PurchaseDetail({ id }: { id: string }) {
       )}
 
       <div className="mt-6">
-        <LineItemsTable items={pr.lineItems} showOrderColumns={showOrder} showReceivedColumns={showReceived} />
+        <LineItemsTable
+          items={pr.lineItems}
+          showOrderColumns={showOrder}
+          showReceivedColumns={showReceived}
+          onSetExpectedDelivery={
+            canEditExpectedDelivery(pr, permissions) ? handleSetExpectedDelivery : undefined
+          }
+        />
       </div>
 
       <dl className="mt-6 divide-y divide-border border-t border-border">
