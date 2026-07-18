@@ -23,6 +23,10 @@ export const DEPARTMENT_GROUP_MAP: Record<string, string> = {
   Facilities: "b9dbaa5a-5bda-4ca0-bcb6-bd2f3783739f", // Grounds Keeping + Janitorial merged into Facilities (renamed group)
   HR: "bcd1cb4f-d182-4f0e-8ace-fdee41e005f8", // HR Manager
   "Customer Service": "aa6020eb-e4b4-46ce-a720-945cf2bf5d8d", // Admissions
+  Finance: "ab67cf21-9160-4736-995f-d13944090c68", // Finance - SecGroup
+  "Food & Beverage": "35604eba-ec1a-4f35-9ad9-e5e838762362", // F&B - SecGroup
+  Campground: "2cf46062-5288-4852-929f-0be941e4d758", // Campground - SecGroup
+  Retail: "d02e0b0d-9f77-4c82-8354-2efe790607a7", // Retail - SecGroup
   // "Other" - handled specially: any support staff can edit
 };
 
