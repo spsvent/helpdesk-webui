@@ -3,6 +3,7 @@ const { config, getGraphClient, sendMail } = require("../lib/graphHelpers");
 const { escapeHtml } = require("../lib/emailTemplates");
 const { validateCreateTicketInput, findOpenDuplicate } = require("../lib/ticketIntake");
 const { parseAutoAssignRules, findAssignee } = require("../lib/autoAssign");
+const { isKumaPayload, adaptKumaPayload } = require("../lib/kumaAdapter");
 
 // Machine-to-machine ticket intake: lets another service (monitoring, an internal
 // app) file a HelpDesk ticket over HTTP. Protected by the Azure Functions host key
@@ -125,6 +126,17 @@ app.http("CreateTicket", {
       body = await request.json();
     } catch {
       return { status: 400, jsonBody: { ok: false, error: "invalid JSON body" } };
+    }
+
+    // Uptime Kuma posts its own { heartbeat, monitor, msg } shape. Adapt it, and
+    // only create tickets for DOWN events — recovery/pending/maintenance are
+    // acked with 200 and no ticket (the open ticket's externalRef dedupes repeats).
+    if (isKumaPayload(body)) {
+      const adapted = adaptKumaPayload(body);
+      if (!adapted) {
+        return { status: 200, jsonBody: { ok: true, skipped: true, reason: "uptime-kuma event is not DOWN" } };
+      }
+      body = adapted;
     }
 
     const { ok, errors, value } = validateCreateTicketInput(body);
