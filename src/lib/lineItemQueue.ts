@@ -36,6 +36,10 @@ export interface QueueRow {
   requestedDate?: string; // when the request was created
   approvedDate?: string;
   approver?: string;
+  // The approver's decision note ("ApprovalNotes"), shown in the Awaiting Order
+  // queue so purchasers see ordering instructions without opening each request
+  // (ticket #479).
+  approvalNotes?: string;
   // Who marked the item(s) received (record-level receiver). Shown in Recently Received.
   receivedBy?: string;
 }
