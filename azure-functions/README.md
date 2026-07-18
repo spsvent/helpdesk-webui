@@ -98,8 +98,10 @@ Without these it still creates tickets — just unassigned, unlogged, and un-ded
 
 **Uptime Kuma:** the endpoint also accepts Uptime Kuma's **native** webhook payload
 (`{ heartbeat, monitor, msg }`) directly — no custom body templating needed. It
-turns **DOWN** events (`heartbeat.status === 0`) into a Tech/High ticket keyed
-`externalRef: kuma-<monitorId>` (so a flapping monitor folds onto one open ticket);
+turns **DOWN** events (`heartbeat.status === 0`) into a Tech ticket keyed
+`externalRef: kuma-<monitorId>` (so a flapping monitor folds onto one open ticket).
+Ticket **priority comes from the monitor's Kuma tag**: Critical→Urgent,
+Important→High, Moderate→Normal, untagged→Normal. Up/pending/maintenance events
 up/pending/maintenance events are acked `200 {skipped:true}` with no ticket. Kuma
 setup: add a **Webhook** notification → `POST …/api/createticket`, body type
 "application/json" (preset), and put the function key in an `x-functions-key`
