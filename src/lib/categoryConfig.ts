@@ -120,6 +120,13 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
     ],
     Other: [],
   },
+  Finance: {},
+  // Food & Beverage / Campground / Retail: routing + RBAC already live in the
+  // SharePoint AutoAssign/RBACGroups lists; added to the dropdown here so they're
+  // actually selectable in the new-ticket form (2026-07).
+  "Food & Beverage": {},
+  Campground: {},
+  Retail: {},
   Other: {},
 };
 
