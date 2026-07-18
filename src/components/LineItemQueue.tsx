@@ -296,6 +296,17 @@ export default function LineItemQueue({
               >
                 {r.approver ? `by ${r.approver}` : "—"}
               </div>
+              {r.approvalNotes && (
+                <div
+                  className="mt-0.5 flex items-center gap-1 text-amber-700 max-w-[11rem]"
+                  title={r.approvalNotes}
+                >
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
+                  </svg>
+                  <span className="truncate">{r.approvalNotes}</span>
+                </div>
+              )}
             </td>
           </>
         )}

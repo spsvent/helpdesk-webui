@@ -39,4 +39,16 @@ describe("purchaseUnorderedRows request context", () => {
     const rows = purchaseUnorderedRows([pr({ requesterName: "" })]);
     expect(rows[0].requester).toBe("Jane Doe");
   });
+
+  it("carries the approver's decision note onto the queue row (ticket #479)", () => {
+    const rows = purchaseUnorderedRows([
+      pr({ approvalNotes: "Color prints can go to the main office printer" }),
+    ]);
+    expect(rows[0].approvalNotes).toBe("Color prints can go to the main office printer");
+  });
+
+  it("leaves approvalNotes undefined when the approver left no note", () => {
+    const rows = purchaseUnorderedRows([pr({})]);
+    expect(rows[0].approvalNotes).toBeUndefined();
+  });
 });
