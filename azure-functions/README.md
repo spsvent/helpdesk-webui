@@ -50,6 +50,52 @@ no app settings or extra permissions, just the `heic-convert` dependency
 (`Content-Type: application/octet-stream`). Response: `image/jpeg` bytes (or a
 JSON error). Rejects empty bodies and payloads over 30 MB.
 
+### 5. CreateTicket (external ticket-intake API)
+Lets another service (monitoring/alerting, an internal app) file a HelpDesk ticket
+over HTTP. Unlike the rest of the app, ticket creation normally happens client-side
+in the SPA; this is the only server-side create path. Creates a full-fidelity ticket
+app-only: auto-assigns using the same **AutoAssign** list the web form uses, emails
+the assignee, writes an activity-log entry, and **dedupes** flapping alerts.
+
+**Auth:** `authLevel: "function"` — caller must pass the host/function key as
+`?code=<key>` (or an `x-functions-key` header). Get it with
+`az functionapp function keys list -n helpdesk-notify-func -g SupportDesk --function-name CreateTicket`.
+
+**Endpoint:** `POST /api/createticket?code=<key>` — JSON body:
+
+| field | required | notes |
+|-------|----------|-------|
+| `title` | ✓ | |
+| `description` | ✓ | |
+| `problemType` | ✓ | one of: Tech, Operations, Facilities, Marketing, HR, Inventory, Other (drives routing) |
+| `priority` | | Low \| Normal \| High \| Urgent (default Normal) |
+| `problemTypeSub`, `problemTypeSub2` | | free text |
+| `location` | | |
+| `requesterEmail` | | the affected user; resolved to the Requester person field when possible |
+| `assigneeEmail` | | explicit assignee — overrides AutoAssign routing |
+| `source` | | stamped into SupportChannel (`API: <source>`) + the assignment email |
+| `externalRef` | | dedup key — a repeat call reuses the open ticket instead of duplicating |
+
+Only **Problem** tickets are supported in v1 (`category` is forced to `Problem`);
+Request tickets need the GM approval flow and are a follow-up.
+
+**Responses:** `201 {ok,deduped:false,id,ticketNumber,assignedTo,url}` on create;
+`200 {ok,deduped:true,...}` when folded into an existing open ticket by `externalRef`;
+`400 {ok:false,error,details}` on validation failure.
+
+```bash
+curl -X POST "https://helpdesk-notify-func-...azurewebsites.net/api/createticket?code=<key>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Reindeer Room printer offline","description":"Uptime Kuma: 172.18.10.12 unreachable 5m",
+       "problemType":"Tech","priority":"High","source":"uptime-kuma","externalRef":"kuma-8842"}'
+```
+
+**Extra app settings this function needs** (beyond the shared Graph/site settings):
+`AUTO_ASSIGN_LIST_ID` (`57a6cc6d-2dd1-4022-aaa2-45aa4d947761`) and
+`ACTIVITY_LOG_LIST_ID` (`a961cb69-a588-4ca0-aa04-b421ebcc792a`). It also needs an
+indexed **`ExternalRef`** single-line-of-text column on the Tickets list for dedup.
+Without these it still creates tickets — just unassigned, unlogged, and un-deduped.
+
 ## Deployment
 
 ### Prerequisites
