@@ -9,6 +9,19 @@
 // Uptime Kuma heartbeat.status: 0=DOWN, 1=UP, 2=PENDING, 3=MAINTENANCE.
 const KUMA_DOWN = 0;
 
+// Kuma monitor tags carry the site's priority rating. Map the most severe tag on
+// the monitor to the ticket priority; an untagged monitor defaults to Normal.
+// (Tags ride along in the webhook's monitor payload — monitor.toJSON includes them.)
+const TAG_TO_PRIORITY = { Critical: "Urgent", Important: "High", Moderate: "Normal" };
+
+function priorityFromTags(tags) {
+  const names = new Set((Array.isArray(tags) ? tags : []).map((t) => (t && t.name) || ""));
+  if (names.has("Critical")) return "Urgent";
+  if (names.has("Important")) return "High";
+  if (names.has("Moderate")) return "Normal";
+  return "Normal";
+}
+
 function isKumaPayload(body) {
   return !!(body && typeof body === "object" && body.heartbeat && body.monitor);
 }
@@ -28,10 +41,10 @@ function adaptKumaPayload(body) {
     title: `${name} is DOWN`,
     description,
     problemType: "Tech",
-    priority: "High",
+    priority: priorityFromTags(m.tags),
     source: "uptime-kuma",
     externalRef: `kuma-${m.id != null && m.id !== "" ? m.id : name}`,
   };
 }
 
-module.exports = { isKumaPayload, adaptKumaPayload };
+module.exports = { isKumaPayload, adaptKumaPayload, priorityFromTags, TAG_TO_PRIORITY };
