@@ -5,7 +5,20 @@ const PRIORITIES = ["Low", "Normal", "High", "Urgent"];
 // src/lib/categoryConfig.ts (CATEGORY_HIERARCHY keys), NOT the SharePoint Category
 // column's stale choices. Drives auto-assignment routing, so validate against it.
 // Keep in sync with categoryConfig.ts if departments change.
-const PROBLEM_TYPES = ["Tech", "Operations", "Facilities", "Marketing", "HR", "Inventory", "Other"];
+const PROBLEM_TYPES = [
+  "Tech",
+  "Operations",
+  "Facilities",
+  "Marketing",
+  "HR",
+  "Customer Service",
+  "Inventory",
+  "Finance",
+  "Food & Beverage",
+  "Campground",
+  "Retail",
+  "Other",
+];
 // A ticket still "open" for dedup purposes = anything not in a terminal state.
 const CLOSED_STATUSES = new Set(["Resolved", "Closed", "Cancelled"]);
 

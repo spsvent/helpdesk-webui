@@ -47,6 +47,13 @@ test("accepts Facilities (post-merge department, not in stale SharePoint choices
   assert.strictEqual(ok, true);
 });
 
+test("accepts the full current department set (synced with categoryConfig)", () => {
+  for (const problemType of ["Customer Service", "Finance", "Food & Beverage", "Campground", "Retail"]) {
+    const { ok } = validateCreateTicketInput({ title: "x", description: "y", problemType });
+    assert.strictEqual(ok, true, `${problemType} should be accepted`);
+  }
+});
+
 test("rejects an unknown priority", () => {
   const { ok, errors } = validateCreateTicketInput({
     title: "x", description: "y", problemType: "Tech", priority: "Critical",
