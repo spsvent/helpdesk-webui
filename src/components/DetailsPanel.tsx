@@ -580,8 +580,9 @@ export default function DetailsPanel({
         )}
       </div>
 
-      {/* Approval Section */}
-      {(canRequestApproval(ticket) || canApprove() || ticket.approvalStatus !== "None") && (
+      {/* Approval Section — Request tickets only (Problem tickets have no approval step) */}
+      {ticket.category === "Request" &&
+        (canRequestApproval(ticket) || canApprove() || ticket.approvalStatus !== "None") && (
         <>
           {/* Request Approval Button for Support Staff */}
           {canRequestApproval(ticket) && onRequestApproval && (

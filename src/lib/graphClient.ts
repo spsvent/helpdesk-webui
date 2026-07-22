@@ -420,6 +420,9 @@ export interface CreateTicketData {
 export interface CreateTicketOptions {
   isAdmin?: boolean;
   creatorEmail?: string;
+  /** Creator's display name — mirrored into ApprovedByName on admin auto-approval
+   *  so the approver resolves in the UI (person fields aren't expanded on read). */
+  creatorName?: string;
 }
 
 export async function createTicket(
@@ -468,24 +471,30 @@ export async function createTicket(
     }
   }
 
-  // Approval workflow logic:
-  // - Tickets created by admin: auto-approved
-  // - Request tickets by non-admins: require approval (Pending status)
-  // - Problem tickets by non-admins: no approval workflow needed
-  if (options?.isAdmin && options?.creatorEmail) {
-    // Auto-approve non-purchase tickets created by admins
-    fields.ApprovalStatus = "Approved";
-    fields.ApprovalDate = new Date().toISOString();
-    const adminSiteUserId = await getSiteUserId(client, options.creatorEmail);
-    if (adminSiteUserId) {
-      fields.ApprovedByLookupId = adminSiteUserId;
-    }
-  } else if (ticketData.category === "Request") {
-    // Non-admin Request tickets require approval
-    fields.ApprovalStatus = "Pending";
-    fields.ApprovalRequestedDate = new Date().toISOString();
-    if (requesterSiteUserId) {
-      fields.ApprovalRequestedByLookupId = requesterSiteUserId;
+  // Approval workflow applies to Request tickets ONLY — Problem tickets have no
+  // approval step, so their ApprovalStatus stays at the "None" default.
+  // - Request by admin:     auto-approved (the admin is the approver of record)
+  // - Request by non-admin: requires manager approval (Pending)
+  if (ticketData.category === "Request") {
+    if (options?.isAdmin && options?.creatorEmail) {
+      fields.ApprovalStatus = "Approved";
+      fields.ApprovalDate = new Date().toISOString();
+      const adminSiteUserId = await getSiteUserId(client, options.creatorEmail);
+      if (adminSiteUserId) {
+        fields.ApprovedByLookupId = adminSiteUserId;
+      }
+      // Mirror the approver into the text columns; the person field isn't
+      // expanded on read, so without these the UI shows the approver as "Unknown".
+      fields.ApprovedByEmail = options.creatorEmail;
+      if (options.creatorName) {
+        fields.ApprovedByName = options.creatorName;
+      }
+    } else {
+      fields.ApprovalStatus = "Pending";
+      fields.ApprovalRequestedDate = new Date().toISOString();
+      if (requesterSiteUserId) {
+        fields.ApprovalRequestedByLookupId = requesterSiteUserId;
+      }
     }
   }
 

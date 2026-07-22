@@ -18,6 +18,12 @@ function formatDate(dateString: string): string {
 }
 
 export default function ApprovalHistory({ ticket }: ApprovalHistoryProps) {
+  // Approval only applies to Request tickets. Problem tickets have no approval
+  // step, so never show the history (guards against legacy tickets that were
+  // spuriously stamped with an approval status).
+  if (ticket.category !== "Request") {
+    return null;
+  }
   // Don't show if no approval activity
   if (ticket.approvalStatus === "None") {
     return null;

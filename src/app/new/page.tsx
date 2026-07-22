@@ -374,10 +374,12 @@ export default function NewTicketPage() {
         assigneeEmail = assigneeResult?.email || null;
       }
 
-      // Build options for ticket creation (auto-approval for admin Problem tickets)
+      // Build options for ticket creation. Approval only applies to Request
+      // tickets; admin-created Requests are auto-approved by the creator.
       const createOptions: CreateTicketOptions = {
         isAdmin,
         creatorEmail: requesterEmail,
+        creatorName: accounts[0]?.name,
       };
 
       const ticketData: CreateTicketData = {
