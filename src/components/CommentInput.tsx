@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { loadDraft, clearDraft } from "@/lib/formDraft";
+import MarkdownEditor from "./MarkdownEditor";
 
 interface CommentInputProps {
   onSubmit: (text: string, isInternal: boolean) => void;
@@ -38,13 +39,13 @@ export default function CommentInput({ onSubmit, disabled, ticketId }: CommentIn
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <textarea
+      <MarkdownEditor
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
         placeholder="Add a comment..."
         rows={3}
         disabled={disabled}
-        className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+        ariaLabel="Add a comment"
       />
 
       <div className="flex items-center justify-between">

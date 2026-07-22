@@ -29,6 +29,7 @@ import AssigneePreview from "@/components/AssigneePreview";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import StagedAttachmentList from "@/components/StagedAttachmentList";
+import MarkdownEditor from "@/components/MarkdownEditor";
 
 const CATEGORY_OPTIONS = ["Request", "Problem"] as const;
 
@@ -291,6 +292,11 @@ export default function NewTicketPage() {
 
     if (!formData.description.trim()) {
       setError("Please describe your issue");
+      // The MarkdownEditor isn't a native form control, so replicate the
+      // scroll-into-view/focus that the old `required` textarea gave us.
+      const el = document.getElementById("description");
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      el?.focus();
       return;
     }
 
@@ -800,15 +806,14 @@ export default function NewTicketPage() {
                 >
                   Description <span className="text-red-500">*</span>
                 </label>
-                <textarea
+                <MarkdownEditor
                   id="description"
                   name="description"
                   value={formData.description}
-                  onChange={handleChange}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, description: value }))}
                   placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, or relevant context."
                   rows={6}
-                  className="w-full px-3 py-2 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                  required
+                  ariaLabel="Description"
                 />
               </div>
 

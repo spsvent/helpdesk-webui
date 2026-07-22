@@ -2,6 +2,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { Ticket } from "@/types/ticket";
 import { sendEmail } from "./graphClient";
 import { collectParticipants } from "./participants";
+import { markdownToText } from "./richText";
 
 // App URL for email action buttons
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://lively-coast-062dfc51e.1.azurestaticapps.net";
@@ -92,7 +93,7 @@ function generateApprovalRequestEmail(
         <p><span class="label">Status:</span> ${ticket.status}</p>
         <p><span class="label">Problem Type:</span> ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}${ticket.problemTypeSub2 ? ` > ${ticket.problemTypeSub2}` : ""}</p>
         <p><span class="label">Requester:</span> ${ticket.requester.displayName}</p>
-        ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${escapeHtml(ticket.description.substring(0, 300))}${ticket.description.length > 300 ? "..." : ""}</p>` : ""}
+        ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${bodyPreview(ticket.description, 300)}</p>` : ""}
       </div>
 
       <div class="actions">
@@ -226,6 +227,13 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => map[char]);
 }
 
+// Build a safe, truncated plain-text preview of a Markdown/HTML body for emails.
+// Strips formatting so recipients never see raw `**bold**` or leftover tags.
+function bodyPreview(raw: string, max: number): string {
+  const text = markdownToText(raw);
+  return escapeHtml(text.substring(0, max)) + (text.length > max ? "..." : "");
+}
+
 // ============================================
 // General Ticket Notification Emails
 // ============================================
@@ -260,7 +268,7 @@ function generateNewTicketEmail(
         <p><span class="label">Department:</span> ${ticket.problemType}${ticket.problemTypeSub ? ` > ${ticket.problemTypeSub}` : ""}</p>
         <p><span class="label">Requester:</span> ${escapeHtml(ticket.requester.displayName)}</p>
         ${ticket.location ? `<p><span class="label">Location:</span> ${escapeHtml(ticket.location)}</p>` : ""}
-        ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${escapeHtml(ticket.description.substring(0, 500))}${ticket.description.length > 500 ? "..." : ""}</p>` : ""}
+        ${ticket.description ? `<p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><span class="label">Description:</span><br>${bodyPreview(ticket.description, 500)}</p>` : ""}
       </div>
 
       <div class="actions">
@@ -349,7 +357,7 @@ function generateCommentEmail(
         <h3>${escapeHtml(ticket.title)}</h3>
         <p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
           <span class="label">Comment:</span><br>
-          ${escapeHtml(commentPreview)}${commentPreview.length >= 300 ? "..." : ""}
+          ${commentPreview}
         </p>
       </div>
 
@@ -462,7 +470,8 @@ export async function sendCommentEmail(
   const subject = recipientIsRequester
     ? `[Update] Ticket #${ticket.id}: ${ticket.title}`
     : `[New Comment] Ticket #${ticket.id}: ${ticket.title}`;
-  const preview = commentText.substring(0, 300);
+  // Already-escaped, already-ellipsized (based on full-text length) HTML preview.
+  const preview = bodyPreview(commentText, 300);
   const htmlContent = generateCommentEmail(ticket, commenterName, preview, recipientIsRequester);
   const conversationId = getTicketConversationId(ticket.id);
   await sendEmail(client, recipientEmail, subject, htmlContent, conversationId);

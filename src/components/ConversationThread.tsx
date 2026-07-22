@@ -1,6 +1,7 @@
 "use client";
 
 import { Ticket, Comment, Attachment } from "@/types/ticket";
+import { renderRichText } from "@/lib/richText";
 import UserAvatar from "./UserAvatar";
 import AttachmentThumbnail from "./AttachmentThumbnail";
 import {
@@ -234,8 +235,8 @@ function CommentCard({
           <AttachmentCommentBody info={attachmentInfo} body={content} {...enrichment} />
         ) : (
           <div
-            className="text-sm leading-[1.45] text-text-primary prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: content }}
+            className="rich-text text-sm leading-[1.45] text-text-primary"
+            dangerouslySetInnerHTML={{ __html: renderRichText(content) }}
           />
         )}
       </div>
