@@ -679,6 +679,60 @@ const helpSections: HelpSection[] = [
         </ol>
 
         <h4 className="font-semibold text-text-primary mt-6">
+          Formatting Your Comments
+        </h4>
+        <p>
+          Comments and ticket descriptions support rich formatting, so you can
+          break up long updates, add lists, and include links. Use the
+          formatting toolbar above the text box, or type{" "}
+          <a
+            href="https://www.markdownguide.org/basic-syntax/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-primary underline"
+          >
+            Markdown
+          </a>{" "}
+          directly.
+        </p>
+        <ul className="list-disc list-inside space-y-1 ml-4">
+          <li>
+            <strong>Toolbar buttons</strong> — Bold, Italic, Underline, headings,
+            bulleted &amp; numbered lists, quotes, links, and code
+          </li>
+          <li>
+            <strong>Keyboard shortcuts</strong> — <code>Ctrl/Cmd+B</code> (bold),
+            <code>Ctrl/Cmd+I</code> (italic), <code>Ctrl/Cmd+K</code> (link)
+          </li>
+          <li>
+            <strong>Preview tab</strong> — switch between{" "}
+            <strong>Write</strong> and <strong>Preview</strong> to see how your
+            comment will look before posting
+          </li>
+        </ul>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <p className="mb-2 font-medium text-text-primary">Markdown quick reference</p>
+          <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+            <li><code>**bold**</code> and <code>*italic*</code></li>
+            <li><code>## Heading</code></li>
+            <li><code>- item</code> for bullets, <code>1. item</code> for numbers</li>
+            <li><code>&gt; quote</code> for a block quote</li>
+            <li><code>[link text](https://example.com)</code></li>
+            <li><code>`code`</code> inline, or triple backticks for a code block</li>
+          </ul>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> When you paste content copied from a web page,
+            email, or document, its formatting (headings, lists, links, bold
+            text) is preserved automatically — no more &quot;wall of text.&quot; You
+            can still edit it as Markdown afterward.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">
           Internal Notes vs. Public Comments
         </h4>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
