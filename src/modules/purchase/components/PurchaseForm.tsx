@@ -15,16 +15,24 @@ import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PurchaseLineItem, PurchaseRequest } from "../types";
 import { validateLineItem } from "../lineItems";
-import { canCreatePurchase, canEditPurchase, isPurchaseEditable } from "../access";
+import {
+  canCreatePurchase,
+  canEditPurchase,
+  canEditPurchaseAnytime,
+  isPurchaseEditable,
+  purchaseRequiresReason,
+} from "../access";
 import {
   createPurchase,
   getPurchase,
   isPurchaseConfigured,
+  postPurchaseMessage,
   submitForApproval,
   triggerPurchaseApprovalRequest,
   updateLineItems,
   updatePurchase,
 } from "../purchaseService";
+import { notifyPurchaseEdited } from "../purchaseEmail";
 import LineItemsField from "./LineItemsField";
 
 const DRAFT_KEY = "purchase-new";
@@ -61,6 +69,8 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
   const [project, setProject] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([{ qty: 1, cost: 0 }]);
+  // Reason for editing a request that's already been ordered (required post-order).
+  const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState<null | "save" | "submit">(null);
   const [error, setError] = useState<string | null>(null);
   // Non-fatal: the request saved/submitted but the approver email didn't go out.
@@ -70,6 +80,12 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
   const [loadingTicket, setLoadingTicket] = useState(isConvert || isEdit);
   // The request being edited, for the ownership/status authorization checks.
   const [editTarget, setEditTarget] = useState<PurchaseRequest | null>(null);
+
+  // Edit-mode buckets. Pre-approval edits (Changes Requested / never submitted) keep
+  // the save-and-resubmit flow. Post-approval edits (Approved onward) just save; a
+  // reason is required once the request has been ordered, and participants are notified.
+  const postApprovalEdit = isEdit && !!editTarget && !isPurchaseEditable(editTarget);
+  const reasonRequired = postApprovalEdit && !!editTarget && purchaseRequiresReason(editTarget.purchaseStatus);
 
   // Restore a draft (new mode only — conversions prefill from the ticket, edits
   // hydrate from the existing request instead).
@@ -139,6 +155,7 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
       if (err) return err;
     }
     if (!justification.trim()) return "A justification is required.";
+    if (reasonRequired && !reason.trim()) return "A reason is required to edit a request that has already been ordered.";
     return null;
   }
 
@@ -168,7 +185,8 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
           needByDate: needByDate || null,
         });
         await updateLineItems(client, purchaseId!, items);
-        if (resubmit) {
+        // Pre-approval edits can resubmit back into the approval queue.
+        if (resubmit && !postApprovalEdit) {
           const { emailSent } = await submitForApproval(
             client,
             purchaseId!,
@@ -181,6 +199,22 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
             setEmailWarningId(purchaseId!);
             setSubmitting(null);
             return;
+          }
+        } else if (reasonRequired) {
+          // Post-order edit: record the reason on the thread and notify participants.
+          const actorName = account.name || account.username || "";
+          const actorEmail = account.username || "";
+          try {
+            const withMsg = await postPurchaseMessage(client, purchaseId!, {
+              author: actorName,
+              email: actorEmail,
+              text: `Edited this request after it was ordered. Reason: ${reason.trim()}`,
+              at: new Date().toISOString(),
+            });
+            // Best-effort email fan-out; don't block navigation on it.
+            notifyPurchaseEdited(client, withMsg, actorName, actorEmail, reason.trim());
+          } catch (e) {
+            console.error("[PurchaseForm] post-order edit notification failed (non-blocking):", e);
           }
         }
         router.push(`/purchase/?id=${purchaseId}`);
@@ -245,14 +279,14 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
     return <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">You don’t have permission to create purchase requests.</div>;
   }
 
-  // Editing requires ownership AND an editable status (Pending/Approved/Denied
-  // requests are immutable — see isPurchaseEditable).
-  if (isEdit && editTarget && (!canEditPurchase(editTarget, permissions) || !isPurchaseEditable(editTarget))) {
+  // Editing is allowed at any live point in the flow for owner/admin/purchaser
+  // (canEditPurchaseAnytime); Cancelled/Denied requests are terminal and immutable.
+  if (isEdit && editTarget && !canEditPurchaseAnytime(editTarget, permissions)) {
     return (
       <div className="max-w-2xl mx-auto p-8 text-sm text-text-secondary">
         {canEditPurchase(editTarget, permissions)
           ? "This request can’t be edited in its current status."
-          : "You can only edit your own purchase requests."}
+          : "You don’t have permission to edit this purchase request."}
         <Link href={`/purchase/?id=${purchaseId}`} className="mt-3 block text-brand-primary underline">Back</Link>
       </div>
     );
@@ -266,7 +300,11 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         {isEdit ? "Edit Purchase Request" : isConvert ? "Convert to Purchase Request" : "New Purchase Request"}
       </h1>
       <p className="mt-1 text-sm text-text-secondary">
-        {isEdit
+        {postApprovalEdit
+          ? reasonRequired
+            ? "This request has already been ordered. Update it below — a reason is required, and everyone involved will be notified of the change."
+            : "Update this approved request below, then save your changes."
+          : isEdit
           ? "Update the request, then resubmit it for approval (or save your changes and resubmit later from the request page)."
           : isConvert && sourceTicket?.number != null
           ? `From ticket #${sourceTicket.number}. Add the items needed and submit — the original ticket will be resolved and linked to this request.`
@@ -300,6 +338,27 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
           <input id="pr-needby" type="date" className={`mt-1 ${inputClass}`} value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} />
         </div>
 
+        {postApprovalEdit && (
+          <div>
+            <label htmlFor="pr-reason" className="block text-sm font-medium text-text-primary">
+              Reason for change {reasonRequired && <span className="text-red-500">*</span>}
+            </label>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              {reasonRequired
+                ? "Required — this request has already been ordered. This is recorded on the request and emailed to everyone involved."
+                : "Optional."}
+            </p>
+            <textarea
+              id="pr-reason"
+              rows={2}
+              className={`mt-1 ${inputClass}`}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why is this being changed?"
+            />
+          </div>
+        )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {emailWarningId && (
@@ -315,25 +374,39 @@ export default function PurchaseForm({ fromTicketId, purchaseId }: { fromTicketI
         )}
 
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => handleSubmit(true)}
-            disabled={submitting !== null}
-            className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
-          >
-            {submitting === "submit"
-              ? isEdit ? "Resubmitting…" : "Submitting…"
-              : isEdit ? "Save & Resubmit for Approval" : "Submit for Approval"}
-          </button>
-          {isEdit && (
+          {postApprovalEdit ? (
+            // Post-approval edits just save — they don't re-enter the approval queue.
             <button
               type="button"
               onClick={() => handleSubmit(false)}
               disabled={submitting !== null}
-              className="px-4 py-2 bg-bg-subtle text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
             >
-              {submitting === "save" ? "Saving…" : "Save without Resubmitting"}
+              {submitting === "save" ? "Saving…" : "Save Changes"}
             </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSubmit(true)}
+                disabled={submitting !== null}
+                className="px-4 py-2 bg-brand-primary text-white text-sm rounded-lg font-medium hover:bg-brand-primary-light disabled:opacity-50"
+              >
+                {submitting === "submit"
+                  ? isEdit ? "Resubmitting…" : "Submitting…"
+                  : isEdit ? "Save & Resubmit for Approval" : "Submit for Approval"}
+              </button>
+              {isEdit && (
+                <button
+                  type="button"
+                  onClick={() => handleSubmit(false)}
+                  disabled={submitting !== null}
+                  className="px-4 py-2 bg-bg-subtle text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40 transition-colors disabled:opacity-50"
+                >
+                  {submitting === "save" ? "Saving…" : "Save without Resubmitting"}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

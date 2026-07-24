@@ -44,6 +44,7 @@ jobs:
           NEXT_PUBLIC_ESCALATION_LIST_ID: "6e3bb1d6-1938-4680-82aa-96223e4d3821"
           NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID: "a961cb69-a588-4ca0-aa04-b421ebcc792a"
           NEXT_PUBLIC_VISIBILITY_KEYWORDS_LIST_ID: "1e5a86bf-c2e3-420e-a714-693d00f937eb"
+          NEXT_PUBLIC_NOTIFICATION_OPTOUT_LIST_ID: "cda8ea1a-1f00-42bd-ae5a-c7c23083c3e9"
           NEXT_PUBLIC_GENERAL_MANAGERS_GROUP_ID: "db86fdc8-dbf7-4ec9-af9f-461bb63735ed"
           NEXT_PUBLIC_PURCHASER_GROUP_ID: "6afebd3e-069c-41a2-94d8-6e7b93634bb3"
           NEXT_PUBLIC_INVENTORY_GROUP_ID: "3c9e89ce-83dd-4c31-a884-01404b81898e"
@@ -60,6 +61,8 @@ jobs:
           NEXT_PUBLIC_SEND_CDW_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendcdwapprovalrequest?code=${{ secrets.FUNC_HOST_CODE }}"
           # Purchase Request form module. NEXT_PUBLIC_PURCHASE_LIST_ID filled after the list is created.
           NEXT_PUBLIC_PURCHASE_LIST_ID: "510ef7d1-2c9d-480b-9aa8-e9a8b1ddf82c"
+          # Order Catalog (recurring order sheets) — master list of standard reorder items.
+          NEXT_PUBLIC_ORDER_CATALOG_LIST_ID: "75f93bfc-acec-427a-bdb7-013f0c83f531"
           NEXT_PUBLIC_PURCHASE_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/purchaseapprovalaction"
           NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendpurchaseapprovalrequest?code=${{ secrets.FUNC_HOST_CODE }}"
           # HEIC → JPEG converter: enables inline preview of iPhone HEIC photos. Blank = download-only fallback.

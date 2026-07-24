@@ -23,6 +23,68 @@ export function canReceive(pr: PurchaseRequest, perms: UserPermissions | null): 
   return !!perms?.isInventory && ["Ordered", "Purchased"].includes(pr.purchaseStatus);
 }
 
+// Who may adjust a line item's expected delivery date in place: Inventory (the
+// supervisor + every group member), purchasers, and admins/GMs. Allowed only while
+// the order is in flight — Ordered/Purchased but not yet fully received — since that
+// is the window the receiving queue and reminder cadence care about. Pre-order the
+// date is set through the ordering flow; once Received/terminal there's nothing to
+// adjust. Mirrors canReceive's status gate so the two stay aligned.
+export function canEditExpectedDelivery(
+  pr: Pick<PurchaseRequest, "purchaseStatus">,
+  perms: UserPermissions | null
+): boolean {
+  if (!perms) return false;
+  const privileged = perms.role === "admin" || !!perms.isPurchaser || !!perms.isInventory;
+  return privileged && ["Ordered", "Purchased"].includes(pr.purchaseStatus);
+}
+
+// Fulfillment statuses where money has been committed, so a cancel or a post-order
+// edit must carry a reason (per the workflow: "a reason is required if it's already
+// been ordered"). Everything before ordering can be changed freely.
+const REASON_REQUIRED_STATUSES: PurchaseRequest["purchaseStatus"][] = ["Ordered", "Purchased", "Received"];
+
+export function purchaseRequiresReason(status: PurchaseRequest["purchaseStatus"]): boolean {
+  return REASON_REQUIRED_STATUSES.includes(status);
+}
+
+// Terminal states — nothing more can happen to the request, so cancel/edit are off.
+function isPurchaseTerminal(status: PurchaseRequest["purchaseStatus"]): boolean {
+  return status === "Cancelled" || status === "Denied";
+}
+
+// Who may cancel or edit a request at ANY point in the flow: the owner
+// (creator/requester), an admin/GM, or a purchaser (they own post-approval
+// fulfillment). Blocked once the request is already terminal (Cancelled/Denied).
+function isPurchaseActor(
+  pr: Pick<PurchaseRequest, "createdByEmail" | "requesterEmail">,
+  perms: UserPermissions | null
+): boolean {
+  if (!perms) return false;
+  if (perms.role === "admin" || perms.isPurchaser) return true;
+  const me = perms.email.toLowerCase();
+  return [pr.createdByEmail, pr.requesterEmail].some((e) => e && e.toLowerCase() === me);
+}
+
+// Cancel a request at any live point in the flow.
+export function canCancelPurchase(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
+  return isPurchaseActor(pr, perms) && !isPurchaseTerminal(pr.purchaseStatus);
+}
+
+// Edit a request past the pre-approval window (broader than the isPurchaseEditable
+// gate below). Admins/approvers and purchasers may edit at any live stage. The
+// requester (owner) may edit only BEFORE the request is approved — once it has been
+// approved, the owner is locked out and only an admin/approver or purchaser can
+// change the order. Post-order edits require a reason at save time.
+export function canEditPurchaseAnytime(pr: PurchaseRequest, perms: UserPermissions | null): boolean {
+  if (!perms) return false;
+  if (isPurchaseTerminal(pr.purchaseStatus)) return false;
+  if (perms.role === "admin" || perms.isPurchaser) return true;
+  // Owner: allowed only while the request hasn't been approved yet.
+  if (pr.approvalStatus === "Approved") return false;
+  const me = perms.email.toLowerCase();
+  return [pr.createdByEmail, pr.requesterEmail].some((e) => e && e.toLowerCase() === me);
+}
+
 // Owner (creator/requester) or admin — for editing a draft/changes-requested request.
 export function canEditPurchase(
   pr: Pick<PurchaseRequest, "createdByEmail" | "requesterEmail">,

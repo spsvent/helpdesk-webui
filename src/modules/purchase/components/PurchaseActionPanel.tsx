@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { PurchaseLineItem } from "../types";
 import { loadDraft, clearDraft } from "@/lib/formDraft";
+import ApproverNote from "./ApproverNote";
 
 interface PurchaseActionPanelProps {
-  pr: { id: string; lineItems: PurchaseLineItem[] };
+  // approvalNotes/approvedByName carry the approver's decision note so it shows
+  // right where the purchaser orders (ticket #479), not just in the box up top.
+  pr: { id: string; lineItems: PurchaseLineItem[]; approvalNotes?: string; approvedByName?: string };
   onMarkPurchased: (orderItems: PurchaseLineItem[], notes?: string) => Promise<void>;
 }
 
@@ -53,21 +56,26 @@ export default function PurchaseActionPanel({ pr, onMarkPurchased }: PurchaseAct
 
   if (!isExpanded) {
     return (
-      <button
-        onClick={() => setIsExpanded(true)}
-        className="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-        </svg>
-        Mark as Purchased
-      </button>
+      <div className="space-y-3">
+        <ApproverNote note={pr.approvalNotes} by={pr.approvedByName} />
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+          </svg>
+          Mark as Purchased
+        </button>
+      </div>
     );
   }
 
   return (
     <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-3">
       <h4 className="text-sm font-medium text-indigo-900">Order Details (per item)</h4>
+
+      <ApproverNote note={pr.approvalNotes} by={pr.approvedByName} />
 
       {orderItems.length === 0 && (
         <p className="text-sm text-indigo-700">No line items on this ticket.</p>

@@ -16,13 +16,24 @@ import {
   updateLineItems,
   visiblePurchase,
 } from "../purchaseService";
-import { canApprovePurchase, canEditPurchase, canPurchase, canReceive, isPurchaseEditable } from "../access";
+import {
+  canApprovePurchase,
+  canCancelPurchase,
+  canEditExpectedDelivery,
+  canEditPurchase,
+  canEditPurchaseAnytime,
+  canPurchase,
+  canReceive,
+  isPurchaseEditable,
+} from "../access";
 import { allItemsOrdered, allItemsReceived } from "../lineItems";
 import PurchaseStatusBadge from "./PurchaseStatusBadge";
 import LineItemsTable from "./LineItemsTable";
 import PurchaseApprovalPanel from "./PurchaseApprovalPanel";
 import PurchaseActionPanel from "./PurchaseActionPanel";
 import ReceiveActionPanel from "./ReceiveActionPanel";
+import CancelPurchasePanel from "./CancelPurchasePanel";
+import PurchaseThread from "./PurchaseThread";
 
 export default function PurchaseDetail({ id }: { id: string }) {
   const { instance, accounts } = useMsal();
@@ -64,6 +75,14 @@ export default function PurchaseDetail({ id }: { id: string }) {
     const client = getGraphClient(instance, account);
     const status = allItemsReceived(receivedItems) ? "Received" : pr.purchaseStatus;
     setPr(await updateLineItems(client, pr.id, receivedItems, { purchaseStatus: status, notes }));
+  }
+  // Inline delivery-date edit (Inventory/purchasers). Patches just that line item's
+  // expectedDelivery — no status change. Throws on failure so the cell can flag it.
+  async function handleSetExpectedDelivery(idx: number, iso: string) {
+    if (!account || !pr) return;
+    const client = getGraphClient(instance, account);
+    const items = pr.lineItems.map((it, i) => (i === idx ? { ...it, expectedDelivery: iso || undefined } : it));
+    setPr(await updateLineItems(client, pr.id, items));
   }
 
   // Put a bounced ("Changes Requested") or never-submitted request back into the
@@ -108,6 +127,10 @@ export default function PurchaseDetail({ id }: { id: string }) {
   // Owner edit/resubmit escape hatch (mirrors CdwDetail): only while the request
   // is out of the approval gate — "Changes Requested" or never submitted.
   const canEdit = canEditPurchase(pr, permissions) && isPurchaseEditable(pr);
+  // Edit at any live point in the flow (owner/admin/purchaser). Only surfaced as a
+  // separate affordance when the pre-approval canEdit block above isn't already showing.
+  const showAnytimeEdit = canEditPurchaseAnytime(pr, permissions) && !canEdit;
+  const showCancel = canCancelPurchase(pr, permissions);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -121,6 +144,17 @@ export default function PurchaseDetail({ id }: { id: string }) {
         Requested by {pr.requesterName || pr.createdByName || "—"}
         {pr.sourceTicketNumber ? ` · migrated from ticket #${pr.sourceTicketNumber}` : ""}
       </p>
+
+      {pr.purchaseStatus === "Cancelled" && (
+        <div className="mt-4 rounded-lg border border-gray-300 bg-gray-50 p-4 text-sm">
+          <p className="text-text-primary">
+            <span className="font-medium">Cancelled</span>
+            {pr.cancelledByName ? ` by ${pr.cancelledByName}` : ""}
+            {pr.cancelledDate ? ` on ${formatDate(pr.cancelledDate)}` : ""}
+          </p>
+          {pr.cancelReason && <p className="mt-1 text-text-secondary">“{pr.cancelReason}”</p>}
+        </div>
+      )}
 
       {conflictNotice && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
@@ -192,8 +226,29 @@ export default function PurchaseDetail({ id }: { id: string }) {
         </div>
       )}
 
+      {(showAnytimeEdit || showCancel) && (
+        <div className="mt-4 flex flex-wrap items-start gap-2">
+          {showAnytimeEdit && (
+            <Link
+              href={`/purchase/edit/?id=${pr.id}`}
+              className="px-4 py-2 bg-bg-card text-text-primary text-sm rounded-lg font-medium border border-border hover:bg-border/40"
+            >
+              Edit request
+            </Link>
+          )}
+          {showCancel && <CancelPurchasePanel pr={pr} onCancelled={setPr} />}
+        </div>
+      )}
+
       <div className="mt-6">
-        <LineItemsTable items={pr.lineItems} showOrderColumns={showOrder} showReceivedColumns={showReceived} />
+        <LineItemsTable
+          items={pr.lineItems}
+          showOrderColumns={showOrder}
+          showReceivedColumns={showReceived}
+          onSetExpectedDelivery={
+            canEditExpectedDelivery(pr, permissions) ? handleSetExpectedDelivery : undefined
+          }
+        />
       </div>
 
       <dl className="mt-6 divide-y divide-border border-t border-border">
@@ -223,6 +278,8 @@ export default function PurchaseDetail({ id }: { id: string }) {
       {canReceive(pr, permissions) && (
         <div className="mt-4"><ReceiveActionPanel pr={pr} onMarkReceived={handleMarkReceived} /></div>
       )}
+
+      <PurchaseThread pr={pr} onUpdate={setPr} />
     </div>
   );
 }

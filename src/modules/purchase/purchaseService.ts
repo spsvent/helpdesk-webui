@@ -13,12 +13,14 @@ import type { Attachment } from "@/types/ticket";
 import type { UserPermissions } from "@/types/rbac";
 import {
   PurchaseLineItem,
+  PurchaseMessage,
   PurchaseRequest,
   PurchaseWritable,
   PURCHASE_COLUMN_MAP,
   mapToPurchase,
 } from "./types";
 import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
+import { purchaseRequiresReason } from "./access";
 
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const PURCHASE_LIST_ID = process.env.NEXT_PUBLIC_PURCHASE_LIST_ID || "";
@@ -34,6 +36,26 @@ export function isPurchaseConfigured(): boolean {
 
 export function serializeLineItems(items: PurchaseLineItem[]): string {
   return JSON.stringify(items);
+}
+
+// Append a message to a request's thread. Re-reads the thread immediately before
+// writing (to shrink the lost-update window when two people post at once), then
+// writes with a verify re-read. Callers send the notification email separately.
+export async function postPurchaseMessage(
+  client: Client,
+  id: string,
+  message: PurchaseMessage
+): Promise<PurchaseRequest> {
+  if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
+  const endpoint = `/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`;
+  const current = await getPurchase(client, id);
+  const thread = [...(current.thread ?? []), message];
+  const json = JSON.stringify(thread);
+  await client.api(endpoint).patch({ fields: { PurchaseThreadJSON: json } });
+  const verify = await client.api(`${endpoint}?$expand=fields`).get();
+  const saved = (verify.fields as Record<string, unknown>).PurchaseThreadJSON as string | undefined;
+  if (saved !== json) throw new Error("Message failed to save to SharePoint. Please retry.");
+  return mapToPurchase(verify);
 }
 
 // The decisions an approver can make on a purchase request.
@@ -74,7 +96,9 @@ export async function listPurchases(client: Client): Promise<PurchaseRequest[]> 
 // approver. Only meaningful for approvers (canApprovePurchase) — the caller gates.
 export async function listPendingPurchaseApprovals(client: Client): Promise<PurchaseRequest[]> {
   const all = await listPurchases(client);
-  return all.filter((p) => p.approvalStatus === "Pending");
+  // Cancelled requests may still carry a Pending approval gate (cancel doesn't
+  // rewrite it, keeping the audit intact) — exclude them from the queue explicitly.
+  return all.filter((p) => p.approvalStatus === "Pending" && p.purchaseStatus !== "Cancelled");
 }
 
 // Header-badge counts (Awaiting Order / Awaiting Receipt). Reuse the same row
@@ -133,6 +157,33 @@ export async function updatePurchase(client: Client, id: string, patch: Purchase
   if (!PURCHASE_LIST_ID) throw new Error("Purchase list is not configured");
   await client.api(`/sites/${SITE_ID}/lists/${PURCHASE_LIST_ID}/items/${id}`).patch({ fields: toFields(patch) });
   return getPurchase(client, id);
+}
+
+// Cancel a request (terminal). Re-reads first to enforce the reason gate against the
+// live status (a stale tab can't slip a reasonless cancel past an ordered request)
+// and to reject double-cancels. Callers notify participants separately.
+export async function cancelPurchase(
+  client: Client,
+  id: string,
+  actor: { name: string; email: string },
+  reason?: string
+): Promise<PurchaseRequest> {
+  const current = await getPurchase(client, id);
+  if (current.purchaseStatus === "Cancelled" || current.purchaseStatus === "Denied") {
+    throw new Error(`This request is already ${current.purchaseStatus} and can't be cancelled.`);
+  }
+  const trimmed = reason?.trim();
+  if (purchaseRequiresReason(current.purchaseStatus) && !trimmed) {
+    throw new Error("A reason is required to cancel a request that has already been ordered.");
+  }
+  return updatePurchase(client, id, {
+    purchaseStatus: "Cancelled",
+    // null clears the column if a blank reason ever reaches here (pre-order cancels).
+    cancelReason: trimmed || null,
+    cancelledByName: actor.name,
+    cancelledByEmail: actor.email,
+    cancelledDate: new Date().toISOString().slice(0, 10),
+  });
 }
 
 // Write line items JSON (+ optional status/notes) with a verify re-read.
@@ -322,17 +373,41 @@ const MEMO = (name: string): SharePointColumnDef => ({ name, text: { allowMultip
 const DATE = (name: string): SharePointColumnDef => ({ name, dateTime: { format: "dateOnly", displayAs: "default" } });
 const NUM = (name: string): SharePointColumnDef => ({ name, number: {} });
 
+// Canonical PurchaseStatus choices — the single source of truth shared by the
+// column definition (list creation) and the reconcile step (existing lists), so a
+// value added to the PurchaseStatus type can't be created in one place but rejected
+// by the live column in the other.
+const PURCHASE_STATUS_CHOICES = [
+  "Pending Approval",
+  "Approved",
+  "Approved with Changes",
+  "Ordered",
+  "Purchased",
+  "Received",
+  "Denied",
+  "Cancelled",
+];
+
 const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   {
     name: "PurchaseStatus",
     choice: {
       allowTextEntry: false,
-      choices: ["Pending Approval", "Approved", "Approved with Changes", "Ordered", "Purchased", "Received", "Denied"],
+      choices: PURCHASE_STATUS_CHOICES,
       displayAs: "dropDownMenu",
     },
     defaultValue: { value: "Pending Approval" },
   },
   { name: "PurchaseLineItemsJSON", text: { allowMultipleLines: true } },
+  // Purchaser <-> requester/approver message thread (JSON array of messages).
+  { name: "PurchaseThreadJSON", text: { allowMultipleLines: true } },
+  // Recurring order-sheet tagging (unset/"adhoc" on ordinary requests).
+  TEXT("Department"),
+  {
+    name: "OrderType",
+    choice: { allowTextEntry: false, choices: ["adhoc", "catalog"], displayAs: "dropDownMenu" },
+    defaultValue: { value: "adhoc" },
+  },
   MEMO("PurchaseJustification"),
   TEXT("PurchaseProject"),
   MEMO("PurchaseNotes"),
@@ -352,6 +427,11 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   TEXT("ApprovedByEmail"),
   DATE("ApprovalDate"),
   MEMO("ApprovalNotes"),
+  // Cancellation audit (set when a request is cancelled at any point in the flow).
+  MEMO("CancelReason"),
+  TEXT("CancelledByName"),
+  TEXT("CancelledByEmail"),
+  DATE("CancelledDate"),
   TEXT("RequesterName"),
   TEXT("RequesterEmail"),
   MEMO("ParticipantEmails"),
@@ -365,6 +445,33 @@ const PURCHASE_COLUMNS: SharePointColumnDef[] = [
   { name: "LastReminderSent", dateTime: { format: "dateTime", displayAs: "default" } },
 ];
 
+// ensureList only *adds* missing columns — it never updates an existing one. So a
+// PurchaseStatus value added to the type after the list was created (e.g. "Cancelled")
+// won't be accepted by the live choice column until we PATCH its choices to match.
+// Idempotent: only patches when a choice is actually missing. Best-effort — a failure
+// here shouldn't block the rest of the (already-succeeded) column repair.
+async function reconcilePurchaseStatusChoices(client: Client, listId: string): Promise<void> {
+  try {
+    const res = await client.api(`/sites/${SITE_ID}/lists/${listId}/columns?$select=id,name,choice`).get();
+    const col = (res.value as Array<{ id: string; name: string; choice?: { choices?: string[] } }>).find(
+      (c) => c.name === "PurchaseStatus"
+    );
+    if (!col) return;
+    const current = col.choice?.choices ?? [];
+    const missing = PURCHASE_STATUS_CHOICES.filter((c) => !current.includes(c));
+    if (missing.length === 0) return;
+    await client
+      .api(`/sites/${SITE_ID}/lists/${listId}/columns/${col.id}`)
+      .patch({ choice: { choices: PURCHASE_STATUS_CHOICES } });
+    console.log("[reconcilePurchaseStatusChoices] added PurchaseStatus choices:", missing);
+  } catch (e) {
+    console.warn("[reconcilePurchaseStatusChoices] could not update PurchaseStatus choices:", e);
+  }
+}
+
 export async function ensurePurchaseList(client: Client): Promise<string> {
-  return ensureList(client, PURCHASE_LIST_NAME, "Purchase requests (extracted from the ticket flow)", PURCHASE_COLUMNS);
+  const listId = await ensureList(client, PURCHASE_LIST_NAME, "Purchase requests (extracted from the ticket flow)", PURCHASE_COLUMNS);
+  // Bring the existing PurchaseStatus choice column up to date (adds "Cancelled" etc.).
+  await reconcilePurchaseStatusChoices(client, listId);
+  return listId;
 }

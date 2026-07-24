@@ -36,6 +36,10 @@ const statusConfig: Record<PurchaseStatus, { label: string; className: string }>
     label: "Denied",
     className: "bg-red-100 text-red-800 border border-red-300",
   },
+  "Cancelled": {
+    label: "Cancelled",
+    className: "bg-gray-100 text-gray-700 border border-gray-300",
+  },
 };
 
 export default function PurchaseStatusBadge({ status, size = "md" }: PurchaseStatusBadgeProps) {
@@ -76,6 +80,11 @@ export default function PurchaseStatusBadge({ status, size = "md" }: PurchaseSta
       {status === "Denied" && (
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      )}
+      {status === "Cancelled" && (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
         </svg>
       )}
       {config.label}

@@ -1,6 +1,7 @@
 const { app } = require("@azure/functions");
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
+const { filterRecipients } = require("../lib/optOut");
 
 // Configuration from environment variables
 const config = {
@@ -81,6 +82,18 @@ app.http("SendEmail", {
       const accessToken = await getAppToken();
       const client = getGraphClient(accessToken);
 
+      // Recipient opt-out: drop any address on the NotificationOptOut list. Those
+      // people keep their access/roles; only support-desk email delivery stops.
+      const recipients = await filterRecipients(client, to);
+      if (recipients.length === 0) {
+        context.log(`[SendEmail] All recipient(s) opted out — nothing sent (was: ${recipientList})`);
+        return {
+          status: 200,
+          headers: corsHeaders,
+          jsonBody: { success: true, suppressed: true, message: "All recipients opted out of notifications" },
+        };
+      }
+
       // Send email from the shared mailbox
       const endpoint = `/users/${config.senderEmail}/sendMail`;
 
@@ -95,14 +108,12 @@ app.http("SendEmail", {
             contentType: "HTML",
             content: htmlContent,
           },
-          toRecipients: Array.isArray(to)
-            ? to.map((email) => ({ emailAddress: { address: email } }))
-            : [{ emailAddress: { address: to } }],
+          toRecipients: recipients.map((email) => ({ emailAddress: { address: email } })),
         },
         saveToSentItems: true,
       });
 
-      context.log(`Email sent successfully to: ${Array.isArray(to) ? to.join(", ") : to}`);
+      context.log(`Email sent successfully to: ${recipients.join(", ")}`);
 
       return {
         status: 200,

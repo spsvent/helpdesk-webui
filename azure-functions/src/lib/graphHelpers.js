@@ -1,5 +1,6 @@
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
+const { getOptOutEmails, isSuppressed } = require("./optOut");
 
 const config = {
   clientId: process.env.AZURE_CLIENT_ID,
@@ -12,6 +13,7 @@ const config = {
   purchaseListId: process.env.PURCHASE_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
+  notificationOptOutListId: process.env.NOTIFICATION_OPTOUT_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
   purchaserGroupId: process.env.PURCHASER_GROUP_ID,
   inventoryGroupId: process.env.INVENTORY_GROUP_ID,
@@ -40,6 +42,13 @@ async function getGraphClient() {
 }
 
 async function sendMail(client, toEmail, subject, htmlContent) {
+  // Recipient opt-out: never send to an address on the NotificationOptOut list.
+  // They keep all access/roles; only support-desk email delivery is suppressed.
+  const optOut = await getOptOutEmails(client);
+  if (isSuppressed(toEmail, optOut)) {
+    console.log(`[sendMail] suppressed (opt-out): ${toEmail} — "${subject}"`);
+    return;
+  }
   await client.api(`/users/${config.senderEmail}/sendMail`).post({
     message: {
       subject,
@@ -61,6 +70,21 @@ async function getGroupMemberEmails(client, groupId) {
   }
 }
 
+// The SMTP address of a mail-enabled (Microsoft 365) group, or null if the group
+// isn't mail-enabled / can't be read. Lets a digest be sent to the group's shared
+// address — so members subscribe/unsubscribe it in Outlook (keeping membership and
+// any app role) — instead of blasting each member's personal inbox directly.
+async function getGroupMail(client, groupId) {
+  if (!groupId) return null;
+  try {
+    const g = await client.api(`/groups/${groupId}`).select("mail,mailEnabled").get();
+    return g && g.mailEnabled && g.mail ? g.mail : null;
+  } catch (e) {
+    console.error("getGroupMail failed:", e.message);
+    return null;
+  }
+}
+
 // Like getGroupMemberEmails but returns { email, displayName } for correct attribution.
 async function getGroupMembers(client, groupId) {
   if (!groupId) return [];
@@ -75,4 +99,4 @@ async function getGroupMembers(client, groupId) {
   }
 }
 
-module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMembers };
+module.exports = { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMembers, getGroupMail };

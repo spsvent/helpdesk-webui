@@ -24,12 +24,15 @@ function buildRow(pr: PurchaseRequest, item: PurchaseLineItem, idx: number): Que
     displayVendor: explicit && explicit.length > 0 ? explicit : inferVendorFromUrl(item.url),
     // Order-date proxy for the Awaiting Receipt sort (no per-item ordered timestamp exists).
     orderedAt: pr.purchasedDate || pr.modified,
-    // Request context for the queue's Requester + Approval columns. Purchase
-    // requests have no department (a ticket-only concept), so it's left blank.
+    // Request context for the queue's Requester + Approval columns. Recurring
+    // order-sheet requests carry a department + per-item SKU; ad-hoc ones don't.
     requester: pr.requesterName || pr.createdByName,
+    department: pr.department,
+    sku: item.sku,
     requestedDate: pr.created,
     approvedDate: pr.approvalDate,
     approver: pr.approvedByName,
+    approvalNotes: pr.approvalNotes,
     receivedBy: pr.receivedByEmail,
   };
 }
@@ -40,8 +43,8 @@ export function purchaseUnorderedRows(prs: PurchaseRequest[]): QueueRow[] {
   for (const pr of prs) {
     if (pr.approvalStatus !== "Approved") continue;
     const status = pr.purchaseStatus;
-    // Skip requests fully done (Received) or denied
-    if (status === "Received" || status === "Denied" || status === "Pending Approval") continue;
+    // Skip requests fully done (Received), denied, cancelled, or not yet approved
+    if (status === "Received" || status === "Denied" || status === "Cancelled" || status === "Pending Approval") continue;
     pr.lineItems.forEach((item, idx) => {
       if (item.vendor?.trim()) return; // already ordered (vendor present; order # optional)
       rows.push(buildRow(pr, item, idx));
@@ -54,7 +57,7 @@ export function purchaseUnorderedRows(prs: PurchaseRequest[]): QueueRow[] {
 export function purchaseUnreceivedRows(prs: PurchaseRequest[]): QueueRow[] {
   const rows: QueueRow[] = [];
   for (const pr of prs) {
-    if (pr.purchaseStatus === "Pending Approval" || pr.purchaseStatus === "Denied") continue;
+    if (pr.purchaseStatus === "Pending Approval" || pr.purchaseStatus === "Denied" || pr.purchaseStatus === "Cancelled") continue;
     pr.lineItems.forEach((item, idx) => {
       const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;
@@ -71,6 +74,7 @@ export function purchaseRecentlyOrderedRows(prs: PurchaseRequest[], daysBack = 3
   const cutoff = Date.now() - daysBack * 86400000;
   const rows: QueueRow[] = [];
   for (const pr of prs) {
+    if (pr.purchaseStatus === "Cancelled") continue;
     pr.lineItems.forEach((item, idx) => {
       const ordered = Boolean(item.vendor?.trim());
       if (!ordered) return;

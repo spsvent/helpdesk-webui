@@ -36,6 +36,11 @@ const BUILT_IN_TABS: { id: string; label: string; Component: React.ComponentType
     Component: dynamic(() => import("@/components/TeamsChannelsManager"), { loading: () => <TabLoadingSpinner /> }),
   },
   {
+    id: "notification-optout",
+    label: "Notification Opt-Out",
+    Component: dynamic(() => import("@/components/NotificationOptOutManager"), { loading: () => <TabLoadingSpinner /> }),
+  },
+  {
     id: "activity-log",
     label: "Activity Log",
     Component: dynamic(() => import("@/components/ActivityLogManager"), { loading: () => <TabLoadingSpinner /> }),

@@ -89,32 +89,36 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
     assignTo: "guestservices@skyparksantasvillage.com",
   },
 
-  // Food & Beverage assignments (includes Pub + Coffee-Bakery)
-  {
-    department: "Food & Beverage",
-    assignTo: "FandB@skyparksantasvillage.com",
-    groupId: "35604eba-ec1a-4f35-9ad9-e5e838762362",
-  },
-
-  // Campground assignments
-  {
-    department: "Campground",
-    assignTo: "CampRVResort@skyparksantasvillage.com",
-    groupId: "2cf46062-5288-4852-929f-0be941e4d758",
-  },
-
-  // Retail assignments
-  {
-    department: "Retail",
-    assignTo: "retail@skyparksantasvillage.com",
-    groupId: "d02e0b0d-9f77-4c82-8354-2efe790607a7",
-  },
-
   // Inventory assignments
   {
     department: "Inventory",
     assignTo: "inventory@skyparksantasvillage.com",
     groupId: "3c9e89ce-83dd-4c31-a884-01404b81898e",
+  },
+
+  // Finance assignments (routes/notifies the Finance M365 group mailbox)
+  {
+    department: "Finance",
+    assignTo: "Finance@skyparksantasvillage.com",
+    groupId: "ab67cf21-9160-4736-995f-d13944090c68", // Finance - SecGroup
+  },
+
+  // Food & Beverage / Campground / Retail (already routed via the SharePoint
+  // AutoAssign list; mirrored here so the fallback knows them too)
+  {
+    department: "Food & Beverage",
+    assignTo: "FandB@skyparksantasvillage.com",
+    groupId: "35604eba-ec1a-4f35-9ad9-e5e838762362",
+  },
+  {
+    department: "Campground",
+    assignTo: "CampRVResort@skyparksantasvillage.com",
+    groupId: "2cf46062-5288-4852-929f-0be941e4d758",
+  },
+  {
+    department: "Retail",
+    assignTo: "retail@skyparksantasvillage.com",
+    groupId: "d02e0b0d-9f77-4c82-8354-2efe790607a7",
   },
 ];
 

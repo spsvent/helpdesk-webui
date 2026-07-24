@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { QueueRow } from "@/lib/lineItemQueue";
 import { groupByVendor } from "@/lib/lineItemQueue";
+import InlineDateEdit from "@/components/InlineDateEdit";
 
 type Tab = "awaiting" | "recent";
 type SortKey = "vendor" | "ticket" | "cost" | "orderDate";
@@ -14,6 +15,9 @@ interface LineItemQueueProps {
   recentRows: QueueRow[];
   onBulkAction: (selected: QueueRow[]) => void;
   loading?: boolean;
+  // When provided, the Delivery column becomes an inline autosaving date editor
+  // (Inventory adjusting expected delivery in the receiving queue). Omitted → text.
+  onSetExpectedDelivery?: (row: QueueRow, iso: string) => void | Promise<void>;
 }
 
 // Keyed on provenance too: ticket and purchase-module ids come from different
@@ -56,10 +60,12 @@ export default function LineItemQueue({
   recentRows,
   onBulkAction,
   loading = false,
+  onSetExpectedDelivery,
 }: LineItemQueueProps) {
   const [tab, setTab] = useState<Tab>("awaiting");
-  // Default sort per queue: Awaiting Order → ticket #; Awaiting Receipt → order date (oldest first).
-  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "ticket");
+  // Default sort per queue: Awaiting Order → group by vendor (purchasers order by
+  // store/vendor); Awaiting Receipt → order date (oldest first).
+  const [sortKey, setSortKey] = useState<SortKey>(mode === "receive" ? "orderDate" : "vendor");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const rows = tab === "awaiting" ? awaitingRows : recentRows;
@@ -223,6 +229,19 @@ export default function LineItemQueue({
     </tr>
   );
 
+  // Delivery column: inline editable when the parent supplies a save handler
+  // (Inventory in the receiving queue), otherwise plain text.
+  const deliveryCell = (r: QueueRow) =>
+    onSetExpectedDelivery ? (
+      <InlineDateEdit
+        value={r.item.expectedDelivery}
+        onSave={(iso) => onSetExpectedDelivery(r, iso)}
+        ariaLabel={`Expected delivery for ${deriveItemLabel(r)}`}
+      />
+    ) : (
+      (r.item.expectedDelivery ?? "—")
+    );
+
   const renderDataRow = (r: QueueRow) => {
     const k = rowKey(r);
     const isSelected = selected.has(k);
@@ -277,6 +296,17 @@ export default function LineItemQueue({
               >
                 {r.approver ? `by ${r.approver}` : "—"}
               </div>
+              {r.approvalNotes && (
+                <div
+                  className="mt-0.5 flex items-center gap-1 text-amber-700 max-w-[11rem]"
+                  title={r.approvalNotes}
+                >
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
+                  </svg>
+                  <span className="truncate">{r.approvalNotes}</span>
+                </div>
+              )}
             </td>
           </>
         )}
@@ -299,6 +329,11 @@ export default function LineItemQueue({
           ) : (
             <span className="text-text-primary">{deriveItemLabel(r)}</span>
           )}
+          {r.sku && (
+            <div className="text-[11px] text-text-secondary font-mono" title="Vendor product code">
+              SKU {r.sku}
+            </div>
+          )}
         </td>
         <td className="text-center px-3 py-2 tabular-nums">{r.item.qty}</td>
         <td className="px-3 py-2">{r.displayVendor}</td>
@@ -312,14 +347,14 @@ export default function LineItemQueue({
         {mode === "order" && isRecent && (
           <>
             <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
-            <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{deliveryCell(r)}</td>
           </>
         )}
         {mode === "receive" && !isRecent && (
           <>
             <td className="px-3 py-2 text-xs">{r.item.orderNum ?? "—"}</td>
             <td className="px-3 py-2 text-xs">{shortDate(r.orderedAt)}</td>
-            <td className="px-3 py-2 text-xs">{r.item.expectedDelivery ?? "—"}</td>
+            <td className="px-3 py-2 text-xs">{deliveryCell(r)}</td>
           </>
         )}
         {mode === "receive" && isRecent && (
