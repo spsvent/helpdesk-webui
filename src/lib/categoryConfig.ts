@@ -121,12 +121,33 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
     Other: [],
   },
   Finance: {},
-  // Food & Beverage / Campground / Retail: routing + RBAC already live in the
-  // SharePoint AutoAssign/RBACGroups lists; added to the dropdown here so they're
-  // actually selectable in the new-ticket form (2026-07).
-  "Food & Beverage": {},
-  Campground: {},
-  Retail: {},
+  // Food & Beverage / Campground / Retail: routing + RBAC live in the SharePoint
+  // AutoAssign/RBACGroups lists; the subcategories below drive the new-ticket form.
+  "Food & Beverage": {
+    "Dining/Restaurant": [],
+    "Bar/Pub": [],
+    "Coffee & Bakery": [],
+    "Kitchen Equipment": [],
+    "Food Safety/Sanitation": [],
+    Supplies: [],
+    Other: [],
+  },
+  Campground: {
+    "Sites & Hookups": [],
+    "Restrooms/Showers": [],
+    "Cabins/Lodging": [],
+    Reservations: [],
+    "Grounds & Amenities": [],
+    Utilities: [],
+    Other: [],
+  },
+  Retail: {
+    "Merchandise/Stock": [],
+    "Displays & Signage": [],
+    Inventory: [],
+    "Store Facilities": [],
+    Other: [],
+  },
   Other: {},
 };
 
