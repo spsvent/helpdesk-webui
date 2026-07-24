@@ -96,6 +96,7 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID` - AutoAssignRules list
 - `NEXT_PUBLIC_ESCALATION_LIST_ID` - EscalationRules list
 - `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` - ActivityLog list
+- `NEXT_PUBLIC_NOTIFICATION_OPTOUT_LIST_ID` - NotificationOptOut list (emails suppressed from all notifications; access/roles unaffected). Also set `NOTIFICATION_OPTOUT_LIST_ID` on the Function App so server-side send paths enforce it.
 
 ### Teams Notifications
 - `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` - "true" to enable Teams notifications
@@ -224,6 +225,11 @@ Set these in **Azure Portal → Function Apps → helpdesk-notify-func → Setti
 | `ESCALATION_LIST_ID` | EscalationRules list GUID |
 | `COMMENTS_LIST_ID` | TicketComments list GUID |
 | `APP_URL` | Web app URL for email links |
+
+#### For Notification Opt-Out (all notification-sending functions)
+| Variable | Description |
+|----------|-------------|
+| `NOTIFICATION_OPTOUT_LIST_ID` | NotificationOptOut list GUID. Emails on this list are dropped by every server-side send path (`graphHelpers.sendMail`, the `SendEmail` HTTP function, and `checkEscalations`). People keep all access/roles — only email delivery stops. Managed from the web UI (Settings → Notification Opt-Out). Leave unset to disable suppression. |
 
 ### Azure AD App Permissions Required
 
