@@ -12,6 +12,7 @@ import { getGraphClient, createTicket, CreateTicketData, CreateTicketOptions, ad
 import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import { ensureFreshToken } from "@/lib/authActions";
 import { useRBAC } from "@/contexts/RBACContext";
+import { creatableModules } from "@/shared/formModules";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncTicketCreated } from "@/lib/vikunjaSyncService";
@@ -48,6 +49,10 @@ export default function NewTicketPage() {
   const isAuthenticated = useIsAuthenticated();
   const { permissions } = useRBAC();
   const isAdmin = permissions?.role === "admin";
+  // When purchases are available to this user, Requests get a pointer to the
+  // dedicated Purchase Request form (same gating as the "+ New" menu).
+  const purchaseHref =
+    creatableModules(permissions).find((m) => m.id === "purchase")?.newHref ?? null;
 
   const [formData, setFormData] = useState<CreateTicketData>(() => {
     // Check for pre-fill data from debug report
@@ -778,6 +783,33 @@ export default function NewTicketPage() {
                     )}
                   </p>
                 </div>
+                {formData.category === "Request" && purchaseHref && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                    <svg
+                      className="w-4 h-4 mt-0.5 shrink-0 text-blue-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                      />
+                    </svg>
+                    <p className="text-sm text-blue-800">
+                      Requesting a <strong>purchase</strong>? Use the dedicated{" "}
+                      <Link
+                        href={purchaseHref}
+                        className="font-medium underline hover:no-underline"
+                      >
+                        New Purchase Request
+                      </Link>{" "}
+                      form instead — it captures items, quantities, and costs for approval.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Title */}
