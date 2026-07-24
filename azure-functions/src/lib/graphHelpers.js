@@ -1,5 +1,6 @@
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
+const { getOptOutEmails, isSuppressed } = require("./optOut");
 
 const config = {
   clientId: process.env.AZURE_CLIENT_ID,
@@ -12,6 +13,7 @@ const config = {
   purchaseListId: process.env.PURCHASE_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
+  notificationOptOutListId: process.env.NOTIFICATION_OPTOUT_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
   purchaserGroupId: process.env.PURCHASER_GROUP_ID,
   inventoryGroupId: process.env.INVENTORY_GROUP_ID,
@@ -40,6 +42,13 @@ async function getGraphClient() {
 }
 
 async function sendMail(client, toEmail, subject, htmlContent) {
+  // Recipient opt-out: never send to an address on the NotificationOptOut list.
+  // They keep all access/roles; only support-desk email delivery is suppressed.
+  const optOut = await getOptOutEmails(client);
+  if (isSuppressed(toEmail, optOut)) {
+    console.log(`[sendMail] suppressed (opt-out): ${toEmail} — "${subject}"`);
+    return;
+  }
   await client.api(`/users/${config.senderEmail}/sendMail`).post({
     message: {
       subject,

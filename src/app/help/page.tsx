@@ -1721,6 +1721,64 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "notification-optout",
+    title: "Notification Opt-Out (Admin)",
+    content: (
+      <div className="space-y-4">
+        <p className="text-text-secondary">
+          The <strong>Notification Opt-Out</strong> list lets an admin stop <em>all</em> help desk
+          notification email to a specific person <strong>without removing any of their access</strong>.
+          It&apos;s the right tool when someone&apos;s notifications come from a role they still need — for
+          example a General Manager or Purchaser whose email is driven by group membership.
+        </p>
+
+        <h4 className="font-semibold text-text-primary">When to use it</h4>
+        <p className="text-text-secondary">
+          Use it when a person wants to keep signing in and using the system, but no longer wants the
+          email. Because notifications follow a person&apos;s role (GM, Purchaser, etc.), you can&apos;t
+          stop the email by editing groups without also taking away their access — this list solves that.
+        </p>
+
+        <h4 className="font-semibold text-text-primary">Add someone to the opt-out list</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4 text-text-secondary">
+          <li>Go to <strong>Settings → Notification Opt-Out</strong> (admins only).</li>
+          <li>Enter the person&apos;s <strong>email address</strong> (name and reason are optional).</li>
+          <li>Click <strong>Add Opt-Out</strong>. They stop receiving help desk email within about a minute.</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary">Pause or remove</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4 text-text-secondary">
+          <li>The <strong>green toggle</strong> pauses an entry without deleting it — flip it off to let email
+            resume temporarily, on again to suppress.</li>
+          <li>The <strong>trash icon</strong> removes the entry entirely; that person immediately goes back to
+            receiving notifications.</li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary">What gets suppressed</h4>
+        <p className="text-text-secondary">
+          Every help desk email to that address: approval requests and decisions, purchase-request and
+          &quot;ready to order&quot; notices, escalation alerts, comment notifications, status-change emails,
+          and assignment emails. Suppression is enforced on the server, so no notification path slips through.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Access is never affected.</strong> An opted-out person keeps their exact same sign-in,
+            admin rights, and RBAC roles — a GM stays a GM, a Purchaser stays a Purchaser. Only email delivery stops.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Heads up:</strong> if you opt out a GM or Purchaser, they will no longer be <em>emailed</em>
+            approval requests or purchase orders they may be expected to act on. They can still see and act on
+            those items directly in the app — just make sure that&apos;s the intent before opting them out.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "tips",
     title: "Tips & Best Practices",
     content: (
