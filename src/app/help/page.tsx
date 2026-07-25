@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { debugCapture, formatDebugForTicket } from "@/lib/debugCapture";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -2396,28 +2396,18 @@ const helpSections: HelpSection[] = [
     content: (
       <div className="space-y-4">
         <p>
-          A purchase request lets you request one or more items to buy. Every purchase
-          request follows the same workflow — <strong>General Manager approval →
-          purchasing → inventory receiving</strong> — no matter how it was started.
+          A purchase request lets you request one or more items to buy. It follows a
+          dedicated workflow — <strong>General Manager approval → purchasing → inventory
+          receiving</strong> — separate from regular support tickets.
         </p>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
-          <p className="text-sm text-blue-800">
-            <strong>Two ways to start one:</strong> the dedicated{" "}
-            <strong>standalone Purchase Request</strong> form (its own page, with an
-            edit/resubmit and cancel cycle), or the <strong>ticket-embedded</strong> flow
-            (a checkbox on a regular Request ticket). Both feed the same order and receiving
-            queues.
-          </p>
-        </div>
-
         <h4 className="font-semibold text-text-primary mt-6">
-          Option 1 — Standalone Purchase Request
+          How to Make a Purchase Request
         </h4>
         <p>
-          The standalone form lives on its own page (<strong>/purchase</strong>) instead of
-          inside a ticket, and must be approved by a General Manager before purchasing can
-          order it.
+          Purchase requests have their own dedicated form (the <strong>/purchase</strong> page),
+          separate from regular tickets, and must be approved by a General Manager before
+          purchasing can order them.
         </p>
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>Click <strong>+ New</strong> in the header and choose <strong>New Purchase Request</strong> (or go to <strong>/purchase</strong>).</li>
@@ -2425,37 +2415,10 @@ const helpSections: HelpSection[] = [
           <li>Click <strong>Submit for Approval</strong> — the General Managers are emailed with one-click approve / deny / request-changes links, and can also decide inside the app.</li>
         </ol>
         <p>
-          You can also start one <strong>from an existing ticket</strong>: open the ticket and
-          use <strong>Convert to Purchase Request</strong> in the details panel. The new request
-          is prefilled from the ticket, and the ticket is resolved and linked to it.
+          Already have a ticket for it? Open the ticket and use{" "}
+          <strong>Convert to Purchase Request</strong> in the details panel — the new request is
+          prefilled from the ticket, and the ticket is resolved and linked to it.
         </p>
-
-        <h4 className="font-semibold text-text-primary mt-6">
-          Option 2 — Purchase Request on a Ticket
-        </h4>
-        <ol className="list-decimal list-inside space-y-2 ml-4">
-          <li>
-            Click <strong>New</strong> in the header (choose <strong>New ticket</strong> if a menu
-            appears) and select <strong>&quot;Request&quot;</strong> as the category.
-          </li>
-          <li>
-            Check the <strong>&quot;This is a Purchase Request&quot;</strong> checkbox that appears
-            right after the category selector, before the Title field. Check it{" "}
-            <strong>first</strong>; the form reshapes to show the purchase-specific fields.
-          </li>
-          <li>Fill in the Title and remaining ticket fields (department, etc.), then add your item(s).</li>
-          <li>
-            Click <strong>&quot;Submit Ticket&quot;</strong> to submit your purchase request.
-          </li>
-        </ol>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
-          <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> On a Purchase Request the Description field is replaced by
-            per-item detail rows and a shared Justification field — you don&apos;t need to write
-            a separate description.
-          </p>
-        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">
           Adding Multiple Items
@@ -3349,7 +3312,7 @@ const staffResourcesSection: HelpSection = {
 const popularQuestions: { q: string; hint: string; target: string }[] = [
   {
     q: "How do I make a purchase request?",
-    hint: "The two ways to request something to buy, and how approval works.",
+    hint: "Use the New Purchase Request form, and how approval works.",
     target: "purchase-requests",
   },
   {
@@ -3484,6 +3447,47 @@ function PopularQuestions({ onNavigate }: { onNavigate: (id: string) => void }) 
   );
 }
 
+// Section ids a deep link (/help#<id>) may target. Kept module-scope so it's a
+// stable reference for the hash listener regardless of the signed-in user's role.
+const DEEP_LINK_IDS = new Set<string>([
+  "popular",
+  ...helpSections.map((s) => s.id),
+  staffResourcesSection.id,
+]);
+
+// Small "Copy link" control shown next to a topic heading, so a specific topic
+// can be shared directly (copies the current /help#<id> URL to the clipboard).
+function CopyLinkButton({ sectionId }: { sectionId: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const url = `${window.location.origin}${window.location.pathname}#${sectionId}`;
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(() => {});
+    }
+  };
+  return (
+    <button
+      onClick={copy}
+      title="Copy a link to this topic"
+      className="shrink-0 inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-brand-blue transition-colors"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828 1.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"
+        />
+      </svg>
+      {copied ? "Copied!" : "Copy link"}
+    </button>
+  );
+}
+
 export default function HelpPage() {
   const [activeSection, setActiveSection] = useState("popular");
   const { permissions, loading } = useRBAC();
@@ -3497,6 +3501,31 @@ export default function HelpPage() {
   const visibleCategories = helpCategories.filter((cat) => !cat.staffOnly || isStaff);
 
   const activeSectionObj = activeSection === "popular" ? null : sectionById.get(activeSection);
+
+  // Deep-linking: open the topic named in the URL hash (/help#purchase-requests),
+  // and react to hash changes (shared links, back/forward, manual edits).
+  useEffect(() => {
+    const applyHash = () => {
+      const id = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!id) {
+        setActiveSection("popular");
+      } else if (DEEP_LINK_IDS.has(id)) {
+        setActiveSection(id);
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  // Switch topic AND reflect it in the URL hash, so the address bar always points
+  // at the current topic and can be copied/shared directly.
+  const navigate = useCallback((id: string) => {
+    setActiveSection(id);
+    const url =
+      id === "popular" ? window.location.pathname + window.location.search : `#${id}`;
+    window.history.replaceState(null, "", url);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
@@ -3522,7 +3551,7 @@ export default function HelpPage() {
           <nav className="p-4 space-y-5">
             {/* Popular Questions — pinned landing */}
             <button
-              onClick={() => setActiveSection("popular")}
+              onClick={() => navigate("popular")}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                 activeSection === "popular"
                   ? "bg-blue-50 text-brand-blue"
@@ -3553,7 +3582,7 @@ export default function HelpPage() {
                     return (
                       <li key={sid}>
                         <button
-                          onClick={() => setActiveSection(sid)}
+                          onClick={() => navigate(sid)}
                           className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                             activeSection === sid
                               ? "bg-blue-50 text-brand-blue font-medium"
@@ -3574,16 +3603,14 @@ export default function HelpPage() {
         {/* Content area */}
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-3xl">
-            {activeSection === "popular" ? (
+            {activeSectionObj ? (
               <>
-                <h2 className="text-2xl font-bold text-text-primary mb-6">Popular Questions</h2>
-                <PopularQuestions onNavigate={setActiveSection} />
-              </>
-            ) : activeSectionObj ? (
-              <>
-                <h2 className="text-2xl font-bold text-text-primary mb-6">
-                  {activeSectionObj.title}
-                </h2>
+                <div className="flex items-start justify-between gap-3 mb-6">
+                  <h2 className="text-2xl font-bold text-text-primary">
+                    {activeSectionObj.title}
+                  </h2>
+                  <CopyLinkButton sectionId={activeSectionObj.id} />
+                </div>
                 <div className="prose prose-slate max-w-none text-text-primary">
                   {activeSectionObj.id === "report-issue" ? (
                     <ReportIssueSection />
@@ -3592,7 +3619,12 @@ export default function HelpPage() {
                   )}
                 </div>
               </>
-            ) : null}
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-text-primary mb-6">Popular Questions</h2>
+                <PopularQuestions onNavigate={navigate} />
+              </>
+            )}
           </div>
         </main>
       </div>
