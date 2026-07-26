@@ -3033,6 +3033,69 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "todo-sync",
+    title: "Microsoft To Do Sync",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Assigned <strong>Tech</strong> tickets automatically appear as tasks in a
+          Microsoft To Do list called{" "}
+          <strong>SkyPark Tech Tickets</strong>. This gives the tech lead a personal,
+          check-off-able view of the assigned Tech queue right inside the To Do app on
+          desktop, web, and phone.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Creates a Task</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            A ticket in the <strong>Tech</strong> department that has an{" "}
+            <strong>assignee</strong> creates a task titled{" "}
+            <code className="bg-bg-subtle px-1 rounded">[HD-123] Ticket Title</code>
+          </li>
+          <li>
+            The ticket <strong>priority</strong> maps to the task&apos;s importance
+            (Urgent/High → High), and each task links straight back to the ticket
+          </li>
+          <li>
+            A Tech ticket created without an assignee gets its task the moment someone
+            is assigned
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Staying in Sync</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Resolving or closing</strong> a ticket checks the task off;
+            reopening it un-checks it
+          </li>
+          <li>
+            <strong>Title and priority changes</strong> update the task automatically
+          </li>
+          <li>
+            Moving a ticket <strong>out of the Tech department</strong>, or removing its
+            assignee, checks the task off and stops mirroring it
+          </li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Tap a task&apos;s link to jump straight to the ticket
+            in the Help Desk. Add the task to <em>My Day</em> in To Do to keep it front
+            and center.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> The sync is one-directional (Help Desk → To Do).
+            Checking a task off in To Do does <strong>not</strong> resolve the ticket —
+            always update the ticket in the Help Desk itself.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "session-troubleshooting",
     title: "Sign-In & Session Issues",
     content: (
@@ -3408,6 +3471,7 @@ const helpCategories: {
       "admin-deployment",
       "admin-teams-config",
       "vikunja-sync",
+      "todo-sync",
       "staff-resources",
     ],
   },
