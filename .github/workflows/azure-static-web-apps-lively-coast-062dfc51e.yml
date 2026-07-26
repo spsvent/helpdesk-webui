@@ -79,6 +79,10 @@ jobs:
           # Vikunja Sync
           NEXT_PUBLIC_VIKUNJA_SYNC_ENABLED: "true"
           NEXT_PUBLIC_VIKUNJA_SYNC_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/synctovikunja"
+          # Microsoft To Do Sync (assigned Tech tickets → jnunn@ To Do)
+          # Backend (Tasks.ReadWrite.All consent, TodoSyncMap list, syncToTodo function) is live as of 2026-07-26.
+          NEXT_PUBLIC_TODO_SYNC_ENABLED: "true"
+          NEXT_PUBLIC_TODO_SYNC_FUNCTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/synctotodo"
           # Application Insights
           NEXT_PUBLIC_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
 

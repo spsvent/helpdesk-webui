@@ -16,6 +16,7 @@ import { creatableModules } from "@/shared/formModules";
 import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncTicketCreated } from "@/lib/vikunjaSyncService";
+import { syncTodoCreated } from "@/lib/todoSyncService";
 import {
   getProblemTypes,
   getProblemTypeSubs,
@@ -433,6 +434,9 @@ export default function NewTicketPage() {
 
       // 3. Sync to Vikunja (fire-and-forget, Tech tickets only)
       syncTicketCreated(newTicket);
+
+      // 3b. Sync to Microsoft To Do (fire-and-forget, assigned Tech tickets only)
+      syncTodoCreated(newTicket);
 
       // 4. Send email notification to assignee if there is one
       if (assigneeEmail) {

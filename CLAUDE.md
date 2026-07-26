@@ -197,6 +197,7 @@ Location: `azure-functions/` directory in this repo
 | `SendTeamsNotification` | `/api/sendteamsnotification` | Posts to Teams channels via Bot Framework | Anonymous |
 | `checkEscalations` | Timer trigger | Scheduled escalation checks | N/A |
 | `runEscalationCheck` | `/api/runescalationcheck` | Manual escalation check trigger | Anonymous |
+| `syncToTodo` | `/api/synctotodo` | Mirrors assigned Tech tickets into a Microsoft To Do list (create/update/complete) | Anonymous |
 
 ### Function App Environment Variables
 
@@ -231,6 +232,17 @@ Set these in **Azure Portal → Function Apps → helpdesk-notify-func → Setti
 |----------|-------------|
 | `NOTIFICATION_OPTOUT_LIST_ID` | NotificationOptOut list GUID. Emails on this list are dropped by every server-side send path (`graphHelpers.sendMail`, the `SendEmail` HTTP function, and `checkEscalations`). People keep all access/roles — only email delivery stops. Managed from the web UI (Settings → Notification Opt-Out). Leave unset to disable suppression. |
 
+#### For Microsoft To Do Sync (syncToTodo)
+| Variable | Description |
+|----------|-------------|
+| `TODO_TARGET_USER` | UPN whose Microsoft To Do the tasks land in (`jnunn@skyparksantasvillage.com`). Requires the `Tasks.ReadWrite.All` application permission with admin consent. |
+| `TODO_SYNC_MAP_LIST_ID` | GUID of the `TodoSyncMap` SharePoint list (ticket → To Do task mapping). Provision it with `scripts/create-todo-syncmap-list.ps1`. |
+| `TODO_LIST_NAME` | Optional. Display name of the To Do list to use/create (default `SkyPark Tech Tickets`). The function creates it on first use — no GUID needed. |
+| `TODO_LIST_ID` | Optional. Pin a specific To Do list id to skip the by-name lookup. |
+| `APP_URL` | Web app URL for the ticket deep-link on each task (shared with the escalation functions). |
+
+> **Scope:** only tickets with `ProblemType == "Tech"` **and** an assignee are mirrored. Frontend kill switch is `NEXT_PUBLIC_TODO_SYNC_ENABLED` in the workflow file; the sync is one-directional (Help Desk → To Do).
+
 ### Azure AD App Permissions Required
 
 The Azure AD app registration needs these **Application permissions** (not Delegated) with **admin consent**:
@@ -240,6 +252,7 @@ The Azure AD app registration needs these **Application permissions** (not Deleg
 | `Mail.Send` | Send emails from shared mailbox |
 | `Sites.ReadWrite.All` | Read/write SharePoint lists |
 | `User.Read.All` | Look up user information |
+| `Tasks.ReadWrite.All` | Create/update Microsoft To Do tasks for the To Do sync (`syncToTodo`). ⚠️ Tenant-wide: To Do has no per-mailbox scoping policy, so this grants the daemon read/write to all users' tasks. |
 
 ### Teams Bot Configuration
 
