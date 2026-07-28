@@ -1,7 +1,7 @@
 const { app } = require("@azure/functions");
 const { config, getGraphClient, sendMail, getGroupMemberEmails, getGroupMail } = require("../lib/graphHelpers");
 const { purchaseReminderDigestEmail } = require("../lib/purchaseEmailTemplates");
-const { reminderPlan, shouldSend } = require("../lib/purchaseReminderLogic");
+const { reminderPlan, shouldSend, TERMINAL_STATUSES } = require("../lib/purchaseReminderLogic");
 
 // Daily purchase-reminder sweep. For every non-terminal PurchaseRequests item it
 // asks reminderPlan() which nudges are due (throttled per-record via LastReminderSent),
@@ -17,8 +17,6 @@ const { reminderPlan, shouldSend } = require("../lib/purchaseReminderLogic");
 // group is mail-enabled) rather than to each member individually — so a member can keep
 // their membership/role but unsubscribe the digest in Outlook. It falls back to individual
 // member emails if the group isn't mail-enabled.
-
-const TERMINAL = new Set(["Received", "Denied"]);
 
 function parseItems(fields) {
   try {
@@ -80,7 +78,7 @@ async function runPurchaseReminders(context) {
   for (const item of items) {
     const fields = item.fields || {};
     fields.id = item.id;
-    if (TERMINAL.has(fields.PurchaseStatus)) continue;
+    if (TERMINAL_STATUSES.has(fields.PurchaseStatus)) continue;
 
     const req = {
       approvalStatus: fields.ApprovalStatus,

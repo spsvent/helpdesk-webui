@@ -19,6 +19,13 @@ const NEED_BY_WINDOW_DAYS = 9;
 const PENDING_NUDGE_DAYS = 4;
 const RECEIVE_NUDGE_DAYS = 7;
 
+// Terminal purchase states never get reminders — the request is finished
+// ("Received") or was stopped ("Denied" by a GM, "Cancelled" by the owner/admin).
+// Defined here (not just in the timer) so the short-circuit is unit-testable and
+// shared with the timer's pre-filter — one source of truth. Omitting "Cancelled"
+// here is what caused cancelled requests to keep nagging their requesters.
+const TERMINAL_STATUSES = new Set(["Received", "Denied", "Cancelled"]);
+
 // Whole/fractional days elapsed since an ISO timestamp, or null if unparseable.
 function daysSince(iso, nowMs) {
   if (!iso) return null;
@@ -83,6 +90,9 @@ function receiveDue(items, orderedAt, nowMs) {
 // Returns { cadenceDays, reminders: Array<"approval"|"order"|"receive"> } — the
 // nudges due right now, ignoring throttle (the caller gates on shouldSend()).
 function reminderPlan(req, nowMs) {
+  // A terminal request (received / denied / cancelled) is done — never nudge it,
+  // regardless of leftover ApprovalStatus or unordered/unreceived line items.
+  if (TERMINAL_STATUSES.has(req.purchaseStatus)) return { cadenceDays: 3, reminders: [] };
   const items = Array.isArray(req.lineItems) ? req.lineItems : [];
   const win = inNeedByWindow(req.needByDate, nowMs);
   // Recurring order sheets (orderType "catalog") remind daily — they have no need-by
@@ -131,5 +141,6 @@ module.exports = {
   receiveDue,
   hasUnorderedItem,
   hasOrderedUnreceivedItem,
+  TERMINAL_STATUSES,
   DAY_MS,
 };
