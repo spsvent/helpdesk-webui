@@ -101,12 +101,57 @@ Without these it still creates tickets — just unassigned, unlogged, and un-ded
 turns **DOWN** events (`heartbeat.status === 0`) into a Tech ticket keyed
 `externalRef: kuma-<monitorId>` (so a flapping monitor folds onto one open ticket).
 Ticket **priority comes from the monitor's Kuma tag**: Critical→Urgent,
-Important→High, Moderate→Normal, untagged→Normal. Up/pending/maintenance events
-up/pending/maintenance events are acked `200 {skipped:true}` with no ticket. Kuma
-setup: add a **Webhook** notification → `POST …/api/createticket`, body type
-"application/json" (preset), and put the function key in an `x-functions-key`
-Additional Header (`{"x-functions-key":"<key>"}`), then attach it to the monitors
-that should open tickets.
+Important→High, Moderate→Normal, untagged→Normal. Pending/maintenance events are
+acked `200 {skipped:true}` with no ticket. Kuma setup: add a **Webhook**
+notification → `POST …/api/createticket`, body type "application/json" (preset),
+and put the function key in an `x-functions-key` Additional Header
+(`{"x-functions-key":"<key>"}`), then attach it to the monitors that should open
+tickets.
+
+### Kuma noise control
+
+Three mechanisms keep a flapping monitor from burying the queue:
+
+| Mechanism | Where | Default |
+|-----------|-------|---------|
+| One ticket per monitor while its ticket is open | `externalRef: kuma-<monitorId>` dedup | always on |
+| Repeat-alert comments throttled | `API_REPEAT_COMMENT_THROTTLE_MINUTES` | 30 min (`0` = comment on every repeat) |
+| Recovered tickets auto-close | `KUMA_AUTO_CLOSE_MINUTES` | 60 min (`0` = never auto-close) |
+
+The first alert cadence itself is **Kuma-side**, not code: set each monitor's
+*Retries* / *Heartbeat Retry Interval* so a blip doesn't page, and *Resend
+Notification if Down X times* to control how often a still-down monitor re-fires
+the webhook.
+
+### Recovery → auto-close (`autoCloseRecovered`)
+
+**UP** events (`heartbeat.status === 1`) no longer just get dropped. CreateTicket
+stamps `ExternalRecoveredAt` (ISO datetime) on the monitor's open ticket and
+returns `200 {ok,recorded:true,id,recoveredAt}` — it deliberately does **not**
+close the ticket, because a host that flaps back down minutes later would leave a
+closed ticket over a live outage. A subsequent DOWN clears the stamp, restarting
+the clock.
+
+The `autoCloseRecovered` timer (hourly, minute 0) then closes any ticket whose
+recovery has held for `KUMA_AUTO_CLOSE_MINUTES`, guarded so it never closes work
+out from under anyone — it requires **all** of:
+
+- `ExternalRef` starts with `kuma-`
+- `Status` is still **New** (nobody moved it to In Progress / On Hold)
+- no human comment (any comment whose `OriginalAuthor` isn't `API` — that covers
+  web-app comments and emailed replies alike)
+- `ExternalRecoveredAt` is at least the hold window old
+
+On close it sets `Status: Closed`, clears the stamp, posts an explanatory public
+comment, and writes a `StatusChanged` ActivityLog entry. No email is sent — a
+monitor that fixed itself shouldn't generate a second round of noise. Every skip
+is counted by reason in the logs.
+
+Manual trigger: `POST …/api/runautocloserecovered?code=<key>` → `{ok,examined,closed,closedIds,skipped}`.
+
+**Extra requirement:** an **`ExternalRecoveredAt`** DateTime column on the Tickets
+list. Without it the UP stamp fails (logged, `recorded:false`) and nothing ever
+auto-closes — the DOWN path is unaffected.
 
 ## Deployment
 

@@ -3096,6 +3096,99 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "monitoring-alerts",
+    title: "Automatic Monitoring Tickets",
+    content: (
+      <div className="space-y-4">
+        <p>
+          <strong>Uptime Kuma</strong> watches our network gear, servers and
+          printers. When something stops responding it files a Help Desk ticket
+          on its own — no person has to notice and report it. These tickets are
+          created in the <strong>Tech</strong> department as{" "}
+          <strong>Problem</strong> tickets, and the sender shows as{" "}
+          <strong>API</strong>.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">How to Recognize One</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            The title reads{" "}
+            <code className="bg-bg-subtle px-1 rounded">
+              &lt;device name&gt; is DOWN
+            </code>
+          </li>
+          <li>
+            The description includes the device&apos;s address and the raw check
+            result (ping statistics, connection errors, and so on)
+          </li>
+          <li>Comments from the monitoring system are attributed to <strong>API</strong></li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Priority Comes From the Monitor</h4>
+        <p>
+          The priority is set by the tag on the monitor in Uptime Kuma, not by a
+          person:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Critical</strong> tag → <strong>Urgent</strong> ticket
+          </li>
+          <li>
+            <strong>Important</strong> tag → <strong>High</strong> ticket
+          </li>
+          <li>
+            <strong>Moderate</strong> or untagged → <strong>Normal</strong> ticket
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">You Only Get One Ticket Per Device</h4>
+        <p>
+          A device that keeps dropping in and out does not create a pile of
+          duplicate tickets. While a ticket for that device is still open, every
+          repeat alert is folded into it as a comment instead — and those
+          comments are limited to one every 30 minutes so the ticket stays
+          readable.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Tickets Close Themselves When the Device Recovers</h4>
+        <p>
+          If the device comes back online and <strong>stays</strong> online for a
+          full hour, the ticket is closed automatically with a comment noting
+          when it recovered. This only happens when:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            The ticket is still <strong>New</strong> — nobody has moved it to In
+            Progress or On Hold
+          </li>
+          <li>Nobody has commented on it or replied to it by email</li>
+        </ul>
+        <p>
+          The moment you comment on one of these tickets or change its status, it
+          is yours — the system will leave it alone and you close it when the
+          real problem is fixed.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> If a device drops again before the hour is up,
+            the countdown resets. A ticket only auto-closes after a genuinely
+            steady recovery, so a flapping switch keeps its ticket.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> An auto-closed ticket means the device
+            answered again — not necessarily that the underlying fault is fixed.
+            If you know the real cause is still outstanding, reopen the ticket or
+            file a new one so the work isn&apos;t forgotten.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "session-troubleshooting",
     title: "Sign-In & Session Issues",
     content: (
