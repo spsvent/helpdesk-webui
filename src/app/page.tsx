@@ -27,6 +27,10 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useRBAC } from "@/contexts/RBACContext";
 import { debugCapture } from "@/lib/debugCapture";
 
+// Where an email deep link (?ticket=N&action=approve) is parked while the user
+// signs in, since the MSAL redirect returns to the bare origin without them.
+const PENDING_DEEP_LINK_KEY = "helpdesk.pendingDeepLink";
+
 export default function Home() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -310,17 +314,58 @@ export default function Home() {
     instance.logoutRedirect();
   };
 
-  // Handle URL parameters for email action buttons
+  // Handle URL parameters for email action buttons.
+  //
+  // These links arrive from email, so the recipient is often NOT signed in yet.
+  // MSAL's loginRedirect sends them to Entra and back to the bare origin, which
+  // drops ?ticket=&action= — the approve intent then vanished silently and the
+  // ticket sat Pending while the approver believed they'd acted on it. So the
+  // intent is stashed before auth and replayed once sign-in completes.
   useEffect(() => {
-    const ticketId = searchParams.get("ticket");
-    const action = searchParams.get("action");
+    const urlTicketId = searchParams.get("ticket");
+    const urlAction = searchParams.get("action");
 
+    if (urlTicketId && !isAuthenticated) {
+      try {
+        sessionStorage.setItem(
+          PENDING_DEEP_LINK_KEY,
+          JSON.stringify({ ticket: urlTicketId, action: urlAction })
+        );
+      } catch {
+        // Private mode / storage disabled — the link still works when signed in.
+      }
+      return;
+    }
+
+    // Signed in: prefer the live URL, else replay whatever survived the redirect.
+    let ticketId = urlTicketId;
+    let action = urlAction;
+    if (!ticketId && isAuthenticated) {
+      try {
+        const stashed = sessionStorage.getItem(PENDING_DEEP_LINK_KEY);
+        if (stashed) {
+          const parsed = JSON.parse(stashed) as { ticket?: string; action?: string | null };
+          ticketId = parsed.ticket ?? null;
+          action = parsed.action ?? null;
+        }
+      } catch {
+        // Ignore unreadable/corrupt stash — nothing to replay.
+      }
+    }
     if (ticketId && isAuthenticated && accounts[0] && !loading) {
+      // Consume the stash only now that it's actually being acted on — clearing
+      // it earlier would lose the intent while tickets are still loading.
+      try {
+        sessionStorage.removeItem(PENDING_DEEP_LINK_KEY);
+      } catch {
+        // Non-fatal.
+      }
       // Load the specific ticket from URL
+      const targetTicketId = ticketId;
       const loadTicketFromUrl = async () => {
         try {
           const client = getGraphClient(instance, accounts[0]);
-          const ticket = await getTicket(client, ticketId);
+          const ticket = await getTicket(client, targetTicketId);
           setSelectedTicket(ticket);
 
           // Store the action if provided (will be handled by TicketDetail)
