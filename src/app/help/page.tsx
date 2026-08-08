@@ -1097,6 +1097,8 @@ const helpSections: HelpSection[] = [
             <p className="text-sm text-gray-600 mt-1">
               Click the Approve, Deny, or Request Changes button directly in the email notification.
               This will open the ticket in the Help Desk where you can add notes and confirm your decision.
+              If you aren&apos;t signed in yet, sign in when prompted — the app remembers which ticket
+              you were approving and reopens it for you afterwards.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
@@ -1171,11 +1173,31 @@ const helpSections: HelpSection[] = [
     content: (
       <div className="space-y-4">
         <p>Approval-request emails now include <strong>Approve</strong>, <strong>Deny</strong>, and <strong>Request Changes</strong> buttons.</p>
+
+        <p className="font-medium text-text-primary">Approving is one tap</p>
         <ol className="list-decimal pl-5 space-y-2">
-          <li>Tap a button in the email. A secure confirmation page opens — no sign-in required.</li>
-          <li>Optionally add a message to the team (required for <em>Request Changes</em>).</li>
-          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone on the ticket is notified.</li>
+          <li>Tap <strong>Approve</strong> in the email. A secure page opens — no sign-in required.</li>
+          <li>
+            It records your approval automatically. Wait for the green
+            <strong> ✓ Approved</strong> confirmation, then you can close the tab.
+          </li>
         </ol>
+
+        <p className="font-medium text-text-primary">Denying or requesting changes takes a second tap</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Tap <strong>Deny</strong> or <strong>Request Changes</strong> in the email.</li>
+          <li>Add a message to the team (required for <em>Request Changes</em>).</li>
+          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone is notified.</li>
+        </ol>
+
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Important:</strong> your decision only counts once the page confirms it. If the page
+          shows an error or says your approval has <strong>NOT</strong> been recorded, tap
+          <strong> Try again</strong> — the request is still waiting for you until you see the
+          confirmation. (Previously the page needed a second tap to approve, and decisions were being
+          lost when the tab was closed too early.)
+        </div>
+
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
           <strong>Tip:</strong> Links are personal and expire after 14 days. Once a ticket is approved or denied, the link shows that it was already decided.
         </div>
@@ -2414,6 +2436,12 @@ const helpSections: HelpSection[] = [
           <li>Add a title, your item(s) — each needs a name or an http(s) link, a quantity, and an estimated cost — and a justification (a project/budget code is optional).</li>
           <li>Click <strong>Submit for Approval</strong> — the General Managers are emailed with one-click approve / deny / request-changes links, and can also decide inside the app.</li>
         </ol>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Approvers:</strong> tapping <strong>Approve</strong> in the email records the decision
+          for you — just wait for the green <strong>✓ Approved</strong> confirmation before closing the
+          page. If it doesn&apos;t confirm, the request is still pending and the purchasers won&apos;t
+          see it, so tap <strong>Try again</strong> or open the request in the app.
+        </div>
         <p>
           Already have a ticket for it? Open the ticket and use{" "}
           <strong>Convert to Purchase Request</strong> in the details panel — the new request is
