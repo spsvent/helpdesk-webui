@@ -3,6 +3,7 @@ const { signToken } = require("../lib/approvalToken");
 const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { approvalRequestEmail } = require("../lib/emailTemplates");
 const { isValidItemId } = require("../lib/requestGuards");
+const { excludeActorMembers } = require("../lib/selfNotify");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,9 +46,20 @@ app.http("sendApprovalRequest", {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "not_pending" } };
       }
 
-      const approvers = await getGroupMembers(client, config.generalManagersGroupId);
-      if (approvers.length === 0) {
+      const allApprovers = await getGroupMembers(client, config.generalManagersGroupId);
+      if (allApprovers.length === 0) {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "no approvers" } };
+      }
+
+      // A GM who files their own Request doesn't need "[Approval Required]" for the
+      // ticket they just created — they're looking at it. If that empties the list
+      // (they're the only GM) we send nothing: the ticket still shows as Pending in
+      // the app, which is where they'd approve it.
+      const requesterEmail =
+        fields.ApprovalRequestedByEmail || fields.OriginalRequester || item.createdBy?.user?.email || "";
+      const approvers = excludeActorMembers(allApprovers, requesterEmail);
+      if (approvers.length === 0) {
+        return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "self_only" } };
       }
 
       const subject = `[Approval Required] ${ref}: ${fields.Title}`;

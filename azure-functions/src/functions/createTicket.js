@@ -300,7 +300,11 @@ app.http("CreateTicket", {
 
     // Best-effort notify + audit — never fail the create on these.
     if (assignee) {
-      await sendMail(client, assignee, `[New Ticket #${id}] ${value.title}`, assignmentEmailHtml(value, id, url)).catch(
+      // actorEmail: someone who files a ticket already assigned to themselves gets
+      // no "[New Ticket]" mail about it (see selfNotify.js).
+      await sendMail(client, assignee, `[New Ticket #${id}] ${value.title}`, assignmentEmailHtml(value, id, url), {
+        actorEmail: value.requesterEmail,
+      }).catch(
         (e) => context.error(`assignment email to ${assignee} failed:`, e.message),
       );
     }

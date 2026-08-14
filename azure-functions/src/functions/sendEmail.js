@@ -2,6 +2,7 @@ const { app } = require("@azure/functions");
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
 const { filterRecipients } = require("../lib/optOut");
+const { excludeActor } = require("../lib/selfNotify");
 
 // Configuration from environment variables
 const config = {
@@ -61,7 +62,7 @@ app.http("SendEmail", {
 
     try {
       const body = await request.json();
-      const { to, subject, htmlContent } = body;
+      const { to, subject, htmlContent, actorEmail } = body;
 
       const recipientList = Array.isArray(to) ? to.join(", ") : to;
       const recipientCount = Array.isArray(to) ? to.length : (to ? 1 : 0);
@@ -82,9 +83,21 @@ app.http("SendEmail", {
       const accessToken = await getAppToken();
       const client = getGraphClient(accessToken);
 
+      // Self-notification: drop the actor from their own change's notification.
+      // Backstop for the SPA, which also filters at each call site.
+      const addressed = excludeActor(Array.isArray(to) ? to : [to], actorEmail);
+      if (addressed.length === 0) {
+        context.log(`[SendEmail] Only recipient was the actor — nothing sent (was: ${recipientList})`);
+        return {
+          status: 200,
+          headers: corsHeaders,
+          jsonBody: { success: true, suppressed: true, message: "Recipient is the actor" },
+        };
+      }
+
       // Recipient opt-out: drop any address on the NotificationOptOut list. Those
       // people keep their access/roles; only support-desk email delivery stops.
-      const recipients = await filterRecipients(client, to);
+      const recipients = await filterRecipients(client, addressed);
       if (recipients.length === 0) {
         context.log(`[SendEmail] All recipient(s) opted out — nothing sent (was: ${recipientList})`);
         return {

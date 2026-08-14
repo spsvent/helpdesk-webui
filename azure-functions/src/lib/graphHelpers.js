@@ -1,6 +1,7 @@
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
 const { getOptOutEmails, isSuppressed } = require("./optOut");
+const { isSelfNotification } = require("./selfNotify");
 
 const config = {
   clientId: process.env.AZURE_CLIENT_ID,
@@ -41,7 +42,13 @@ async function getGraphClient() {
   return Client.init({ authProvider: (done) => done(null, result.accessToken) });
 }
 
-async function sendMail(client, toEmail, subject, htmlContent) {
+async function sendMail(client, toEmail, subject, htmlContent, options = {}) {
+  // Self-notification: never tell someone about a change they just made themselves.
+  // Callers pass options.actorEmail; group addresses are unaffected (see selfNotify.js).
+  if (isSelfNotification(toEmail, options.actorEmail)) {
+    console.log(`[sendMail] suppressed (self): ${toEmail} — "${subject}"`);
+    return;
+  }
   // Recipient opt-out: never send to an address on the NotificationOptOut list.
   // They keep all access/roles; only support-desk email delivery is suppressed.
   const optOut = await getOptOutEmails(client);

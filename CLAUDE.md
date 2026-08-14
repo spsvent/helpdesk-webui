@@ -232,6 +232,19 @@ Set these in **Azure Portal → Function Apps → helpdesk-notify-func → Setti
 |----------|-------------|
 | `NOTIFICATION_OPTOUT_LIST_ID` | NotificationOptOut list GUID. Emails on this list are dropped by every server-side send path (`graphHelpers.sendMail`, the `SendEmail` HTTP function, and `checkEscalations`). People keep all access/roles — only email delivery stops. Managed from the web UI (Settings → Notification Opt-Out). Leave unset to disable suppression. |
 
+### Self-Notification Suppression
+
+Nobody is emailed about a change they made themselves. Two mirrored chokepoints enforce it — **any new notification path gets the behavior for free; don't re-implement it per call site**:
+
+| Side | Where | How |
+|------|-------|-----|
+| Frontend | `src/lib/graphClient.ts` → `sendEmail` | `actorEmail` defaults to `getCurrentActor()` (`src/lib/currentActor.ts`, set from `layout.tsx` on every MSAL account activation). Recipient == actor → the send is skipped. Pass `""` explicitly to force a deliberate email-to-self. |
+| Functions | `graphHelpers.sendMail(…, { actorEmail })` and the `SendEmail` HTTP function's `actorEmail` body field | `src/lib/selfNotify.js` — `isSelfNotification` / `excludeActor` / `excludeActorMembers`. |
+
+The three approval-request functions (`sendApprovalRequest`, `sendPurchaseApprovalRequest`, `sendCdwApprovalRequest`) drop the requester from the expanded GM group; if that empties the list they return `note: "self_only"` and send nothing — the item is still Pending in the app.
+
+**Deliberate limit:** suppression matches individual addresses only. Mail to a shared/M365 group address (e.g. an Inventory queue) still reaches every member including the actor — Graph has no per-recipient suppression, and expanding the group into N sends would break the shared queue's reply semantics. Distinct from `NOTIFICATION_OPTOUT_LIST_ID`, which suppresses by *recipient* regardless of who acted.
+
 #### For Microsoft To Do Sync (syncToTodo)
 | Variable | Description |
 |----------|-------------|
@@ -481,6 +494,15 @@ Implementation:
 - New components: PurchaseStatusBadge, PurchaseActionPanel, ReceiveActionPanel
 - Modified: ApprovalActionPanel (4-button layout for purchases), DetailsPanel (purchase details section)
 - New env vars: `NEXT_PUBLIC_PURCHASER_GROUP_ID`, `NEXT_PUBLIC_INVENTORY_GROUP_ID`
+
+**Approval notification fan-out (two independent paths — change both or neither):**
+
+| Path | Code | Notifies |
+|------|------|----------|
+| In-app decision | `purchaseEmail.notifyPurchaseDecision` (called by `PurchaseApprovalPanel`) | Requester always; purchasers when `notifiesPurchasers(decision)` — i.e. `Approved` / `Approved with Changes`, not `Approved & Ordered` |
+| One-click from email | `azure-functions/.../purchaseApprovalAction.js` | Requester + participants; purchasers on `Approved` (the only approve variant that path can produce) |
+
+The in-app path shipped without any purchaser notification, so requests approved inside the app sat in the order queue silently — purchasers only found them by opening `/orders`. Purchaser addresses come from the `RBACGroups` list (`purchaserGroupIds`, supports multiple groups) with `NEXT_PUBLIC_PURCHASER_GROUP_ID` as fallback; the Function still uses only its single `PURCHASER_GROUP_ID` env var.
 
 ### Planned: Email-based Purchase Auto-Update
 Auto-extract vendor + confirmation # from forwarded confirmation emails to update purchase tickets.
