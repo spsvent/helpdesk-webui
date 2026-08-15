@@ -300,14 +300,33 @@ Teams notifications use **Bot Framework SDK** (not Graph API) for proactive mess
 
 ```bash
 cd azure-functions
-func azure functionapp publish helpdesk-notify-func
+func azure functionapp publish helpdesk-notify-func --javascript --build remote
 ```
 
-**After deployment, verify functions are listed:**
-- SendEmail
-- SendTeamsNotification
-- checkEscalations
-- runEscalationCheck
+> **⚠️ `--build remote` is REQUIRED — omitting it takes the whole app down.**
+> There is no `node_modules` in this repo, so a default publish uploads ~100 KB of
+> source with `remotebuild = false`, Kudu skips the Oryx build, and the app comes up
+> with **zero functions registered** — every endpoint 404s and all notification email
+> stops until you republish. The deploy still prints "The deployment was successful!"
+> and a Running host status, so trust the function list, not the success message.
+> (Learned the hard way on 2026-08-14: ~6 minutes of dead endpoints.)
+>
+> `--javascript` is also required — there's no `local.settings.json` to infer the
+> worker runtime from.
+
+**After deployment, verify the functions actually registered:**
+
+```bash
+func azure functionapp list-functions helpdesk-notify-func
+# Expect 21 functions (17 httpTrigger + 4 timerTrigger). Zero or a short list = broken deploy.
+curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
+  https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail
+# Expect 204. A 404 means the app has no functions loaded.
+```
+
+Timer triggers (`checkEscalations`, `purchaseReminders`, `pollInboundReplies`,
+`autoCloseRecovered`) fail silently when a deploy breaks — nothing 404s visibly, the
+scheduled work just never runs. Always check the full list, not just one endpoint.
 
 ### Testing Functions Manually
 
@@ -414,7 +433,7 @@ az monitor app-insights query \
 #### CORS errors when calling Azure Functions
 **Cause:** Functions not deployed or CORS not configured.
 **Fix:**
-1. Ensure functions are deployed: `func azure functionapp publish helpdesk-notify-func`
+1. Ensure functions are deployed: `func azure functionapp publish helpdesk-notify-func --javascript --build remote`
 2. Functions have CORS headers built-in (code handles OPTIONS requests)
 
 #### 401 Unauthorized from Azure Functions
