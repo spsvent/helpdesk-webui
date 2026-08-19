@@ -37,6 +37,7 @@ import ApprovalActionPanel from "./ApprovalActionPanel";
 import { collectParticipants, staffSubset } from "@/lib/participants";
 import { getStaffEmails } from "@/lib/rbacService";
 import { ensureFreshToken } from "@/lib/authActions";
+import { autoAssignIfUnassigned } from "@/lib/approvalSafetyNet";
 import { saveDraft } from "@/lib/formDraft";
 import { graphScopes } from "@/lib/msalConfig";
 
@@ -745,8 +746,18 @@ export default function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
     );
     setComments((prev) => [...prev, approvalComment]);
 
+    // Safety net: an approved Request with no assignee would otherwise vanish —
+    // the decision email only reaches the requester/participants, so the team
+    // meant to do the work never hears about it. Route it via the AutoAssign
+    // rules now (same rules the create form uses).
+    let safetyNetAssignee: string | null = null;
+    if (decision === "Approved") {
+      safetyNetAssignee = await autoAssignIfUnassigned(client, updatedTicket, approverName);
+    }
+
     // Notify approval requester + ticket requester + assignee (deduped, excluding the approver)
     const decisionRecipients = new Set<string>();
+    if (safetyNetAssignee) decisionRecipients.add(safetyNetAssignee.toLowerCase());
     const approvalRequesterEmail = updatedTicket.approvalRequestedBy?.email || ticket.approvalRequestedBy?.email;
     if (approvalRequesterEmail) decisionRecipients.add(approvalRequesterEmail.toLowerCase());
     if (ticket.requester?.email) decisionRecipients.add(ticket.requester.email.toLowerCase());

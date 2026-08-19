@@ -3,7 +3,8 @@ const { verifyToken } = require("../lib/approvalToken");
 const { actionToDecision, buildDecisionFields, isTerminalStatus, decisionConflict } = require("../lib/decisionFields");
 const { resolveDecisionRecipients } = require("../lib/approvalRecipients");
 const { config, getGraphClient, sendMail, getGroupMemberEmails } = require("../lib/graphHelpers");
-const { decisionEmail, purchaseApprovedEmail } = require("../lib/emailTemplates");
+const { decisionEmail, purchaseApprovedEmail, assignedOnApprovalEmail } = require("../lib/emailTemplates");
+const { parseAutoAssignRules, findAssignee } = require("../lib/autoAssign");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,37 @@ async function getCommenterEmails(client, ticketId) {
   } catch {
     return [];
   }
+}
+
+// Resolve an assignee for an unassigned ticket from the AutoAssign list (same
+// rules the web form and createTicket use). Any failure → null, never a throw.
+async function resolveAutoAssignee(client, fields) {
+  if (!config.autoAssignListId) return null;
+  try {
+    const res = await client
+      .api(`/sites/${config.siteId}/lists/${config.autoAssignListId}/items`)
+      .expand("fields")
+      .top(500)
+      .get();
+    return findAssignee(parseAutoAssignRules(res.value || []), {
+      problemType: fields.ProblemType,
+      problemTypeSub: fields.ProblemTypeSub,
+      problemTypeSub2: fields.ProblemTypeSub2,
+      category: fields.Category,
+      priority: fields.Priority,
+    });
+  } catch (e) {
+    console.error("resolveAutoAssignee failed:", e.message);
+    return null;
+  }
+}
+
+// "itav@domain.com" -> "Itav", "john.doe@domain.com" -> "John Doe" (mirrors the SPA)
+function assigneeDisplayName(email) {
+  return email
+    .split("@")[0]
+    .replace(/[._]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 async function addInternalComment(client, ticketId, body) {
@@ -210,6 +242,45 @@ app.http("approvalAction", {
         description: `Ticket ${decision.toLowerCase()} by ${approverName} (via email)`,
         details: JSON.stringify({ decision, notes: note || null, channel: "email" }),
       });
+
+      // Safety net: an approved Request with no assignee would land in a void —
+      // the decision email only reaches the requester/participants, so the team
+      // meant to do the work never hears about it (tickets #577/#578). Route it
+      // via the same AutoAssign rules the create form uses; mutating `verify`
+      // makes resolveDecisionRecipients below include the new assignee too.
+      if (decision === "Approved" && !verify.OriginalAssignedTo && !verify.AssignedToLookupId) {
+        try {
+          const assignee = await resolveAutoAssignee(client, verify);
+          if (assignee) {
+            await client
+              .api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${tid}/fields`)
+              .patch({ OriginalAssignedTo: assignee });
+            verify.OriginalAssignedTo = assignee;
+            const assigneeName = assigneeDisplayName(assignee);
+            await addInternalComment(client, tid, `📋 Assigned to ${assigneeName} (${assignee}) by System`);
+            await logActivity(client, {
+              eventType: "ticket_assigned",
+              ticketId: tid,
+              ticketNumber: verify.TicketNumber,
+              actor: "system",
+              actorName: "System",
+              description: `Auto-assigned to ${assigneeName} on approval (was unassigned)`,
+              details: JSON.stringify({ to: assignee, trigger: "approval_safety_net" }),
+            });
+            const aRef = ticketRefOf(verify);
+            await sendMail(
+              client,
+              assignee,
+              `[Assigned] ${aRef}: ${verify.Title}`,
+              assignedOnApprovalEmail(verify, aRef, assigneeName, approverName),
+              { actorEmail: approverEmail }
+            ).catch((e) => console.error(`safety-net assignment email to ${assignee} failed:`, e.message));
+          }
+        } catch (e) {
+          // Never let the safety net break the approval itself.
+          console.error("approval safety-net auto-assign failed:", e.message);
+        }
+      }
 
       // Decision emails -> participants (requester/assignee/approval-requester/participants/commenters, minus approver)
       const commenterEmails = await getCommenterEmails(client, tid);

@@ -880,10 +880,21 @@ export default function NewTicketPage() {
                     <option value="">Select a department...</option>
                     {getProblemTypes().map((opt) => (
                       <option key={opt} value={opt}>
-                        {opt}
+                        {opt === "Other" ? "Other — last resort only" : opt}
                       </option>
                     ))}
                   </select>
+                  {formData.problemType === "Other" && (
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-900">
+                      <p className="font-semibold">⚠️ Only use “Other” as a last resort</p>
+                      <p className="mt-1">
+                        Double-check the department list first — the team that will actually do
+                        this work is probably there (e.g. design and creative requests belong to{" "}
+                        <strong>Marketing</strong>). “Other” tickets go to the General Managers to
+                        be re-routed, which delays your request.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Level 2: Problem Type Sub */}

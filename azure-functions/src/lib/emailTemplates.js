@@ -97,6 +97,29 @@ function purchaseApprovedEmail(fields, ticketRef, approverName) {
   </div></body></html>`;
 }
 
+// Sent by the approval safety net: a Request was approved while unassigned, so it
+// was routed via the AutoAssign rules at approval time instead of at creation.
+function assignedOnApprovalEmail(fields, ticketRef, assigneeName, approverName) {
+  return `<!DOCTYPE html><html><head><style>${styles}</style></head><body>
+  <div class="container">
+    <div class="header"><h1 style="margin:0;font-size:24px;">Ticket Assigned</h1>
+      <p style="margin:8px 0 0 0;opacity:.9;">SkyPark Help Desk</p></div>
+    <div class="content">
+      <p style="text-align:center;"><span class="badge badge-approved">Approved</span></p>
+      <p>Hi ${escapeHtml(assigneeName)},</p>
+      <p>${ticketRef} — <strong>${escapeHtml(fields.Title)}</strong> was just approved by
+      ${escapeHtml(approverName)} and has been assigned to you. It had no assignee, so it was
+      routed automatically — please review and re-route it if it belongs to another team.</p>
+      <div class="ticket-info">
+        <p><span class="label">Department:</span> ${escapeHtml(fields.ProblemType || "")}</p>
+        <p><span class="label">Priority:</span> ${escapeHtml(fields.Priority || "")}</p>
+      </div>
+      <div class="actions"><a href="${config.appUrl}/?ticket=${fields.id}" class="btn btn-view">View Ticket</a></div>
+    </div>
+    <div class="footer"><p>This is an automated message from SkyPark Help Desk.</p></div>
+  </div></body></html>`;
+}
+
 function commentEmail(fields, ticketRef, commenterName, commentText) {
   const preview = String(commentText || "").substring(0, 600);
   return `<!DOCTYPE html><html><head><style>${styles}</style></head><body>
@@ -115,4 +138,4 @@ function commentEmail(fields, ticketRef, commenterName, commentText) {
   </div></body></html>`;
 }
 
-module.exports = { approvalRequestEmail, decisionEmail, purchaseApprovedEmail, commentEmail, escapeHtml };
+module.exports = { approvalRequestEmail, decisionEmail, purchaseApprovedEmail, assignedOnApprovalEmail, commentEmail, escapeHtml };

@@ -342,6 +342,14 @@ const helpSections: HelpSection[] = [
           <p><strong>Description</strong> (required): Detailed explanation of the problem or request</p>
           <p><strong>Category</strong>: Select &quot;Request&quot; for new features/access, or &quot;Problem&quot; for something broken</p>
           <p><strong>Department</strong> (required): Which team should handle this (Tech, Operations, HR, etc.). The form starts with no department selected — you must pick one before submitting.</p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm text-amber-800">
+              <strong>&quot;Other&quot; is a last resort.</strong> Check the department list carefully first —
+              the team that will do the work is almost always there (for example, design and creative
+              requests belong to <strong>Marketing</strong>). Tickets filed under &quot;Other&quot; are routed
+              to the General Managers for manual re-routing, which delays your request.
+            </p>
+          </div>
           <p><strong>Priority</strong>: How urgent is this issue (see Priority Levels below)</p>
           <p><strong>Location</strong> (required): Where the issue is occurring</p>
         </div>
@@ -1512,8 +1520,17 @@ const helpSections: HelpSection[] = [
         <h4 className="font-semibold text-text-primary mt-6">Current Auto-Assignment Rules</h4>
         <p className="text-sm text-text-secondary mt-2">
           Auto-assignment rules are configured by administrators in SharePoint. Each department
-          has a designated contact who receives new tickets automatically. Contact your
-          administrator to view or modify the current assignment rules.
+          has a designated contact who receives new tickets automatically. Tickets filed under
+          the &quot;Other&quot; department are assigned to the General Managers, who re-route them
+          to the right team. Contact your administrator to view or modify the current assignment rules.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Auto-Assignment on Approval</h4>
+        <p className="text-sm text-text-secondary mt-2">
+          If a Request ticket is still unassigned when it gets approved (for example, its
+          department had no assignment rule when it was created), the system automatically
+          assigns it using the current rules at the moment of approval and notifies the new
+          assignee by email. This guarantees that approved work always lands in someone&apos;s queue.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Saving Changes</h4>
