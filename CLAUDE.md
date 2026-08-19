@@ -198,6 +198,12 @@ Location: `azure-functions/` directory in this repo
 | `checkEscalations` | Timer trigger | Scheduled escalation checks | N/A |
 | `runEscalationCheck` | `/api/runescalationcheck` | Manual escalation check trigger | Anonymous |
 | `syncToTodo` | `/api/synctotodo` | Mirrors assigned Tech tickets into a Microsoft To Do list (create/update/complete) | Anonymous |
+| `agentApi` (×4) | `/api/agent/tickets`, `/api/agent/tickets/{id}`, `/api/agent/tickets/{id}/comments`, `/api/agent/tickets/{id}/status` | Agent-facing REST API: read ticket + thread, list, comment, change status — with activity logging and participant notifications | `x-agent-key` header == `AGENT_API_KEY` env var (unset = API disabled) |
+
+> **Agent access:** headless agents (Fedora server, cron, etc.) use `tools/helpdesk-agent/`
+> — a dependency-free CLI (`helpdesk.mjs`) and stdio MCP server (`mcp-server.mjs`)
+> wrapping the agent API. They accept `?ticket=N` deep-link URLs directly. See
+> `tools/helpdesk-agent/README.md` for setup.
 
 ### Function App Environment Variables
 
@@ -244,6 +250,11 @@ Nobody is emailed about a change they made themselves. Two mirrored chokepoints 
 The three approval-request functions (`sendApprovalRequest`, `sendPurchaseApprovalRequest`, `sendCdwApprovalRequest`) drop the requester from the expanded GM group; if that empties the list they return `note: "self_only"` and send nothing — the item is still Pending in the app.
 
 **Deliberate limit:** suppression matches individual addresses only. Mail to a shared/M365 group address (e.g. an Inventory queue) still reaches every member including the actor — Graph has no per-recipient suppression, and expanding the group into N sends would break the shared queue's reply semantics. Distinct from `NOTIFICATION_OPTOUT_LIST_ID`, which suppresses by *recipient* regardless of who acted.
+
+#### For the Agent API (agentApi)
+| Variable | Description |
+|----------|-------------|
+| `AGENT_API_KEY` | Shared secret required in the `x-agent-key` header on all `/api/agent/*` endpoints. Generate with `openssl rand -hex 32`. Leave unset to disable the agent API entirely (endpoints return 503). Client-side counterpart is `HELPDESK_AGENT_KEY` (see `tools/helpdesk-agent/README.md`). |
 
 #### For Microsoft To Do Sync (syncToTodo)
 | Variable | Description |
@@ -318,7 +329,7 @@ func azure functionapp publish helpdesk-notify-func --javascript --build remote
 
 ```bash
 func azure functionapp list-functions helpdesk-notify-func
-# Expect 21 functions (17 httpTrigger + 4 timerTrigger). Zero or a short list = broken deploy.
+# Expect 25 functions (21 httpTrigger + 4 timerTrigger). Zero or a short list = broken deploy.
 curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
   https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail
 # Expect 204. A 404 means the app has no functions loaded.
