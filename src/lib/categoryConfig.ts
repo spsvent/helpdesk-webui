@@ -127,6 +127,7 @@ export const CATEGORY_HIERARCHY: Record<string, Record<string, string[]>> = {
   "Food & Beverage": {},
   Campground: {},
   Retail: {},
+  Safety: {},
   Other: {},
 };
 

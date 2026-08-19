@@ -27,6 +27,7 @@ export const DEPARTMENT_GROUP_MAP: Record<string, string> = {
   "Food & Beverage": "35604eba-ec1a-4f35-9ad9-e5e838762362", // F&B - SecGroup
   Campground: "2cf46062-5288-4852-929f-0be941e4d758", // Campground - SecGroup
   Retail: "d02e0b0d-9f77-4c82-8354-2efe790607a7", // Retail - SecGroup
+  Safety: "bfb9c840-8c79-4df9-8334-8e4da41f9ede", // Safety M365 group
   // "Other" - handled specially: any support staff can edit
 };
 

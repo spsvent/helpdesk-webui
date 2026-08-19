@@ -17,6 +17,7 @@ const PROBLEM_TYPES = [
   "Food & Beverage",
   "Campground",
   "Retail",
+  "Safety",
   "Other",
 ];
 // A ticket still "open" for dedup purposes = anything not in a terminal state.

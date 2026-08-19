@@ -120,6 +120,13 @@ export const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
     assignTo: "retail@skyparksantasvillage.com",
     groupId: "d02e0b0d-9f77-4c82-8354-2efe790607a7",
   },
+
+  // Safety assignments (routes/notifies the Safety M365 group mailbox)
+  {
+    department: "Safety",
+    assignTo: "Safety@skyparksantasvillage.com",
+    groupId: "bfb9c840-8c79-4df9-8334-8e4da41f9ede", // Safety M365 group
+  },
 ];
 
 /**
