@@ -1,9 +1,15 @@
 const { app } = require("@azure/functions");
 const { config, getGraphClient, sendMail } = require("../lib/graphHelpers");
 const { escapeHtml } = require("../lib/emailTemplates");
-const { validateCreateTicketInput, findOpenDuplicate } = require("../lib/ticketIntake");
+const {
+  validateCreateTicketInput,
+  findOpenDuplicate,
+  isRepeatCommentThrottled,
+  REPEAT_COMMENT_PREFIX,
+} = require("../lib/ticketIntake");
 const { parseAutoAssignRules, findAssignee } = require("../lib/autoAssign");
-const { isKumaPayload, adaptKumaPayload } = require("../lib/kumaAdapter");
+const { isKumaPayload, kumaEventKind, kumaExternalRef, adaptKumaPayload } = require("../lib/kumaAdapter");
+const { KUMA_REF_PREFIX } = require("../lib/kumaRecovery");
 
 // Machine-to-machine ticket intake: lets another service (monitoring, an internal
 // app) file a HelpDesk ticket over HTTP. Protected by the Azure Functions host key
@@ -14,6 +20,9 @@ const { isKumaPayload, adaptKumaPayload } = require("../lib/kumaAdapter");
 
 const AUTO_ASSIGN_LIST_ID = process.env.AUTO_ASSIGN_LIST_ID;
 const ACTIVITY_LOG_LIST_ID = process.env.ACTIVITY_LOG_LIST_ID;
+// At most one repeat-alert comment per ticket per this many minutes. 0 disables
+// the throttle (every repeat comments, the pre-throttle behaviour).
+const REPEAT_COMMENT_THROTTLE_MINUTES = Number(process.env.API_REPEAT_COMMENT_THROTTLE_MINUTES ?? 30);
 
 // Explicit caller override wins; otherwise route by the AutoAssign list. Any
 // failure (list unset/unreadable) → unassigned rather than a hard error.
@@ -73,6 +82,29 @@ async function findDuplicate(client, externalRef) {
   }
 }
 
+// Existing comments on a ticket, used to decide whether a repeat alert is due for
+// another note. Fails open (→ []) so a lookup error never swallows the comment.
+async function getTicketComments(client, ticketId) {
+  try {
+    const res = await client
+      .api(`/sites/${config.siteId}/lists/${config.commentsListId}/items?$expand=fields&$filter=fields/TicketID eq ${Number(ticketId)}`)
+      .get();
+    return res.value || [];
+  } catch (e) {
+    console.error("getTicketComments failed:", e.message);
+    return [];
+  }
+}
+
+// Stamp (or clear) the moment Kuma last reported this monitor healthy. The
+// autoCloseRecovered sweep closes tickets whose stamp has held for the hold window;
+// clearing it on a fresh DOWN restarts that clock so a flapping host never closes.
+async function setRecoveredAt(client, ticketId, iso) {
+  await client
+    .api(`/sites/${config.siteId}/lists/${config.ticketsListId}/items/${ticketId}/fields`)
+    .patch({ ExternalRecoveredAt: iso });
+}
+
 async function addComment(client, ticketId, body) {
   try {
     await client.api(`/sites/${config.siteId}/lists/${config.commentsListId}/items`).post({
@@ -99,6 +131,25 @@ async function logActivity(client, entry) {
   } catch (e) {
     console.error("logActivity failed:", e.message);
   }
+}
+
+// Kuma reports UP the instant a monitor recovers. Deliberately does NOT close the
+// ticket — a host that flaps back down minutes later would leave a closed ticket
+// for a live outage. It only records when the monitor came back; autoCloseRecovered
+// decides, an hour later, whether the recovery stuck.
+async function recordKumaRecovery(client, externalRef, context) {
+  const open = await findDuplicate(client, externalRef);
+  if (!open) {
+    return { status: 200, jsonBody: { ok: true, skipped: true, reason: "no open ticket for this monitor" } };
+  }
+  const recoveredAt = new Date().toISOString();
+  try {
+    await setRecoveredAt(client, open.id, recoveredAt);
+  } catch (e) {
+    context.error(`recovery stamp for ticket ${open.id} failed:`, e.message);
+    return { status: 200, jsonBody: { ok: true, recorded: false, id: open.id, error: "stamp failed" } };
+  }
+  return { status: 200, jsonBody: { ok: true, recorded: true, id: open.id, recoveredAt } };
 }
 
 function assignmentEmailHtml(value, ticketId, url) {
@@ -128,10 +179,26 @@ app.http("CreateTicket", {
       return { status: 400, jsonBody: { ok: false, error: "invalid JSON body" } };
     }
 
-    // Uptime Kuma posts its own { heartbeat, monitor, msg } shape. Adapt it, and
-    // only create tickets for DOWN events — recovery/pending/maintenance are
-    // acked with 200 and no ticket (the open ticket's externalRef dedupes repeats).
+    // Uptime Kuma posts its own { heartbeat, monitor, msg } shape on every state
+    // change. DOWN creates (or dedupes onto) a ticket; UP stamps the recovery so
+    // the ticket can auto-close once the monitor holds; pending/maintenance are
+    // acked with 200 and no ticket at all.
     if (isKumaPayload(body)) {
+      const kind = kumaEventKind(body);
+      if (kind === "up") {
+        if (!config.siteId || !config.ticketsListId) {
+          context.error("createTicket: SHAREPOINT_SITE_ID / TICKETS_LIST_ID not configured");
+          return { status: 500, jsonBody: { ok: false, error: "server not configured" } };
+        }
+        let recoveryClient;
+        try {
+          recoveryClient = await getGraphClient();
+        } catch (e) {
+          context.error("graph auth failed:", e.message);
+          return { status: 502, jsonBody: { ok: false, error: "graph auth failed" } };
+        }
+        return await recordKumaRecovery(recoveryClient, kumaExternalRef(body.monitor), context);
+      }
       const adapted = adaptKumaPayload(body);
       if (!adapted) {
         return { status: 200, jsonBody: { ok: true, skipped: true, reason: "uptime-kuma event is not DOWN" } };
@@ -161,17 +228,41 @@ app.http("CreateTicket", {
     if (value.externalRef) {
       const dup = await findDuplicate(client, value.externalRef);
       if (dup) {
-        const note = `Repeat alert${value.source ? ` from ${value.source}` : ""} (ref ${value.externalRef}):\n${value.description}`;
-        await addComment(client, dup.id, note);
-        await logActivity(client, {
-          description: `Repeat API alert folded into existing ticket (ref ${value.externalRef})`,
-          eventType: "Comment",
-          actor: value.source || "API",
-          ticketId: dup.id,
-        });
+        // Down again — void any recovery stamp so the auto-close clock restarts
+        // from the next genuine recovery instead of firing mid-outage. Only kuma
+        // refs carry a stamp, so don't spend a PATCH on other integrations.
+        if (value.externalRef.startsWith(KUMA_REF_PREFIX)) {
+          await setRecoveredAt(client, dup.id, null).catch((e) =>
+            context.error(`clearing recovery stamp on ticket ${dup.id} failed:`, e.message),
+          );
+        }
+        // A monitor flapping every minute would otherwise bury the ticket in
+        // identical alert dumps — comment at most once per throttle window.
+        const throttled = isRepeatCommentThrottled(
+          await getTicketComments(client, dup.id),
+          Date.now(),
+          REPEAT_COMMENT_THROTTLE_MINUTES,
+        );
+        if (!throttled) {
+          const note = `${REPEAT_COMMENT_PREFIX}${value.source ? ` from ${value.source}` : ""} (ref ${value.externalRef}):\n${value.description}`;
+          await addComment(client, dup.id, note);
+          await logActivity(client, {
+            description: `Repeat API alert folded into existing ticket (ref ${value.externalRef})`,
+            eventType: "Comment",
+            actor: value.source || "API",
+            ticketId: dup.id,
+          });
+        }
         return {
           status: 200,
-          jsonBody: { ok: true, deduped: true, id: dup.id, ticketNumber: Number(dup.id), url: `${config.appUrl}/?ticket=${dup.id}` },
+          jsonBody: {
+            ok: true,
+            deduped: true,
+            commentThrottled: throttled,
+            id: dup.id,
+            ticketNumber: Number(dup.id),
+            url: `${config.appUrl}/?ticket=${dup.id}`,
+          },
         };
       }
     }
@@ -209,7 +300,11 @@ app.http("CreateTicket", {
 
     // Best-effort notify + audit — never fail the create on these.
     if (assignee) {
-      await sendMail(client, assignee, `[New Ticket #${id}] ${value.title}`, assignmentEmailHtml(value, id, url)).catch(
+      // actorEmail: someone who files a ticket already assigned to themselves gets
+      // no "[New Ticket]" mail about it (see selfNotify.js).
+      await sendMail(client, assignee, `[New Ticket #${id}] ${value.title}`, assignmentEmailHtml(value, id, url), {
+        actorEmail: value.requesterEmail,
+      }).catch(
         (e) => context.error(`assignment email to ${assignee} failed:`, e.message),
       );
     }

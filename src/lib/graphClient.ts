@@ -4,6 +4,7 @@ import { graphScopes, sharepointScopes } from "./msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "./teamsAuth";
 import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError, ssoSilentWithTimeout } from "./authActions";
 import { trackEvent } from "./appInsights";
+import { getCurrentActor } from "./currentActor";
 import {
   Ticket,
   Comment,
@@ -690,8 +691,19 @@ export async function sendEmail(
   recipientEmail: string,
   subject: string,
   htmlContent: string,
-  conversationId?: string
+  conversationId?: string,
+  // Whose action produced this mail. Defaults to the signed-in user, so we never
+  // notify someone about a change they just made themselves. Pass "" to force the
+  // send (e.g. a deliberate "email this to me" action).
+  actorEmail: string = getCurrentActor()
 ): Promise<void> {
+  // Self-notification suppression. Only matches individual addresses — mail to a
+  // shared group address still reaches every member (see currentActor.ts).
+  if (actorEmail && recipientEmail?.trim().toLowerCase() === actorEmail.trim().toLowerCase()) {
+    console.log("[sendEmail] Skipped (recipient is the actor):", recipientEmail);
+    return;
+  }
+
   console.log("[sendEmail] Sending to:", recipientEmail, "Subject:", subject);
 
   // Use Azure Function if configured (app-only auth from shared mailbox)
@@ -708,6 +720,8 @@ export async function sendEmail(
           htmlContent,
           // Pass conversation ID for email threading
           conversationId,
+          // Server-side backstop for the self-suppression check above
+          actorEmail: actorEmail || undefined,
         }),
       });
 

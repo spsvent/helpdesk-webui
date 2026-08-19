@@ -22,6 +22,8 @@ const PROBLEM_TYPES = [
 ];
 // A ticket still "open" for dedup purposes = anything not in a terminal state.
 const CLOSED_STATUSES = new Set(["Resolved", "Closed", "Cancelled"]);
+// Every repeat-alert comment opens with this, so we can spot the previous one.
+const REPEAT_COMMENT_PREFIX = "Repeat alert";
 
 function trimStr(v) {
   return typeof v === "string" ? v.trim() : "";
@@ -87,4 +89,31 @@ function findOpenDuplicate(items, externalRef) {
   return null;
 }
 
-module.exports = { PRIORITIES, PROBLEM_TYPES, validateCreateTicketInput, isOpenStatus, findOpenDuplicate };
+// A monitor that re-fires every few minutes folds onto one ticket, but each repeat
+// still appends an identical ping dump — enough of them and the thread is unreadable.
+// Suppress the comment if another repeat note already landed within the throttle
+// window. `comments` are Tickets-comment list items; timestamp comes from
+// fields.Created, falling back to the item-level createdDateTime Graph always sends.
+// Unparseable/absent timestamps don't throttle (fail open — better a noisy comment
+// than a silently swallowed alert).
+function isRepeatCommentThrottled(comments, nowMs, throttleMinutes) {
+  const windowMs = Number(throttleMinutes) * 60 * 1000;
+  if (!(windowMs > 0)) return false;
+  for (const c of comments || []) {
+    const f = (c && c.fields) || {};
+    if (!String(f.Body || "").startsWith(REPEAT_COMMENT_PREFIX)) continue;
+    const t = Date.parse(f.Created || (c && c.createdDateTime) || "");
+    if (!Number.isNaN(t) && nowMs - t < windowMs) return true;
+  }
+  return false;
+}
+
+module.exports = {
+  PRIORITIES,
+  PROBLEM_TYPES,
+  REPEAT_COMMENT_PREFIX,
+  validateCreateTicketInput,
+  isOpenStatus,
+  findOpenDuplicate,
+  isRepeatCommentThrottled,
+};

@@ -1,6 +1,7 @@
 const { app } = require("@azure/functions");
 const { ConfidentialClientApplication } = require("@azure/msal-node");
 const { Client } = require("@microsoft/microsoft-graph-client");
+const { getOptOutEmails, isSuppressed } = require("../lib/optOut");
 
 // Configuration from environment variables
 const config = {
@@ -160,6 +161,14 @@ async function checkTriggerCondition(client, rule, ticket) {
 
 // Send notification email
 async function sendNotificationEmail(client, toEmail, ticket, rule) {
+  // Recipient opt-out: skip anyone on the NotificationOptOut list (keeps their
+  // access/role; only suppresses support-desk email delivery).
+  const optOut = await getOptOutEmails(client);
+  if (isSuppressed(toEmail, optOut)) {
+    console.log(`[checkEscalations] suppressed (opt-out): ${toEmail} for ticket #${ticket.ticketNumber}`);
+    return;
+  }
+
   const endpoint = `/users/${config.senderEmail}/sendMail`;
 
   const subject = `[Escalation Alert] Ticket #${ticket.ticketNumber}: ${ticket.title}`;

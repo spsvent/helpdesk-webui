@@ -42,6 +42,7 @@ import {
   sendPriorityEscalationTeamsNotification,
 } from "@/lib/teamsService";
 import { syncTicketUpdated, syncTicketRecategorized } from "@/lib/vikunjaSyncService";
+import { syncTodoUpdated, syncTodoRecategorized } from "@/lib/todoSyncService";
 import { allTicketDetailActions } from "@/shared/formModules";
 
 // Module-contributed ticket-detail actions (e.g. the purchase module's "Convert to
@@ -536,6 +537,7 @@ export default function DetailsPanel({
       }
       if (Object.keys(changedFields).length > 0) {
         syncTicketUpdated(updated, changedFields, currentUserName, accounts[0].username);
+        syncTodoUpdated(updated, changedFields, currentUserName, accounts[0].username);
       }
 
       // If the ticket was recategorized away from Tech, pause its Vikunja mapping so the
@@ -543,6 +545,7 @@ export default function DetailsPanel({
       // current ticket is no longer Tech, which bypasses the regular sync path.
       if (ticket.problemType === "Tech" && problemType !== "Tech") {
         syncTicketRecategorized(ticket.id, ticket.problemType, problemType);
+        syncTodoRecategorized(ticket.id, ticket.problemType, problemType);
       }
     } catch (e) {
       console.error("Failed to update ticket:", e);

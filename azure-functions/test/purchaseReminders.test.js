@@ -121,6 +121,28 @@ test("shouldSend throttle honors cadence", () => {
   assert.equal(shouldSend("garbage", 3, NOW), true, "unparseable => send");
 });
 
+test("terminal statuses never remind, even with reminder-worthy items", () => {
+  // An approved request whose ordered items are overdue would normally receive-nudge.
+  // Once it reaches a terminal state it must go silent — this is the cancelled-request
+  // bug: a Cancelled request kept nagging its requester with 'receive' reminders.
+  const items = [{ qty: 1, vendor: "Amazon", expectedDelivery: daysAgo(5) }];
+  for (const purchaseStatus of ["Received", "Denied", "Cancelled"]) {
+    const plan = reminderPlan(
+      { approvalStatus: "Approved", purchaseStatus, lineItems: items, orderedAt: daysAgo(10) },
+      NOW
+    );
+    assert.deepEqual(plan.reminders, [], `${purchaseStatus} must not remind`);
+  }
+
+  // Sanity: the same request with no terminal status still nudges (proves the fixture
+  // is genuinely reminder-worthy, so the assertions above aren't vacuously passing).
+  const active = reminderPlan(
+    { approvalStatus: "Approved", lineItems: items, orderedAt: daysAgo(10) },
+    NOW
+  );
+  assert.deepEqual(active.reminders, ["receive"]);
+});
+
 test("partially-received ordered item still nudges to receive", () => {
   const items = [{ qty: 5, vendor: "A", receivedDate: daysAgo(1), receivedQty: 2, expectedDelivery: daysAgo(2) }];
   const plan = reminderPlan({ approvalStatus: "Approved", lineItems: items, orderedAt: daysAgo(3) }, NOW);

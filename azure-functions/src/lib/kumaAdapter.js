@@ -8,6 +8,7 @@
 
 // Uptime Kuma heartbeat.status: 0=DOWN, 1=UP, 2=PENDING, 3=MAINTENANCE.
 const KUMA_DOWN = 0;
+const KUMA_UP = 1;
 
 // Kuma monitor tags carry the site's priority rating. Map the most severe tag on
 // the monitor to the ticket priority; an untagged monitor defaults to Normal.
@@ -24,6 +25,24 @@ function priorityFromTags(tags) {
 
 function isKumaPayload(body) {
   return !!(body && typeof body === "object" && body.heartbeat && body.monitor);
+}
+
+// "down" → open/dedupe a ticket, "up" → stamp the recovery so the ticket can be
+// auto-closed once the monitor stays up, "other" (pending/maintenance) → ignore.
+function kumaEventKind(body) {
+  if (!isKumaPayload(body)) return null;
+  const status = Number(body.heartbeat.status);
+  if (status === KUMA_DOWN) return "down";
+  if (status === KUMA_UP) return "up";
+  return "other";
+}
+
+// The dedup key tying every event for a monitor to one ticket. Falls back to the
+// monitor name when Kuma omits the id, so DOWN and UP still land on the same ref.
+function kumaExternalRef(monitor) {
+  const m = monitor || {};
+  const id = m.id != null && m.id !== "" ? m.id : String(m.name || "Monitor");
+  return `kuma-${id}`;
 }
 
 // Returns CreateTicket input for a DOWN event, or null to skip (up/pending/etc).
@@ -43,8 +62,15 @@ function adaptKumaPayload(body) {
     problemType: "Tech",
     priority: priorityFromTags(m.tags),
     source: "uptime-kuma",
-    externalRef: `kuma-${m.id != null && m.id !== "" ? m.id : name}`,
+    externalRef: kumaExternalRef(m),
   };
 }
 
-module.exports = { isKumaPayload, adaptKumaPayload, priorityFromTags, TAG_TO_PRIORITY };
+module.exports = {
+  isKumaPayload,
+  kumaEventKind,
+  kumaExternalRef,
+  adaptKumaPayload,
+  priorityFromTags,
+  TAG_TO_PRIORITY,
+};

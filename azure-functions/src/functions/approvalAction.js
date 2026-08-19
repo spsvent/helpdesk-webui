@@ -272,7 +272,8 @@ app.http("approvalAction", {
               client,
               assignee,
               `[Assigned] ${aRef}: ${verify.Title}`,
-              assignedOnApprovalEmail(verify, aRef, assigneeName, approverName)
+              assignedOnApprovalEmail(verify, aRef, assigneeName, approverName),
+              { actorEmail: approverEmail }
             ).catch((e) => console.error(`safety-net assignment email to ${assignee} failed:`, e.message));
           }
         } catch (e) {

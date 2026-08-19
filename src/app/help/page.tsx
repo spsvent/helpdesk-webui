@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { debugCapture, formatDebugForTicket } from "@/lib/debugCapture";
 import { useRBAC } from "@/contexts/RBACContext";
@@ -292,6 +292,39 @@ const helpSections: HelpSection[] = [
         <p>
           You can submit a new support ticket directly from the Help Desk application.
         </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">
+          Problem vs. Request — Which One?
+        </h4>
+        <p>
+          Every ticket is either a <strong>Problem</strong> or a <strong>Request</strong>. Picking
+          the right one routes your ticket correctly and sets the right expectations:
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 mt-3">
+          <div className="rounded-lg border border-border bg-bg-card p-4">
+            <p className="font-semibold text-text-primary">Problem</p>
+            <p className="text-sm text-text-secondary mt-1">
+              Something is <strong>broken or not working</strong> and needs to be fixed — a printer
+              is offline, the Wi-Fi is down, an app throws an error. A Problem is about restoring
+              something that should already be working.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-bg-card p-4">
+            <p className="font-semibold text-text-primary">Request</p>
+            <p className="text-sm text-text-secondary mt-1">
+              You <strong>need something new</strong> — access to a system, a new account, a piece
+              of equipment, or a purchase. Requests often go through an approval step before work
+              begins.
+            </p>
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-3">
+          <p className="text-sm text-blue-800">
+            <strong>Not sure?</strong> Just start typing — the form suggests a category from your
+            wording (see <em>Smart Category Suggestions</em> below), and staff can re-categorize a
+            ticket later if needed.
+          </p>
+        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">
           How to Submit a Ticket
@@ -790,8 +823,18 @@ const helpSections: HelpSection[] = [
           supporting materials. Attachments are stored securely in SharePoint.
         </p>
 
-        <h4 className="font-semibold text-text-primary mt-6">Uploading Attachments</h4>
-        <p>To upload a file to a ticket:</p>
+        <h4 className="font-semibold text-text-primary mt-6">When Creating a Ticket</h4>
+        <p>You can attach files as you fill out the new-ticket form (this also works on the purchase and creative-brief forms):</p>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>Fill out the form as usual (title, description, etc.)</li>
+          <li>Scroll down to the <strong>Attachments</strong> section before submitting</li>
+          <li>Click to browse for files, or drag and drop them onto the upload zone</li>
+          <li>Selected files appear as <strong>staged</strong> items — review or remove any of them before you submit</li>
+          <li>Click <strong>&quot;Submit&quot;</strong> to create the ticket with the files attached</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary mt-6">On an Existing Ticket</h4>
+        <p>To add files to a ticket that already exists:</p>
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>Select the ticket you want to add files to</li>
           <li>In the Details panel on the right, scroll down to the <strong>Attachments</strong> section</li>
@@ -880,7 +923,8 @@ const helpSections: HelpSection[] = [
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-blue-800">
             <strong>Tip:</strong> Attachments are helpful for providing screenshots of error
-            messages, relevant documents, or any visual information that helps explain the issue.
+            messages, relevant documents, receipts, or any visual information that helps explain
+            the issue or request.
           </p>
         </div>
       </div>
@@ -1040,7 +1084,11 @@ const helpSections: HelpSection[] = [
             In the Details panel on the right, find the <strong>&quot;Request Approval&quot;</strong> button
           </li>
           <li>Click the button and confirm your request</li>
-          <li>An email notification will be sent to all General Managers</li>
+          <li>
+            An email notification will be sent to all General Managers — except you, if you&apos;re a
+            GM yourself. You don&apos;t need an approval email for a request you just filed; approve
+            it in the app instead.
+          </li>
           <li>The ticket will show a &quot;Pending Approval&quot; badge</li>
         </ol>
 
@@ -1061,6 +1109,8 @@ const helpSections: HelpSection[] = [
             <p className="text-sm text-gray-600 mt-1">
               Click the Approve, Deny, or Request Changes button directly in the email notification.
               This will open the ticket in the Help Desk where you can add notes and confirm your decision.
+              If you aren&apos;t signed in yet, sign in when prompted — the app remembers which ticket
+              you were approving and reopens it for you afterwards.
             </p>
           </div>
           <div className="p-3 border border-gray-200 rounded-lg">
@@ -1135,11 +1185,31 @@ const helpSections: HelpSection[] = [
     content: (
       <div className="space-y-4">
         <p>Approval-request emails now include <strong>Approve</strong>, <strong>Deny</strong>, and <strong>Request Changes</strong> buttons.</p>
+
+        <p className="font-medium text-text-primary">Approving is one tap</p>
         <ol className="list-decimal pl-5 space-y-2">
-          <li>Tap a button in the email. A secure confirmation page opens — no sign-in required.</li>
-          <li>Optionally add a message to the team (required for <em>Request Changes</em>).</li>
-          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone on the ticket is notified.</li>
+          <li>Tap <strong>Approve</strong> in the email. A secure page opens — no sign-in required.</li>
+          <li>
+            It records your approval automatically. Wait for the green
+            <strong> ✓ Approved</strong> confirmation, then you can close the tab.
+          </li>
         </ol>
+
+        <p className="font-medium text-text-primary">Denying or requesting changes takes a second tap</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Tap <strong>Deny</strong> or <strong>Request Changes</strong> in the email.</li>
+          <li>Add a message to the team (required for <em>Request Changes</em>).</li>
+          <li>Tap <strong>Confirm</strong>. Your decision is recorded and everyone is notified.</li>
+        </ol>
+
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Important:</strong> your decision only counts once the page confirms it. If the page
+          shows an error or says your approval has <strong>NOT</strong> been recorded, tap
+          <strong> Try again</strong> — the request is still waiting for you until you see the
+          confirmation. (Previously the page needed a second tap to approve, and decisions were being
+          lost when the tab was closed too early.)
+        </div>
+
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
           <strong>Tip:</strong> Links are personal and expire after 14 days. Once a ticket is approved or denied, the link shows that it was already decided.
         </div>
@@ -1162,6 +1232,19 @@ const helpSections: HelpSection[] = [
           <li><strong>Manual:</strong> click <strong>+ Add</strong>, type a name or email to pick someone from the company directory, and press Enter or <strong>Add</strong>. Remove a manually-added person with the <strong>×</strong> next to their name.</li>
         </ul>
         <p>Participants are emailed on every new comment, approval decision, and status change.</p>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>You never get emailed about your own changes.</strong> Comment, change a status,
+          assign a ticket, make an approval decision, or file a request that needs approval — the
+          notification goes to everyone else, never back to you. Nothing to turn on; it&apos;s how
+          the Help Desk always behaves.
+        </div>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>One exception:</strong> if a ticket is assigned to a shared group address (for
+          example an Inventory or department queue), that one email goes to the group and lands in
+          every member&apos;s inbox — including yours, even when you were the one who made the
+          change. Email to a shared address can&apos;t be filtered per person. Use an Outlook rule
+          (see <strong>Outlook Email Rules</strong>) if it gets noisy.
+        </div>
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
           <strong>Note:</strong> Internal staff notes are only sent to staff participants — they are never emailed to the requester or to non-staff people you add.
         </div>
@@ -1738,6 +1821,64 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "notification-optout",
+    title: "Notification Opt-Out (Admin)",
+    content: (
+      <div className="space-y-4">
+        <p className="text-text-secondary">
+          The <strong>Notification Opt-Out</strong> list lets an admin stop <em>all</em> help desk
+          notification email to a specific person <strong>without removing any of their access</strong>.
+          It&apos;s the right tool when someone&apos;s notifications come from a role they still need — for
+          example a General Manager or Purchaser whose email is driven by group membership.
+        </p>
+
+        <h4 className="font-semibold text-text-primary">When to use it</h4>
+        <p className="text-text-secondary">
+          Use it when a person wants to keep signing in and using the system, but no longer wants the
+          email. Because notifications follow a person&apos;s role (GM, Purchaser, etc.), you can&apos;t
+          stop the email by editing groups without also taking away their access — this list solves that.
+        </p>
+
+        <h4 className="font-semibold text-text-primary">Add someone to the opt-out list</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4 text-text-secondary">
+          <li>Go to <strong>Settings → Notification Opt-Out</strong> (admins only).</li>
+          <li>Enter the person&apos;s <strong>email address</strong> (name and reason are optional).</li>
+          <li>Click <strong>Add Opt-Out</strong>. They stop receiving help desk email within about a minute.</li>
+        </ol>
+
+        <h4 className="font-semibold text-text-primary">Pause or remove</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4 text-text-secondary">
+          <li>The <strong>green toggle</strong> pauses an entry without deleting it — flip it off to let email
+            resume temporarily, on again to suppress.</li>
+          <li>The <strong>trash icon</strong> removes the entry entirely; that person immediately goes back to
+            receiving notifications.</li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary">What gets suppressed</h4>
+        <p className="text-text-secondary">
+          Every help desk email to that address: approval requests and decisions, purchase-request and
+          &quot;ready to order&quot; notices, escalation alerts, comment notifications, status-change emails,
+          and assignment emails. Suppression is enforced on the server, so no notification path slips through.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Access is never affected.</strong> An opted-out person keeps their exact same sign-in,
+            admin rights, and RBAC roles — a GM stays a GM, a Purchaser stays a Purchaser. Only email delivery stops.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Heads up:</strong> if you opt out a GM or Purchaser, they will no longer be <em>emailed</em>
+            approval requests or purchase orders they may be expected to act on. They can still see and act on
+            those items directly in the app — just make sure that&apos;s the intent before opting them out.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "tips",
     title: "Tips & Best Practices",
     content: (
@@ -2306,153 +2447,40 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
-    id: "attaching-files",
-    title: "Attaching Files",
-    content: (
-      <div className="space-y-4">
-        <p>
-          You can attach files to tickets both during creation and on existing tickets.
-          Files are stored securely in SharePoint and accessible to anyone who can view
-          the ticket.
-        </p>
-
-        <h4 className="font-semibold text-text-primary mt-6">
-          Attaching Files During Ticket Creation
-        </h4>
-        <ol className="list-decimal list-inside space-y-2 ml-4">
-          <li>
-            Fill out the new ticket form as usual (title, description, etc.)
-          </li>
-          <li>
-            Scroll down to the <strong>Attachments</strong> section before submitting
-          </li>
-          <li>
-            Click to browse for files, or drag and drop files into the upload zone
-          </li>
-          <li>
-            Selected files will appear as staged items &mdash; you can review and
-            remove them before submitting
-          </li>
-          <li>
-            Click <strong>&quot;Submit Ticket&quot;</strong> to create the ticket with
-            the attached files
-          </li>
-        </ol>
-
-        <h4 className="font-semibold text-text-primary mt-6">
-          Attaching Files to Existing Tickets
-        </h4>
-        <ol className="list-decimal list-inside space-y-2 ml-4">
-          <li>Select the ticket you want to add files to</li>
-          <li>
-            In the <strong>Details panel</strong> on the right, scroll down to the{" "}
-            <strong>Attachments</strong> section
-          </li>
-          <li>
-            Drag and drop files onto the upload zone, or click to browse for files
-          </li>
-          <li>Wait for the upload to complete</li>
-        </ol>
-
-        <h4 className="font-semibold text-text-primary mt-6">Supported File Types</h4>
-        <ul className="list-disc list-inside space-y-2 ml-4">
-          <li>
-            <strong>Images:</strong> PNG, JPG, GIF, and other common image formats
-          </li>
-          <li>
-            <strong>PDFs:</strong> PDF documents
-          </li>
-          <li>
-            <strong>Documents:</strong> Word (DOC, DOCX), text files (TXT)
-          </li>
-          <li>
-            <strong>Spreadsheets:</strong> Excel (XLS, XLSX), CSV files
-          </li>
-          <li>
-            <strong>Other:</strong> Most common file types are accepted
-          </li>
-        </ul>
-
-        <h4 className="font-semibold text-text-primary mt-6">File Size Limit</h4>
-        <p>
-          The maximum file size is <strong>4 MB per file</strong>. Files larger than
-          this will be rejected with an error message.
-        </p>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-          <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> Files are staged before upload &mdash; you can review
-            and remove any files before submitting. This prevents accidental uploads
-            and lets you double-check that you have the right files attached.
-          </p>
-        </div>
-
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-          <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Attachments are helpful for providing screenshots
-            of error messages, relevant documents, receipts, or any visual information
-            that helps explain the issue or request.
-          </p>
-        </div>
-      </div>
-    ),
-  },
-  {
     id: "purchase-requests",
     title: "Purchase Requests",
     content: (
       <div className="space-y-4">
         <p>
-          Purchase requests allow employees to request the purchase of one or
-          more items in a single ticket. These requests follow a multi-step
-          approval and fulfillment workflow that includes manager approval,
-          purchasing, and inventory receiving.
+          A purchase request lets you request one or more items to buy. It follows a
+          dedicated workflow — <strong>General Manager approval → purchasing → inventory
+          receiving</strong> — separate from regular support tickets.
         </p>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
-          <p className="text-sm text-blue-800">
-            <strong>Two ways to request a purchase:</strong> this section covers the{" "}
-            <strong>ticket-embedded</strong> flow (a Purchase Request checkbox on a
-            regular ticket). There is also a <strong>standalone Purchase Request</strong>{" "}
-            form with its own page and an edit/resubmit cycle — see{" "}
-            <strong>Purchase Requests (Standalone)</strong> below. Both flows coexist and
-            feed the same order/receiving queues.
-          </p>
-        </div>
-
         <h4 className="font-semibold text-text-primary mt-6">
-          Creating a Purchase Request
+          How to Make a Purchase Request
         </h4>
+        <p>
+          Purchase requests have their own dedicated form (the <strong>/purchase</strong> page),
+          separate from regular tickets, and must be approved by a General Manager before
+          purchasing can order them.
+        </p>
         <ol className="list-decimal list-inside space-y-2 ml-4">
-          <li>
-            Click <strong>New</strong> in the header (choose <strong>New ticket</strong> if a menu
-            appears). A dedicated <strong>New purchase request</strong> option may also be available.
-          </li>
-          <li>
-            Select <strong>&quot;Request&quot;</strong> as the category
-          </li>
-          <li>
-            Check the <strong>&quot;This is a Purchase Request&quot;</strong>{" "}
-            checkbox that appears immediately — it shows up right after the
-            category selector, before the Title field. Check it{" "}
-            <strong>first</strong> before filling out the rest of the form; the
-            form will reshape to show the purchase-specific fields.
-          </li>
-          <li>Fill in the Title and remaining ticket fields (department, etc.)</li>
-          <li>Add your item(s) and fill in the shared purchase fields (see below)</li>
-          <li>
-            Click <strong>&quot;Submit Ticket&quot;</strong> to submit your purchase request
-          </li>
+          <li>Click <strong>+ New</strong> in the header and choose <strong>New Purchase Request</strong> (or go to <strong>/purchase</strong>).</li>
+          <li>Add a title, your item(s) — each needs a name or an http(s) link, a quantity, and an estimated cost — and a justification (a project/budget code is optional).</li>
+          <li>Click <strong>Submit for Approval</strong> — the General Managers are emailed with one-click approve / deny / request-changes links, and can also decide inside the app.</li>
         </ol>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
-          <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> On a Purchase Request the Description field is
-            replaced by per-item detail rows and a shared Justification field.
-            You do not need to write a separate description — the item details
-            and justification serve that purpose.
-          </p>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Approvers:</strong> tapping <strong>Approve</strong> in the email records the decision
+          for you — just wait for the green <strong>✓ Approved</strong> confirmation before closing the
+          page. If it doesn&apos;t confirm, the request is still pending and the purchasers won&apos;t
+          see it, so tap <strong>Try again</strong> or open the request in the app.
         </div>
+        <p>
+          Already have a ticket for it? Open the ticket and use{" "}
+          <strong>Convert to Purchase Request</strong> in the details panel — the new request is
+          prefilled from the ticket, and the ticket is resolved and linked to it.
+        </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
           Adding Multiple Items
@@ -2577,66 +2605,33 @@ const helpSections: HelpSection[] = [
           </div>
         </div>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-          <p className="text-sm text-yellow-800">
-            <strong>Note:</strong> Email notifications are sent at each step of
-            the workflow, keeping all relevant parties informed of the purchase
-            request&apos;s progress.
-          </p>
-        </div>
-      </div>
-    ),
-  },
-  {
-    id: "purchase-requests-module",
-    title: "Purchase Requests (Standalone)",
-    content: (
-      <div className="space-y-4">
+        <h4 className="font-semibold text-text-primary mt-6">Editing &amp; Resubmitting</h4>
         <p>
-          The <strong>standalone Purchase Request</strong> form lives on its own page
-          (<strong>/purchase</strong>) instead of inside a ticket. Use it to request one or more
-          items for purchase — it must be approved by a General Manager before the purchasing
-          team can order it.
-        </p>
-        <ol className="list-decimal pl-5 space-y-2">
-          <li>Click <strong>+ New</strong> in the header and choose <strong>New Purchase Request</strong> (or go to <strong>/purchase</strong>).</li>
-          <li>Add a title, your item(s) — each needs a name or an http(s) link, a quantity, and an estimated cost — and a justification (a project/budget code is optional).</li>
-          <li>Click <strong>Submit for Approval</strong> — the General Managers are emailed with one-click approve/deny/request-changes links, and they can also decide inside the app.</li>
-        </ol>
-        <p>
-          A request can also be created <strong>from an existing ticket</strong>: open the ticket
-          and use <strong>Convert to Purchase Request</strong> in the details panel. The new
-          request is prefilled from the ticket, and the ticket is resolved and linked to it.
-        </p>
-        <h4 className="font-semibold text-text-primary mt-6">Editing and resubmitting</h4>
-        <p>
-          If the approver chooses <strong>Request Changes</strong>, the request comes back to you:
-          open it and click <strong>Edit</strong>, make your changes, then either{" "}
+          If the approver chooses <strong>Request Changes</strong>, the request comes back to
+          you: open it and click <strong>Edit</strong>, make your changes, then either{" "}
           <strong>Save &amp; Resubmit for Approval</strong> (re-enters the approval queue and
           re-emails the approvers) or <strong>Save without Resubmitting</strong> to keep revising.
-          If the approval email didn&apos;t go out, use <strong>Re-send approval request</strong> on
-          the request page.
+          If the approval email didn&apos;t go out, use <strong>Re-send approval request</strong>{" "}
+          on the request page.
         </p>
-
-        <h4 className="font-semibold text-text-primary mt-6">Editing after submission</h4>
         <p>
-          Before a request is approved, the <strong>requester</strong> (or an admin) can edit it.
-          <strong> Once it has been approved</strong>, the requester is locked out — only an{" "}
+          Before a request is approved, the <strong>requester</strong> (or an admin) can edit it.{" "}
+          <strong>Once it has been approved</strong>, the requester is locked out — only an{" "}
           <strong>admin/GM (approver)</strong> or a <strong>purchaser</strong> can edit an approved
-          request. Open the request and click <strong>Edit request</strong>. Editing an already-approved
-          request just saves your changes (it does <em>not</em> re-enter the approval queue).
+          request, and doing so just saves the changes (it does <em>not</em> re-enter the approval
+          queue).
         </p>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-2">
           <p className="text-sm text-yellow-800">
             <strong>Reason required after ordering:</strong> once a request is{" "}
             <strong>Ordered</strong>, <strong>Purchased</strong>, or <strong>Received</strong>,
-            editing it requires a <strong>reason</strong>. The reason is recorded on the request&apos;s
-            message thread and emailed to everyone involved (requester, approver, purchaser, and
-            inventory).
+            editing it requires a <strong>reason</strong>. The reason is recorded on the
+            request&apos;s message thread and emailed to everyone involved (requester, approver,
+            purchaser, and inventory).
           </p>
         </div>
 
-        <h4 className="font-semibold text-text-primary mt-6">Cancelling a request</h4>
+        <h4 className="font-semibold text-text-primary mt-6">Cancelling a Request</h4>
         <p>
           The <strong>requester</strong>, an <strong>admin/GM</strong>, or a{" "}
           <strong>purchaser</strong> can <strong>cancel</strong> a request at any live stage using{" "}
@@ -2647,17 +2642,16 @@ const helpSections: HelpSection[] = [
           Already-<strong>Denied</strong> or already-<strong>Cancelled</strong> requests can&apos;t
           be cancelled or edited.
         </p>
-        <h4 className="font-semibold text-text-primary mt-6">After approval</h4>
-        <p>
-          Approved requests flow into the same <strong>Order Queue</strong> (/orders) and{" "}
-          <strong>Receiving Queue</strong> (/receiving) as ticket-embedded purchase requests, so
-          purchasers and the inventory team process both kinds side by side. The requester is
-          emailed when a decision is made.
-        </p>
-        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
-          <strong>Visibility:</strong> A purchase request is visible to admins, purchasers,
-          inventory, and its creator/requester.
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Visibility:</strong> A purchase request is visible to admins, purchasers,
+            inventory, and its creator/requester. Approved requests flow into the same{" "}
+            <strong>Order Queue</strong> (/orders) and <strong>Receiving Queue</strong> (/receiving)
+            regardless of how they were started.
+          </p>
         </div>
+
         <p className="text-sm text-text-secondary">
           If the &quot;New Purchase Request&quot; option doesn&apos;t appear in the + New menu, the
           PurchaseRequests list hasn&apos;t been configured yet — ask an administrator.
@@ -2675,6 +2669,23 @@ const helpSections: HelpSection[] = [
           ordered. This view is primarily used by the purchasing team to manage and
           fulfill approved requests.
         </p>
+
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>You&apos;re emailed the moment something is ready to order.</strong> Every
+          purchaser gets a <strong>&quot;Purchase Approved — Ready to Order&quot;</strong> email
+          when a GM approves a request, whether they approved it inside the app or with the
+          one-click buttons in their email. <strong>Approve with Changes</strong> notifies you
+          too — check the approver&apos;s notes, since some items may have been removed.
+          <strong> Approve &amp; Ordered</strong> does not, because the GM already placed that
+          order themselves.
+        </div>
+
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Not getting these?</strong> You need to be a member of a group marked as{" "}
+          <strong>purchaser</strong> in Settings → RBAC Groups — that same membership is what
+          shows you this queue. Also check you&apos;re not on the Notification Opt-Out list,
+          which silences help desk email without touching your access.
+        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">
           Viewing the Purchase Queue
@@ -3101,6 +3112,162 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "todo-sync",
+    title: "Microsoft To Do Sync",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Assigned <strong>Tech</strong> tickets automatically appear as tasks in a
+          Microsoft To Do list called{" "}
+          <strong>SkyPark Tech Tickets</strong>. This gives the tech lead a personal,
+          check-off-able view of the assigned Tech queue right inside the To Do app on
+          desktop, web, and phone.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">What Creates a Task</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            A ticket in the <strong>Tech</strong> department that has an{" "}
+            <strong>assignee</strong> creates a task titled{" "}
+            <code className="bg-bg-subtle px-1 rounded">[HD-123] Ticket Title</code>
+          </li>
+          <li>
+            The ticket <strong>priority</strong> maps to the task&apos;s importance
+            (Urgent/High → High), and each task links straight back to the ticket
+          </li>
+          <li>
+            A Tech ticket created without an assignee gets its task the moment someone
+            is assigned
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Staying in Sync</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Resolving or closing</strong> a ticket checks the task off;
+            reopening it un-checks it
+          </li>
+          <li>
+            <strong>Title and priority changes</strong> update the task automatically
+          </li>
+          <li>
+            Moving a ticket <strong>out of the Tech department</strong>, or removing its
+            assignee, checks the task off and stops mirroring it
+          </li>
+        </ul>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Tap a task&apos;s link to jump straight to the ticket
+            in the Help Desk. Add the task to <em>My Day</em> in To Do to keep it front
+            and center.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> The sync is one-directional (Help Desk → To Do).
+            Checking a task off in To Do does <strong>not</strong> resolve the ticket —
+            always update the ticket in the Help Desk itself.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "monitoring-alerts",
+    title: "Automatic Monitoring Tickets",
+    content: (
+      <div className="space-y-4">
+        <p>
+          <strong>Uptime Kuma</strong> watches our network gear, servers and
+          printers. When something stops responding it files a Help Desk ticket
+          on its own — no person has to notice and report it. These tickets are
+          created in the <strong>Tech</strong> department as{" "}
+          <strong>Problem</strong> tickets, and the sender shows as{" "}
+          <strong>API</strong>.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">How to Recognize One</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            The title reads{" "}
+            <code className="bg-bg-subtle px-1 rounded">
+              &lt;device name&gt; is DOWN
+            </code>
+          </li>
+          <li>
+            The description includes the device&apos;s address and the raw check
+            result (ping statistics, connection errors, and so on)
+          </li>
+          <li>Comments from the monitoring system are attributed to <strong>API</strong></li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Priority Comes From the Monitor</h4>
+        <p>
+          The priority is set by the tag on the monitor in Uptime Kuma, not by a
+          person:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Critical</strong> tag → <strong>Urgent</strong> ticket
+          </li>
+          <li>
+            <strong>Important</strong> tag → <strong>High</strong> ticket
+          </li>
+          <li>
+            <strong>Moderate</strong> or untagged → <strong>Normal</strong> ticket
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">You Only Get One Ticket Per Device</h4>
+        <p>
+          A device that keeps dropping in and out does not create a pile of
+          duplicate tickets. While a ticket for that device is still open, every
+          repeat alert is folded into it as a comment instead — and those
+          comments are limited to one every 30 minutes so the ticket stays
+          readable.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Tickets Close Themselves When the Device Recovers</h4>
+        <p>
+          If the device comes back online and <strong>stays</strong> online for a
+          full hour, the ticket is closed automatically with a comment noting
+          when it recovered. This only happens when:
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            The ticket is still <strong>New</strong> — nobody has moved it to In
+            Progress or On Hold
+          </li>
+          <li>Nobody has commented on it or replied to it by email</li>
+        </ul>
+        <p>
+          The moment you comment on one of these tickets or change its status, it
+          is yours — the system will leave it alone and you close it when the
+          real problem is fixed.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> If a device drops again before the hour is up,
+            the countdown resets. A ticket only auto-closes after a genuinely
+            steady recovery, so a flapping switch keeps its ticket.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> An auto-closed ticket means the device
+            answered again — not necessarily that the underlying fault is fixed.
+            If you know the real cause is still outstanding, reopen the ticket or
+            file a new one so the work isn&apos;t forgotten.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "session-troubleshooting",
     title: "Sign-In & Session Issues",
     content: (
@@ -3376,13 +3543,225 @@ const staffResourcesSection: HelpSection = {
   ),
 };
 
+// FAQ landing — the most-asked questions, each jumping straight to its full topic.
+const popularQuestions: { q: string; hint: string; target: string }[] = [
+  {
+    q: "How do I make a purchase request?",
+    hint: "Use the New Purchase Request form, and how approval works.",
+    target: "purchase-requests",
+  },
+  {
+    q: "What's the difference between a Problem and a Request?",
+    hint: "When to file a Problem vs. a Request — and what happens next.",
+    target: "submitting-tickets",
+  },
+  {
+    q: "Why can't I see my request?",
+    hint: "How visibility works, and why some tickets are hidden from you.",
+    target: "request-visibility",
+  },
+  {
+    q: "Will I get emails about updates?",
+    hint: "Which changes send a notification, and how to manage them.",
+    target: "participants",
+  },
+  {
+    q: "How do I approve a request?",
+    hint: "Approving from inside the app or straight from the email.",
+    target: "approval-workflow",
+  },
+  {
+    q: "How do I attach a file or screenshot?",
+    hint: "Add images, PDFs, and documents to a ticket.",
+    target: "file-attachments",
+  },
+];
+
+// Sidebar taxonomy: the whole topic library organized into categories. Each entry
+// lists section ids (from helpSections / staffResourcesSection) in display order.
+// Admin-only categories are gated behind the staff check.
+const helpCategories: {
+  id: string;
+  label: string;
+  staffOnly?: boolean;
+  sectionIds: string[];
+}[] = [
+  {
+    id: "getting-started",
+    label: "Getting Started",
+    sectionIds: ["getting-started", "dark-mode", "mobile-ipad", "session-troubleshooting"],
+  },
+  {
+    id: "tickets",
+    label: "Working with Tickets",
+    sectionIds: [
+      "submitting-tickets",
+      "viewing-tickets",
+      "filtering-searching",
+      "ticket-details",
+      "adding-comments",
+      "file-attachments",
+      "updating-tickets",
+      "understanding-badges",
+    ],
+  },
+  {
+    id: "approvals",
+    label: "Approvals",
+    sectionIds: ["approval-workflow", "approving-by-email", "nudge-approval"],
+  },
+  {
+    id: "purchasing",
+    label: "Purchasing & Inventory",
+    sectionIds: ["purchase-requests", "purchase-queue", "receiving-orders", "recurring-order-sheets"],
+  },
+  {
+    id: "creative",
+    label: "Creative Briefs",
+    sectionIds: ["creative-briefs-cdw"],
+  },
+  {
+    id: "notifications",
+    label: "Notifications & Email",
+    sectionIds: ["participants", "outlook-rules", "teams-notifications"],
+  },
+  {
+    id: "access",
+    label: "Access & Visibility",
+    sectionIds: ["permissions", "request-visibility"],
+  },
+  {
+    id: "admin",
+    label: "Admin & Setup",
+    staffOnly: true,
+    sectionIds: [
+      "admin-ticket-management",
+      "admin-bulk-actions",
+      "merging-tickets",
+      "admin-rbac",
+      "notification-optout",
+      "admin-deployment",
+      "admin-teams-config",
+      "vikunja-sync",
+      "todo-sync",
+      "staff-resources",
+    ],
+  },
+  {
+    id: "help-support",
+    label: "Help & Support",
+    sectionIds: ["tips", "report-issue"],
+  },
+];
+
+function PopularQuestions({ onNavigate }: { onNavigate: (id: string) => void }) {
+  return (
+    <div className="space-y-6">
+      <p className="text-text-secondary">
+        New here? These are the questions people ask most — pick one to jump straight to the full
+        guide. You can also browse every topic by category in the sidebar.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {popularQuestions.map((item) => (
+          <button
+            key={item.target + item.q}
+            onClick={() => onNavigate(item.target)}
+            className="group relative block h-full overflow-hidden rounded-[14px] border-[1.5px] border-border bg-bg-card py-4 pl-5 pr-4 text-left transition-all duration-150 hover:border-brand-primary hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <span className="block text-[15px] font-semibold text-text-primary">{item.q}</span>
+            <span className="mt-1 block text-[13px] text-text-secondary">{item.hint}</span>
+            <span className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-blue">
+              Read the guide
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Section ids a deep link (/help#<id>) may target. Kept module-scope so it's a
+// stable reference for the hash listener regardless of the signed-in user's role.
+const DEEP_LINK_IDS = new Set<string>([
+  "popular",
+  ...helpSections.map((s) => s.id),
+  staffResourcesSection.id,
+]);
+
+// Small "Copy link" control shown next to a topic heading, so a specific topic
+// can be shared directly (copies the current /help#<id> URL to the clipboard).
+function CopyLinkButton({ sectionId }: { sectionId: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const url = `${window.location.origin}${window.location.pathname}#${sectionId}`;
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(() => {});
+    }
+  };
+  return (
+    <button
+      onClick={copy}
+      title="Copy a link to this topic"
+      className="shrink-0 inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-brand-blue transition-colors"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828 1.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"
+        />
+      </svg>
+      {copied ? "Copied!" : "Copy link"}
+    </button>
+  );
+}
+
 export default function HelpPage() {
-  const [activeSection, setActiveSection] = useState("getting-started");
+  const [activeSection, setActiveSection] = useState("popular");
   const { permissions, loading } = useRBAC();
 
-  // Build sections list - include staff resources for admin and support roles
+  // Include staff-only resources for admin and support roles.
   const isStaff = !loading && (permissions.role === "admin" || permissions.role === "support");
   const allSections = isStaff ? [...helpSections, staffResourcesSection] : helpSections;
+  const sectionById = new Map(allSections.map((s) => [s.id, s] as const));
+
+  // Only show categories the current user is allowed to see.
+  const visibleCategories = helpCategories.filter((cat) => !cat.staffOnly || isStaff);
+
+  const activeSectionObj = activeSection === "popular" ? null : sectionById.get(activeSection);
+
+  // Deep-linking: open the topic named in the URL hash (/help#purchase-requests),
+  // and react to hash changes (shared links, back/forward, manual edits).
+  useEffect(() => {
+    const applyHash = () => {
+      const id = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!id) {
+        setActiveSection("popular");
+      } else if (DEEP_LINK_IDS.has(id)) {
+        setActiveSection(id);
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  // Switch topic AND reflect it in the URL hash, so the address bar always points
+  // at the current topic and can be copied/shared directly.
+  const navigate = useCallback((id: string) => {
+    setActiveSection(id);
+    const url =
+      id === "popular" ? window.location.pathname + window.location.search : `#${id}`;
+    window.history.replaceState(null, "", url);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-subtle">
@@ -3405,49 +3784,83 @@ export default function HelpPage() {
       <div className="flex-1 flex">
         {/* Navigation sidebar */}
         <aside className="w-64 border-r border-border bg-bg-card overflow-y-auto">
-          <nav className="p-4">
-            <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
-              Topics
-            </h2>
-            <ul className="space-y-1">
-              {allSections.map((section) => (
-                <li key={section.id}>
-                  <button
-                    onClick={() => setActiveSection(section.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                      activeSection === section.id
-                        ? "bg-blue-50 text-brand-blue font-medium"
-                        : "text-text-secondary hover:bg-gray-50 hover:text-text-primary"
-                    }`}
-                  >
-                    {section.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <nav className="p-4 space-y-5">
+            {/* Popular Questions — pinned landing */}
+            <button
+              onClick={() => navigate("popular")}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeSection === "popular"
+                  ? "bg-blue-50 text-brand-blue"
+                  : "text-text-primary hover:bg-gray-50"
+              }`}
+            >
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                />
+              </svg>
+              Popular Questions
+            </button>
+
+            {/* Topic library, grouped by category */}
+            {visibleCategories.map((cat) => (
+              <div key={cat.id}>
+                <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 px-3">
+                  {cat.label}
+                </h2>
+                <ul className="space-y-1">
+                  {cat.sectionIds.map((sid) => {
+                    const section = sectionById.get(sid);
+                    if (!section) return null;
+                    return (
+                      <li key={sid}>
+                        <button
+                          onClick={() => navigate(sid)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                            activeSection === sid
+                              ? "bg-blue-50 text-brand-blue font-medium"
+                              : "text-text-secondary hover:bg-gray-50 hover:text-text-primary"
+                          }`}
+                        >
+                          {section.title}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </nav>
         </aside>
 
         {/* Content area */}
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-3xl">
-            {allSections.map((section) => (
-              <div
-                key={section.id}
-                className={activeSection === section.id ? "block" : "hidden"}
-              >
-                <h2 className="text-2xl font-bold text-text-primary mb-6">
-                  {section.title}
-                </h2>
+            {activeSectionObj ? (
+              <>
+                <div className="flex items-start justify-between gap-3 mb-6">
+                  <h2 className="text-2xl font-bold text-text-primary">
+                    {activeSectionObj.title}
+                  </h2>
+                  <CopyLinkButton sectionId={activeSectionObj.id} />
+                </div>
                 <div className="prose prose-slate max-w-none text-text-primary">
-                  {section.id === "report-issue" ? (
+                  {activeSectionObj.id === "report-issue" ? (
                     <ReportIssueSection />
                   ) : (
-                    section.content
+                    activeSectionObj.content
                   )}
                 </div>
-              </div>
-            ))}
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-text-primary mb-6">Popular Questions</h2>
+                <PopularQuestions onNavigate={navigate} />
+              </>
+            )}
           </div>
         </main>
       </div>

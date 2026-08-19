@@ -3,6 +3,7 @@ const { signToken } = require("../lib/approvalToken");
 const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { purchaseApprovalRequestEmail } = require("../lib/purchaseEmailTemplates");
 const { isValidItemId, isWithinCooldown } = require("../lib/requestGuards");
+const { excludeActorMembers } = require("../lib/selfNotify");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,9 +57,18 @@ app.http("sendPurchaseApprovalRequest", {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "cooldown" } };
       }
 
-      const approvers = await getGroupMembers(client, config.generalManagersGroupId);
-      if (approvers.length === 0) {
+      const allApprovers = await getGroupMembers(client, config.generalManagersGroupId);
+      if (allApprovers.length === 0) {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "no approvers" } };
+      }
+
+      // Don't email the GM who filed the request their own "[Approval Required]".
+      // If they're the only GM, nothing goes out — the request is still Pending in
+      // the app, where they can approve it.
+      const requesterEmail = fields.RequesterEmail || item.createdBy?.user?.email || "";
+      const approvers = excludeActorMembers(allApprovers, requesterEmail);
+      if (approvers.length === 0) {
+        return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "self_only" } };
       }
 
       const subject = `[Approval Required] Purchase Request: ${fields.Title}`;
