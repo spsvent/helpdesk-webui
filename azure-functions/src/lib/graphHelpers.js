@@ -12,6 +12,7 @@ const config = {
   purchaseListId: process.env.PURCHASE_LIST_ID,
   commentsListId: process.env.COMMENTS_LIST_ID,
   activityLogListId: process.env.ACTIVITY_LOG_LIST_ID,
+  autoAssignListId: process.env.AUTO_ASSIGN_LIST_ID,
   generalManagersGroupId: process.env.GENERAL_MANAGERS_GROUP_ID,
   purchaserGroupId: process.env.PURCHASER_GROUP_ID,
   inventoryGroupId: process.env.INVENTORY_GROUP_ID,
