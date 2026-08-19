@@ -232,6 +232,19 @@ Set these in **Azure Portal → Function Apps → helpdesk-notify-func → Setti
 |----------|-------------|
 | `NOTIFICATION_OPTOUT_LIST_ID` | NotificationOptOut list GUID. Emails on this list are dropped by every server-side send path (`graphHelpers.sendMail`, the `SendEmail` HTTP function, and `checkEscalations`). People keep all access/roles — only email delivery stops. Managed from the web UI (Settings → Notification Opt-Out). Leave unset to disable suppression. |
 
+### Self-Notification Suppression
+
+Nobody is emailed about a change they made themselves. Two mirrored chokepoints enforce it — **any new notification path gets the behavior for free; don't re-implement it per call site**:
+
+| Side | Where | How |
+|------|-------|-----|
+| Frontend | `src/lib/graphClient.ts` → `sendEmail` | `actorEmail` defaults to `getCurrentActor()` (`src/lib/currentActor.ts`, set from `layout.tsx` on every MSAL account activation). Recipient == actor → the send is skipped. Pass `""` explicitly to force a deliberate email-to-self. |
+| Functions | `graphHelpers.sendMail(…, { actorEmail })` and the `SendEmail` HTTP function's `actorEmail` body field | `src/lib/selfNotify.js` — `isSelfNotification` / `excludeActor` / `excludeActorMembers`. |
+
+The three approval-request functions (`sendApprovalRequest`, `sendPurchaseApprovalRequest`, `sendCdwApprovalRequest`) drop the requester from the expanded GM group; if that empties the list they return `note: "self_only"` and send nothing — the item is still Pending in the app.
+
+**Deliberate limit:** suppression matches individual addresses only. Mail to a shared/M365 group address (e.g. an Inventory queue) still reaches every member including the actor — Graph has no per-recipient suppression, and expanding the group into N sends would break the shared queue's reply semantics. Distinct from `NOTIFICATION_OPTOUT_LIST_ID`, which suppresses by *recipient* regardless of who acted.
+
 #### For Microsoft To Do Sync (syncToTodo)
 | Variable | Description |
 |----------|-------------|
@@ -287,14 +300,33 @@ Teams notifications use **Bot Framework SDK** (not Graph API) for proactive mess
 
 ```bash
 cd azure-functions
-func azure functionapp publish helpdesk-notify-func
+func azure functionapp publish helpdesk-notify-func --javascript --build remote
 ```
 
-**After deployment, verify functions are listed:**
-- SendEmail
-- SendTeamsNotification
-- checkEscalations
-- runEscalationCheck
+> **⚠️ `--build remote` is REQUIRED — omitting it takes the whole app down.**
+> There is no `node_modules` in this repo, so a default publish uploads ~100 KB of
+> source with `remotebuild = false`, Kudu skips the Oryx build, and the app comes up
+> with **zero functions registered** — every endpoint 404s and all notification email
+> stops until you republish. The deploy still prints "The deployment was successful!"
+> and a Running host status, so trust the function list, not the success message.
+> (Learned the hard way on 2026-08-14: ~6 minutes of dead endpoints.)
+>
+> `--javascript` is also required — there's no `local.settings.json` to infer the
+> worker runtime from.
+
+**After deployment, verify the functions actually registered:**
+
+```bash
+func azure functionapp list-functions helpdesk-notify-func
+# Expect 21 functions (17 httpTrigger + 4 timerTrigger). Zero or a short list = broken deploy.
+curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
+  https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail
+# Expect 204. A 404 means the app has no functions loaded.
+```
+
+Timer triggers (`checkEscalations`, `purchaseReminders`, `pollInboundReplies`,
+`autoCloseRecovered`) fail silently when a deploy breaks — nothing 404s visibly, the
+scheduled work just never runs. Always check the full list, not just one endpoint.
 
 ### Testing Functions Manually
 
@@ -401,7 +433,7 @@ az monitor app-insights query \
 #### CORS errors when calling Azure Functions
 **Cause:** Functions not deployed or CORS not configured.
 **Fix:**
-1. Ensure functions are deployed: `func azure functionapp publish helpdesk-notify-func`
+1. Ensure functions are deployed: `func azure functionapp publish helpdesk-notify-func --javascript --build remote`
 2. Functions have CORS headers built-in (code handles OPTIONS requests)
 
 #### 401 Unauthorized from Azure Functions
@@ -481,6 +513,15 @@ Implementation:
 - New components: PurchaseStatusBadge, PurchaseActionPanel, ReceiveActionPanel
 - Modified: ApprovalActionPanel (4-button layout for purchases), DetailsPanel (purchase details section)
 - New env vars: `NEXT_PUBLIC_PURCHASER_GROUP_ID`, `NEXT_PUBLIC_INVENTORY_GROUP_ID`
+
+**Approval notification fan-out (two independent paths — change both or neither):**
+
+| Path | Code | Notifies |
+|------|------|----------|
+| In-app decision | `purchaseEmail.notifyPurchaseDecision` (called by `PurchaseApprovalPanel`) | Requester always; purchasers when `notifiesPurchasers(decision)` — i.e. `Approved` / `Approved with Changes`, not `Approved & Ordered` |
+| One-click from email | `azure-functions/.../purchaseApprovalAction.js` | Requester + participants; purchasers on `Approved` (the only approve variant that path can produce) |
+
+The in-app path shipped without any purchaser notification, so requests approved inside the app sat in the order queue silently — purchasers only found them by opening `/orders`. Purchaser addresses come from the `RBACGroups` list (`purchaserGroupIds`, supports multiple groups) with `NEXT_PUBLIC_PURCHASER_GROUP_ID` as fallback; the Function still uses only its single `PURCHASER_GROUP_ID` env var.
 
 ### Planned: Email-based Purchase Auto-Update
 Auto-extract vendor + confirmation # from forwarded confirmation emails to update purchase tickets.

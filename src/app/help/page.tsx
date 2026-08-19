@@ -1076,7 +1076,11 @@ const helpSections: HelpSection[] = [
             In the Details panel on the right, find the <strong>&quot;Request Approval&quot;</strong> button
           </li>
           <li>Click the button and confirm your request</li>
-          <li>An email notification will be sent to all General Managers</li>
+          <li>
+            An email notification will be sent to all General Managers — except you, if you&apos;re a
+            GM yourself. You don&apos;t need an approval email for a request you just filed; approve
+            it in the app instead.
+          </li>
           <li>The ticket will show a &quot;Pending Approval&quot; badge</li>
         </ol>
 
@@ -1220,6 +1224,19 @@ const helpSections: HelpSection[] = [
           <li><strong>Manual:</strong> click <strong>+ Add</strong>, type a name or email to pick someone from the company directory, and press Enter or <strong>Add</strong>. Remove a manually-added person with the <strong>×</strong> next to their name.</li>
         </ul>
         <p>Participants are emailed on every new comment, approval decision, and status change.</p>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>You never get emailed about your own changes.</strong> Comment, change a status,
+          assign a ticket, make an approval decision, or file a request that needs approval — the
+          notification goes to everyone else, never back to you. Nothing to turn on; it&apos;s how
+          the Help Desk always behaves.
+        </div>
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>One exception:</strong> if a ticket is assigned to a shared group address (for
+          example an Inventory or department queue), that one email goes to the group and lands in
+          every member&apos;s inbox — including yours, even when you were the one who made the
+          change. Email to a shared address can&apos;t be filtered per person. Use an Outlook rule
+          (see <strong>Outlook Email Rules</strong>) if it gets noisy.
+        </div>
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
           <strong>Note:</strong> Internal staff notes are only sent to staff participants — they are never emailed to the requester or to non-staff people you add.
         </div>
@@ -2635,6 +2652,23 @@ const helpSections: HelpSection[] = [
           ordered. This view is primarily used by the purchasing team to manage and
           fulfill approved requests.
         </p>
+
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+          <strong>You&apos;re emailed the moment something is ready to order.</strong> Every
+          purchaser gets a <strong>&quot;Purchase Approved — Ready to Order&quot;</strong> email
+          when a GM approves a request, whether they approved it inside the app or with the
+          one-click buttons in their email. <strong>Approve with Changes</strong> notifies you
+          too — check the approver&apos;s notes, since some items may have been removed.
+          <strong> Approve &amp; Ordered</strong> does not, because the GM already placed that
+          order themselves.
+        </div>
+
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm">
+          <strong>Not getting these?</strong> You need to be a member of a group marked as{" "}
+          <strong>purchaser</strong> in Settings → RBAC Groups — that same membership is what
+          shows you this queue. Also check you&apos;re not on the Notification Opt-Out list,
+          which silences help desk email without touching your access.
+        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">
           Viewing the Purchase Queue

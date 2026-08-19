@@ -11,6 +11,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { debugCapture } from "@/lib/debugCapture";
 import { initAppInsights, setAuthenticatedUser, trackEvent } from "@/lib/appInsights";
 import { markAuthReady, clearRenewalAttempt } from "@/lib/authActions";
+import { setCurrentActor } from "@/lib/currentActor";
 import { isPublicModuleRoute } from "@/shared/formModules";
 import "./globals.css";
 
@@ -131,6 +132,7 @@ export default function RootLayout({
             const payload = event.payload as AuthenticationResult;
             instance?.setActiveAccount(payload.account);
             setAuthenticatedUser(payload.account?.username ?? "", payload.account?.name ?? undefined);
+            setCurrentActor(payload.account?.username);
             clearRenewalAttempt();
           }
         });
@@ -143,6 +145,7 @@ export default function RootLayout({
           // User just logged in via redirect
           instance.setActiveAccount(response.account);
           setAuthenticatedUser(response.account?.username ?? "", response.account?.name ?? undefined);
+          setCurrentActor(response.account?.username);
           // Any successful auth (login or renewal return) re-arms auto-renewal.
           clearRenewalAttempt();
         } else {
@@ -161,6 +164,7 @@ export default function RootLayout({
           } else if (accounts.length > 0) {
             instance.setActiveAccount(accounts[0]);
             setAuthenticatedUser(accounts[0].username, accounts[0].name ?? undefined);
+            setCurrentActor(accounts[0].username);
             // Fire-and-forget so app startup isn't blocked on a token round-trip
             validateCachedSession(instance, accounts[0], teamsAuth.isTeams);
           } else if (teamsAuth.isTeams && teamsAuth.loginHint) {
@@ -180,6 +184,7 @@ export default function RootLayout({
               if (ssoResult?.account) {
                 instance.setActiveAccount(ssoResult.account);
                 setAuthenticatedUser(ssoResult.account.username, ssoResult.account.name ?? undefined);
+                setCurrentActor(ssoResult.account.username);
                 trackEvent("TeamsAuth", { step: "silent_ok", naa: String(naaEngaged) });
               }
             } catch (ssoError) {

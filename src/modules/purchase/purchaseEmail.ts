@@ -4,10 +4,88 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { sendEmail } from "@/shared/graph";
 import { APP_URL, escapeHtml, emailShell } from "@/shared/emailHtml";
+import { fetchRBACConfig } from "@/lib/rbacConfigService";
 import { PurchaseMessage, PurchaseRequest } from "./types";
 import { PurchaseDecision } from "./purchaseService";
 
-// Notify the requester of an in-app decision.
+// Decisions that put a request into the order queue, so purchasers need to hear
+// about them. "Approved & Ordered" is excluded — the GM already placed that order.
+const ORDERABLE_DECISIONS: PurchaseDecision[] = ["Approved", "Approved with Changes"];
+
+// Does this decision put the request in front of the purchasers? Exported so the
+// rule is unit-testable without mocking Graph.
+export function notifiesPurchasers(decision: PurchaseDecision): boolean {
+  return ORDERABLE_DECISIONS.includes(decision);
+}
+
+// Purchaser group members, from the RBACGroups list (which is what decides who
+// actually sees the order queue) with the build-time group id as a fallback for
+// when the list can't be read. Mirrors emailService.getApproverEmails.
+async function getPurchaserEmails(client: Client): Promise<string[]> {
+  const ids = new Set<string>();
+  try {
+    const config = await fetchRBACConfig(client);
+    config.purchaserGroupIds.forEach((id) => ids.add(id));
+  } catch (e) {
+    console.error("[getPurchaserEmails] RBAC config unavailable, falling back to env:", e);
+  }
+  const envGroupId = process.env.NEXT_PUBLIC_PURCHASER_GROUP_ID;
+  if (envGroupId) ids.add(envGroupId);
+  if (ids.size === 0) return [];
+
+  const emails = new Set<string>();
+  await Promise.all(
+    Array.from(ids).map(async (groupId) => {
+      try {
+        const res = await client.api(`/groups/${groupId}/members`).select("mail,userPrincipalName").get();
+        for (const m of res.value || []) {
+          const email = (m.mail || m.userPrincipalName || "").trim();
+          if (email) emails.add(email.toLowerCase());
+        }
+      } catch (e) {
+        console.error(`[getPurchaserEmails] could not read members of ${groupId}:`, e);
+      }
+    })
+  );
+  return Array.from(emails);
+}
+
+// Tell the purchasers an approved request is ready to order. The in-app decision
+// path used to skip this entirely — only the one-click-from-email path sent it —
+// so requests a GM approved inside the app sat in the queue silently.
+export async function notifyPurchasersReadyToOrder(
+  client: Client,
+  pr: PurchaseRequest,
+  approverName: string
+): Promise<void> {
+  const purchasers = await getPurchaserEmails(client);
+  if (purchasers.length === 0) {
+    console.warn("[notifyPurchasersReadyToOrder] no purchasers resolved — nobody notified");
+    return;
+  }
+  const html = emailShell(
+    "Purchase Approved — Ready to Order",
+    `<p>A purchase request was approved by <strong>${escapeHtml(approverName)}</strong> and is ready to order.</p>
+      <div class="info">
+        <p><span class="label">Request:</span> ${escapeHtml(pr.title)}</p>
+        ${pr.requesterName ? `<p><span class="label">Requested by:</span> ${escapeHtml(pr.requesterName)}</p>` : ""}
+        ${pr.needByDate ? `<p><span class="label">Needed by:</span> ${escapeHtml(pr.needByDate)}</p>` : ""}
+      </div>
+      <div class="actions"><a href="${APP_URL}/orders" class="btn">Open the order queue</a></div>`,
+    "SkyPark Help Desk — Purchase Request"
+  );
+  await Promise.all(
+    purchasers.map((to) =>
+      sendEmail(client, to, `[Purchase Approved] ${pr.title}`, html).catch((e) =>
+        console.error("[notifyPurchasersReadyToOrder] failed for", to, e)
+      )
+    )
+  );
+}
+
+// Fan out the notifications for an in-app decision: the requester always hears the
+// outcome, and on an orderable approval the purchasers are told it's ready to order.
+// Both live here so a new decision path can't ship with half the notifications.
 export async function notifyPurchaseDecision(
   client: Client,
   pr: PurchaseRequest,
@@ -16,18 +94,23 @@ export async function notifyPurchaseDecision(
   notes?: string
 ): Promise<void> {
   const to = pr.requesterEmail?.trim();
-  if (!to) return;
-  const notesHtml = notes ? `<p><span class="label">Notes:</span> ${escapeHtml(notes)}</p>` : "";
-  const html = emailShell(
-    `Purchase Request ${decision}`,
-    `<p>Your purchase request <strong>${escapeHtml(pr.title)}</strong> was <strong>${escapeHtml(decision)}</strong> by ${escapeHtml(approverName)}.</p>
+  if (to) {
+    const notesHtml = notes ? `<p><span class="label">Notes:</span> ${escapeHtml(notes)}</p>` : "";
+    const html = emailShell(
+      `Purchase Request ${decision}`,
+      `<p>Your purchase request <strong>${escapeHtml(pr.title)}</strong> was <strong>${escapeHtml(decision)}</strong> by ${escapeHtml(approverName)}.</p>
       ${notesHtml}
       <div class="actions"><a href="${APP_URL}/purchase?id=${pr.id}" class="btn">Open the Request</a></div>`,
-    "SkyPark Help Desk — Purchase Request"
-  );
-  await sendEmail(client, to, `[${decision}] Purchase Request: ${pr.title}`, html).catch((e) =>
-    console.error("[notifyPurchaseDecision] failed:", e)
-  );
+      "SkyPark Help Desk — Purchase Request"
+    );
+    await sendEmail(client, to, `[${decision}] Purchase Request: ${pr.title}`, html).catch((e) =>
+      console.error("[notifyPurchaseDecision] failed:", e)
+    );
+  }
+
+  if (notifiesPurchasers(decision)) {
+    await notifyPurchasersReadyToOrder(client, pr, approverName);
+  }
 }
 
 // Notify everyone involved that a request was cancelled. Best-effort: individual

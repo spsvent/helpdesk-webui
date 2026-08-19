@@ -5,6 +5,7 @@ import { isSafeItemUrl, validateLineItem } from "./lineItems";
 import { mapTicketItemToPurchase, verifyMigration } from "./migration";
 import { canEditExpectedDelivery, canEditPurchase, isPurchaseEditable } from "./access";
 import { purchaseUnorderedRows, purchaseUnreceivedRows } from "./queueRows";
+import { notifiesPurchasers } from "./purchaseEmail";
 import type { PurchaseRequest } from "./types";
 import { fetchAllListItems } from "@/shared/listItems";
 import type { SharePointListItem } from "@/shared/spTypes";
@@ -260,5 +261,21 @@ describe("mapTicketItemToPurchase (migration mapper)", () => {
   it("verifyMigration flags a mismatch", () => {
     const input = mapTicketItemToPurchase(item);
     expect(verifyMigration(input, { Title: "WRONG", PurchaseStatus: "Approved" }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("purchaser notification triggers", () => {
+  // Regression: in-app approvals used to notify only the requester, so requests a
+  // GM approved inside the app sat in the order queue with nobody told.
+  it("notifies purchasers on both orderable approvals", () => {
+    expect(notifiesPurchasers("Approved")).toBe(true);
+    expect(notifiesPurchasers("Approved with Changes")).toBe(true);
+  });
+
+  it("stays quiet when there is nothing to order", () => {
+    // The GM already placed this one.
+    expect(notifiesPurchasers("Approved & Ordered")).toBe(false);
+    expect(notifiesPurchasers("Denied")).toBe(false);
+    expect(notifiesPurchasers("Changes Requested")).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ const { signToken } = require("../lib/approvalToken");
 const { config, getGraphClient, sendMail, getGroupMembers } = require("../lib/graphHelpers");
 const { cdwApprovalRequestEmail } = require("../lib/cdwEmailTemplates");
 const { isValidItemId, isWithinCooldown } = require("../lib/requestGuards");
+const { excludeActorMembers } = require("../lib/selfNotify");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,9 +58,17 @@ app.http("sendCdwApprovalRequest", {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "cooldown" } };
       }
 
-      const approvers = await getGroupMembers(client, config.generalManagersGroupId);
-      if (approvers.length === 0) {
+      const allApprovers = await getGroupMembers(client, config.generalManagersGroupId);
+      if (allApprovers.length === 0) {
         return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "no approvers" } };
+      }
+
+      // Don't email the GM who filed the brief their own "[Approval Required]".
+      // Only GM -> nothing goes out; the brief is still Pending Approval in the app.
+      const requesterEmail = fields.RequesterEmail || item.createdBy?.user?.email || "";
+      const approvers = excludeActorMembers(allApprovers, requesterEmail);
+      if (approvers.length === 0) {
+        return { status: 200, headers: corsHeaders, jsonBody: { ok: true, sent: 0, note: "self_only" } };
       }
 
       const subject = `[Approval Required] Creative Brief: ${fields.Title}`;
