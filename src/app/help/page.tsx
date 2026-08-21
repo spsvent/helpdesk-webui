@@ -2113,16 +2113,53 @@ const helpSections: HelpSection[] = [
           </p>
         </div>
 
-        <h4 className="font-semibold text-text-primary mt-6">Adaptive Cards</h4>
+        <h4 className="font-semibold text-text-primary mt-6">What the Card Shows</h4>
         <p>
-          Teams notifications use Microsoft Adaptive Cards for rich formatting. Each card includes:
+          Notification cards are deliberately compact so a busy channel stays readable — everything
+          you need to decide whether to pick the ticket up fits in four lines:
         </p>
         <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
-          <li>Color-coded header indicating the event type</li>
-          <li>Ticket ID and title</li>
-          <li>Key details (priority, status, department)</li>
-          <li>A &quot;View Ticket&quot; button that links directly to the ticket in the Help Desk</li>
+          <li>
+            <strong>Headline</strong> — ticket number, priority, category and time. High and Urgent
+            tickets are bolded and colored (orange / red) so they stand out while scrolling.
+          </li>
+          <li>
+            <strong>Title</strong> — the ticket subject, in bold.
+          </li>
+          <li>
+            <strong>Details line</strong> — department path, location, requester, who it&apos;s
+            assigned to (or a <strong>⚠️ Unassigned</strong> flag), and the due date if one is set.
+          </li>
+          <li>
+            <strong>Description</strong> — the first few lines of what the requester wrote.
+          </li>
         </ul>
+        <p className="mt-3">
+          Status change and escalation cards use the same shape, with the transition
+          (for example <em>New → 🔄 In Progress</em>) on the headline and the person who made the
+          change at the end of the details line.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Card Buttons</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Open Ticket</strong> — opens the ticket in the Help Desk.
+          </li>
+          <li>
+            <strong>Email</strong> — starts an email to the requester with the ticket number and
+            title already in the subject line.
+          </li>
+          <li>
+            <strong>Chat</strong> — opens a Teams chat with the requester.
+          </li>
+        </ul>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Email and Chat only appear when the Help Desk knows the
+            requester&apos;s email address. Tickets filed from a shared kiosk without an email show
+            the Open Ticket button alone.
+          </p>
+        </div>
 
         <h4 className="font-semibold text-text-primary mt-6">Minimum Priority Threshold</h4>
         <p>

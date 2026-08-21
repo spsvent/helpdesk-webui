@@ -6,6 +6,7 @@ import {
   PRIORITY_ORDER,
   AdaptiveCardBody,
   AdaptiveCardElement,
+  AdaptiveCardAction,
   mapToTeamsChannelConfig,
   TeamsChannelSharePointItem,
 } from "@/types/teams";
@@ -161,6 +162,11 @@ export function shouldNotifyTeams(
 // ============================================
 // Adaptive Card Generation
 // ============================================
+//
+// Design goal: these cards are read in a busy Teams channel, so every line has
+// to earn its height. One headline line (number + priority + category + time),
+// the title, one subtle meta line (route, location, people), and the
+// description — no emphasis header bar, no LABEL/value column grids.
 
 /**
  * Get emoji indicator for priority
@@ -205,199 +211,160 @@ function formatCardDate(dateString: string): string {
 }
 
 /**
+ * Format a date as a bare day (no time) - used for due dates
+ */
+function formatCardDay(dateString: string): string {
+  try {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "Unknown";
+  }
+}
+
+/**
+ * Join meta fragments with a middot, dropping any that are empty.
+ */
+function joinMeta(parts: (string | false | null | undefined)[]): string {
+  return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * The headline (first) line of every card: bold ticket number followed by the
+ * at-a-glance signals. Colored + bolded for High/Urgent so those cards stand
+ * out in a scrolling channel.
+ */
+function buildHeadline(ticket: Ticket, parts: string[]): AdaptiveCardElement {
+  const escalated = ticket.priority === "High" || ticket.priority === "Urgent";
+  return {
+    type: "TextBlock",
+    text: joinMeta([`**#${ticket.ticketNumber || ticket.id}**`, ...parts]),
+    size: "small",
+    weight: escalated ? "bolder" : "default",
+    color: getPriorityColor(ticket.priority),
+    isSubtle: !escalated,
+    wrap: true,
+    spacing: "none",
+  };
+}
+
+/**
+ * The ticket title - the one element that gets real visual weight.
+ */
+function buildTitle(ticket: Ticket): AdaptiveCardElement {
+  return {
+    type: "TextBlock",
+    text: ticket.title,
+    size: "medium",
+    weight: "bolder",
+    wrap: true,
+    spacing: "small",
+  };
+}
+
+/**
+ * The single subtle meta line: routing + location + who's involved. Replaces
+ * the old six-cell LABEL/value grid (~8 lines of card) with one wrapping line.
+ * Extra fragments (e.g. "by Jane") are appended by the caller.
+ */
+function buildMetaLine(ticket: Ticket, extra: string[] = []): AdaptiveCardElement {
+  return {
+    type: "TextBlock",
+    text: joinMeta([
+      formatDepartment(ticket),
+      ticket.location && `📍 ${ticket.location}`,
+      `👤 ${ticket.originalRequester || ticket.requester.displayName}`,
+      ticket.assignedTo?.displayName
+        ? `🛠️ ${ticket.assignedTo.displayName}`
+        : "⚠️ Unassigned",
+      ticket.dueDate && `🗓️ Due ${formatCardDay(ticket.dueDate)}`,
+      ...extra,
+    ]),
+    size: "small",
+    isSubtle: true,
+    wrap: true,
+    spacing: "small",
+  };
+}
+
+/**
+ * Description, capped so a wall-of-text ticket can't take over the channel.
+ */
+function buildDescription(ticket: Ticket): AdaptiveCardElement {
+  const text = (ticket.description || "").trim();
+  return {
+    type: "TextBlock",
+    text: text.length > 280 ? `${text.substring(0, 280)}…` : text || "_No description provided_",
+    wrap: true,
+    maxLines: 3,
+    spacing: "small",
+  };
+}
+
+/**
+ * Best email we have for the requester (migrated tickets store it as a string).
+ */
+function getRequesterEmail(ticket: Ticket): string {
+  const original = ticket.originalRequester || "";
+  if (original.includes("@")) return original;
+  return ticket.requester.email || "";
+}
+
+/**
+ * Card actions: open the ticket, plus one-tap ways to reach the requester so
+ * work can start from the card instead of from a lookup.
+ */
+function buildCardActions(ticket: Ticket): AdaptiveCardAction[] {
+  const actions: AdaptiveCardAction[] = [
+    {
+      type: "Action.OpenUrl",
+      title: "Open Ticket",
+      url: `${APP_URL}?ticket=${ticket.id}`,
+      style: "positive",
+    },
+  ];
+
+  const email = getRequesterEmail(ticket);
+  if (email) {
+    const subject = encodeURIComponent(
+      `Ticket #${ticket.ticketNumber || ticket.id}: ${ticket.title}`
+    );
+    actions.push({
+      type: "Action.OpenUrl",
+      title: "Email",
+      url: `mailto:${email}?subject=${subject}`,
+    });
+    actions.push({
+      type: "Action.OpenUrl",
+      title: "Chat",
+      url: `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}`,
+    });
+  }
+
+  return actions;
+}
+
+/**
  * Generate an Adaptive Card for a new ticket notification
- * Modern design with clear visual hierarchy
  */
 export function generateNewTicketCard(ticket: Ticket): AdaptiveCardBody {
-  const truncatedDescription = ticket.description.length > 200
-    ? ticket.description.substring(0, 200) + "..."
-    : ticket.description;
-
-  const priorityEmoji = getPriorityEmoji(ticket.priority);
-  const categoryEmoji = getCategoryEmoji(ticket.category);
-
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
-      // Header with emphasis background (darker, more readable)
-      {
-        type: "Container",
-        style: "emphasis",
-        bleed: true,
-        padding: "default",
-        items: [
-          {
-            type: "ColumnSet",
-            columns: [
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: "NEW TICKET",
-                    size: "small",
-                    weight: "bolder",
-                  },
-                  {
-                    type: "TextBlock",
-                    text: `#${ticket.ticketNumber || ticket.id}`,
-                    size: "extraLarge",
-                    weight: "bolder",
-                    spacing: "none",
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "auto",
-                verticalContentAlignment: "center",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: `${priorityEmoji} ${ticket.priority}`,
-                    size: "medium",
-                    weight: "bolder",
-                    horizontalAlignment: "right",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      // Title
-      {
-        type: "TextBlock",
-        text: ticket.title,
-        size: "large",
-        weight: "bolder",
-        wrap: true,
-        spacing: "medium",
-      },
-      // Key info in two columns
-      {
-        type: "ColumnSet",
-        columns: [
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "CATEGORY",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: `${categoryEmoji} ${ticket.category}`,
-                spacing: "none",
-              },
-            ],
-          },
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "DEPARTMENT",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: formatDepartment(ticket),
-                spacing: "none",
-                wrap: true,
-              },
-            ],
-          },
-        ],
-      },
-      // Requester and location row
-      {
-        type: "ColumnSet",
-        columns: [
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "REQUESTER",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: ticket.originalRequester || ticket.requester.displayName,
-                spacing: "none",
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: "Column",
-            width: "stretch",
-            items: [
-              {
-                type: "TextBlock",
-                text: "CREATED",
-                size: "small",
-                isSubtle: true,
-                weight: "bolder",
-              },
-              {
-                type: "TextBlock",
-                text: formatCardDate(ticket.created),
-                spacing: "none",
-              },
-            ],
-          },
-        ],
-      },
-      // Assignee row if assigned
-      ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
-      // Location if present
-      ...(ticket.location ? [
-        {
-          type: "TextBlock",
-          text: ticket.location,
-          isSubtle: true,
-          spacing: "small",
-        } as AdaptiveCardElement,
-      ] : []),
-      // Description section
-      {
-        type: "Container",
-        separator: true,
-        spacing: "medium",
-        items: [
-          {
-            type: "TextBlock",
-            text: truncatedDescription || "_No description provided_",
-            wrap: true,
-            isSubtle: true,
-            maxLines: 4,
-          },
-        ],
-      },
+      buildHeadline(ticket, [
+        `${getPriorityEmoji(ticket.priority)} ${ticket.priority}`,
+        `${getCategoryEmoji(ticket.category)} ${ticket.category}`,
+        formatCardDate(ticket.created),
+      ]),
+      buildTitle(ticket),
+      buildMetaLine(ticket),
+      buildDescription(ticket),
     ],
-    actions: [
-      {
-        type: "Action.OpenUrl",
-        title: "Open Ticket",
-        url: `${APP_URL}?ticket=${ticket.id}`,
-        style: "positive",
-      },
-    ],
+    actions: buildCardActions(ticket),
   };
 }
 
@@ -417,148 +384,40 @@ function getStatusEmoji(status: string): string {
 
 /**
  * Generate an Adaptive Card for status change notification
- * Clean design showing the status transition
  */
 export function generateStatusChangeCard(
   ticket: Ticket,
   oldStatus: string,
   changedByName: string
 ): AdaptiveCardBody {
-  const newStatusEmoji = getStatusEmoji(ticket.status);
-
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
-      // Header
-      {
-        type: "Container",
-        style: "emphasis",
-        bleed: true,
-        padding: "default",
-        items: [
-          {
-            type: "ColumnSet",
-            columns: [
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: "STATUS UPDATE",
-                    size: "small",
-                    weight: "bolder",
-                  },
-                  {
-                    type: "TextBlock",
-                    text: `#${ticket.ticketNumber || ticket.id}`,
-                    size: "large",
-                    weight: "bolder",
-                    spacing: "none",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      // Title
       {
         type: "TextBlock",
-        text: ticket.title,
-        size: "medium",
-        weight: "bolder",
-        wrap: true,
-        spacing: "medium",
-      },
-      // Status transition - prominent display
-      {
-        type: "Container",
-        style: "default",
-        spacing: "medium",
-        items: [
-          {
-            type: "ColumnSet",
-            columns: [
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: oldStatus,
-                    size: "medium",
-                    horizontalAlignment: "center",
-                    isSubtle: true,
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "auto",
-                verticalContentAlignment: "center",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: "→",
-                    size: "large",
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: `${newStatusEmoji} ${ticket.status}`,
-                    size: "medium",
-                    weight: "bolder",
-                    horizontalAlignment: "center",
-                    color: getStatusColor(ticket.status),
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      // Common context: Priority + Category, Department + Requester, Assignee
-      {
-        type: "Container",
-        separator: true,
-        spacing: "medium",
-        items: [
-          buildPriorityCategoryRow(ticket),
-          buildDepartmentRequesterRow(ticket),
-          ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
-        ],
-      },
-      // Changed by info
-      {
-        type: "TextBlock",
-        text: `Updated by ${changedByName}`,
-        isSubtle: true,
-        spacing: "medium",
+        text: joinMeta([
+          `**#${ticket.ticketNumber || ticket.id}**`,
+          `${oldStatus} → **${getStatusEmoji(ticket.status)} ${ticket.status}**`,
+          `${getPriorityEmoji(ticket.priority)} ${ticket.priority}`,
+          formatCardDate(ticket.modified),
+        ]),
         size: "small",
+        color: getStatusColor(ticket.status),
+        wrap: true,
+        spacing: "none",
       },
+      buildTitle(ticket),
+      buildMetaLine(ticket, [`by ${changedByName}`]),
+      buildDescription(ticket),
     ],
-    actions: [
-      {
-        type: "Action.OpenUrl",
-        title: "Open Ticket",
-        url: `${APP_URL}?ticket=${ticket.id}`,
-        style: "positive",
-      },
-    ],
+    actions: buildCardActions(ticket),
   };
 }
 
 /**
  * Generate an Adaptive Card for priority escalation notification
- * Attention-grabbing design for escalated tickets
  */
 export function generatePriorityEscalationCard(
   ticket: Ticket,
@@ -566,123 +425,31 @@ export function generatePriorityEscalationCard(
   changedByName: string
 ): AdaptiveCardBody {
   const isUrgent = ticket.priority === "Urgent";
-  const oldEmoji = getPriorityEmoji(oldPriority);
-  const newEmoji = getPriorityEmoji(ticket.priority);
 
   return {
     type: "AdaptiveCard",
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     version: "1.4",
     body: [
-      // Header with colored text for urgency
-      {
-        type: "Container",
-        style: "emphasis",
-        bleed: true,
-        padding: "default",
-        items: [
-          {
-            type: "TextBlock",
-            text: isUrgent ? "URGENT ESCALATION" : "PRIORITY ESCALATION",
-            size: "small",
-            weight: "bolder",
-            color: isUrgent ? "attention" : "warning",
-          },
-          {
-            type: "TextBlock",
-            text: `#${ticket.ticketNumber || ticket.id}`,
-            size: "extraLarge",
-            weight: "bolder",
-            spacing: "none",
-          },
-        ],
-      },
-      // Title
       {
         type: "TextBlock",
-        text: ticket.title,
-        size: "medium",
-        weight: "bolder",
-        wrap: true,
-        spacing: "medium",
-      },
-      // Priority transition - very prominent
-      {
-        type: "Container",
-        style: "emphasis",
-        spacing: "medium",
-        padding: "default",
-        items: [
-          {
-            type: "ColumnSet",
-            columns: [
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: `${oldEmoji} ${oldPriority}`,
-                    size: "medium",
-                    horizontalAlignment: "center",
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "auto",
-                verticalContentAlignment: "center",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: "→",
-                    size: "large",
-                  },
-                ],
-              },
-              {
-                type: "Column",
-                width: "stretch",
-                items: [
-                  {
-                    type: "TextBlock",
-                    text: `${newEmoji} ${ticket.priority}`,
-                    size: "large",
-                    weight: "bolder",
-                    horizontalAlignment: "center",
-                    color: getPriorityColor(ticket.priority),
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      // Category (priority is already in the transition above)
-      buildLabeledColumnSet([
-        { label: "CATEGORY", value: `${getCategoryEmoji(ticket.category)} ${ticket.category}` },
-      ]),
-      // Department + Requester
-      buildDepartmentRequesterRow(ticket),
-      // Assignee row if assigned
-      ...(buildAssigneeRow(ticket) ? [buildAssigneeRow(ticket) as AdaptiveCardElement] : []),
-      // Escalated by
-      {
-        type: "TextBlock",
-        text: `Escalated by ${changedByName}`,
-        isSubtle: true,
-        spacing: "medium",
+        text: joinMeta([
+          isUrgent ? "🔺 **URGENT**" : "🔺 **ESCALATED**",
+          `**#${ticket.ticketNumber || ticket.id}**`,
+          `${getPriorityEmoji(oldPriority)} ${oldPriority} → **${getPriorityEmoji(ticket.priority)} ${ticket.priority}**`,
+          `${getCategoryEmoji(ticket.category)} ${ticket.category}`,
+        ]),
         size: "small",
+        weight: "bolder",
+        color: isUrgent ? "attention" : "warning",
+        wrap: true,
+        spacing: "none",
       },
+      buildTitle(ticket),
+      buildMetaLine(ticket, [`by ${changedByName}`]),
+      buildDescription(ticket),
     ],
-    actions: [
-      {
-        type: "Action.OpenUrl",
-        title: "Open Ticket",
-        url: `${APP_URL}?ticket=${ticket.id}`,
-        style: "positive",
-      },
-    ],
+    actions: buildCardActions(ticket),
   };
 }
 
@@ -873,58 +640,6 @@ export function sendPriorityEscalationTeamsNotification(
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Small helper that renders a row of labeled fields as an Adaptive Card ColumnSet.
- * Each pair becomes a column with a small uppercase label above its value.
- */
-function buildLabeledColumnSet(
-  pairs: { label: string; value: string }[]
-): AdaptiveCardElement {
-  return {
-    type: "ColumnSet",
-    columns: pairs.map(({ label, value }) => ({
-      type: "Column",
-      width: "stretch",
-      items: [
-        {
-          type: "TextBlock",
-          text: label,
-          size: "small",
-          isSubtle: true,
-          weight: "bolder",
-        },
-        {
-          type: "TextBlock",
-          text: value,
-          spacing: "none",
-          wrap: true,
-        },
-      ],
-    })),
-  };
-}
-
-function buildPriorityCategoryRow(ticket: Ticket): AdaptiveCardElement {
-  return buildLabeledColumnSet([
-    { label: "PRIORITY", value: `${getPriorityEmoji(ticket.priority)} ${ticket.priority}` },
-    { label: "CATEGORY", value: `${getCategoryEmoji(ticket.category)} ${ticket.category}` },
-  ]);
-}
-
-function buildDepartmentRequesterRow(ticket: Ticket): AdaptiveCardElement {
-  return buildLabeledColumnSet([
-    { label: "DEPARTMENT", value: formatDepartment(ticket) },
-    { label: "REQUESTER", value: ticket.originalRequester || ticket.requester.displayName },
-  ]);
-}
-
-function buildAssigneeRow(ticket: Ticket): AdaptiveCardElement | null {
-  if (!ticket.assignedTo?.displayName) return null;
-  return buildLabeledColumnSet([
-    { label: "ASSIGNED TO", value: ticket.assignedTo.displayName },
-  ]);
-}
 
 /**
  * Format department hierarchy for display
