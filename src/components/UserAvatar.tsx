@@ -45,6 +45,9 @@ export default function UserAvatar({ name, photoUrl, size = "md" }: UserAvatarPr
 
   if (photoUrl) {
     return (
+      // photoUrl is a runtime Graph blob URL and this is a static export, so
+      // next/image would need unoptimized and gains nothing at 24-48px.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={photoUrl}
         alt={name}
