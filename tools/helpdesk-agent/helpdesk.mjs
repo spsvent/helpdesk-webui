@@ -5,18 +5,51 @@
 //   helpdesk list [--status "In Progress"] [--top 50]
 //   helpdesk comment <id|url> "text" [--internal] [--no-notify]
 //   helpdesk status <id|url> <New|"In Progress"|"On Hold"|Resolved|Closed> [--note "..."] [--no-notify]
+//   helpdesk create <title> <description> --type <department> [--priority ...] [--ref ...] ...
 //
 // Env: HELPDESK_AGENT_KEY (required), HELPDESK_AGENT_API_URL, HELPDESK_ACTOR,
-// HELPDESK_ACTOR_EMAIL. Output is JSON on stdout; errors exit non-zero.
+// HELPDESK_ACTOR_EMAIL. `create` additionally needs HELPDESK_FUNCTION_KEY — it
+// calls the CreateTicket intake endpoint, which uses a host key, not the agent
+// key. Output is JSON on stdout; errors exit non-zero.
 
-import { getTicket, listTickets, addComment, setStatus } from "./helpdesk-client.mjs";
+import {
+  getTicket,
+  listTickets,
+  addComment,
+  setStatus,
+  createTicket,
+  PROBLEM_TYPES,
+  PRIORITIES,
+  STATUSES,
+} from "./helpdesk-client.mjs";
 
 function usage() {
   console.error(`Usage:
   helpdesk get <id|url>
   helpdesk list [--status <status>] [--top <n>]
   helpdesk comment <id|url> <text> [--internal] [--no-notify]
-  helpdesk status <id|url> <status> [--note <text>] [--no-notify]`);
+  helpdesk status <id|url> <status> [--note <text>] [--no-notify]
+  helpdesk create <title> <description> --type <department> [options]
+
+Statuses:    ${STATUSES.join(" | ")}
+Priorities:  ${PRIORITIES.join(" | ")}
+Departments: ${PROBLEM_TYPES.join(", ")}
+
+create options:
+  --type <department>     required
+  --priority <priority>   default Normal
+  --location <text>
+  --sub <text>            sub-category
+  --sub2 <text>           second-level sub-category
+  --requester <email>
+  --assignee <email>      overrides the auto-assign rules
+  --source <text>         defaults to $HELPDESK_ACTOR
+  --ref <text>            dedup key — a repeat while an earlier ticket is still
+                          open comments on it instead of creating a duplicate.
+                          Use a STABLE value per alert condition.
+
+Only "Problem" tickets can be created via the API; Request tickets need the
+in-app GM approval flow.`);
   process.exit(2);
 }
 
@@ -56,6 +89,21 @@ try {
     const [id, status] = args;
     if (!id || !status) usage();
     result = await setStatus(id, status, { note, notify });
+  } else if (cmd === "create") {
+    const opts = {
+      problemType: takeOption(args, "--type"),
+      priority: takeOption(args, "--priority"),
+      location: takeOption(args, "--location"),
+      problemTypeSub: takeOption(args, "--sub"),
+      problemTypeSub2: takeOption(args, "--sub2"),
+      requesterEmail: takeOption(args, "--requester"),
+      assigneeEmail: takeOption(args, "--assignee"),
+      source: takeOption(args, "--source"),
+      externalRef: takeOption(args, "--ref"),
+    };
+    const [title, description] = args;
+    if (!title || !description || !opts.problemType) usage();
+    result = await createTicket({ title, description, ...opts });
   } else {
     usage();
   }

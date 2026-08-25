@@ -1,6 +1,17 @@
 # Help Desk Notification Functions
 
-Azure Functions for sending notifications from the Help Desk app.
+Azure Functions for the Help Desk app — notifications, ticket intake, approvals,
+escalations, inbound mail, and task-manager sync.
+
+> **Full API reference:** [`../docs/INTEGRATION.md`](../docs/INTEGRATION.md) documents
+> all 25 functions (21 HTTP + 4 timers), their auth schemes, request/response shapes,
+> and every environment variable. [`../docs/openapi.yaml`](../docs/openapi.yaml) is the
+> machine-readable spec. The sections below cover a subset — the doc is authoritative.
+>
+> ⚠️ Deploy with `func azure functionapp publish helpdesk-notify-func --javascript
+> --build remote`. **Omitting `--build remote` registers zero functions and takes the
+> whole app down**, while still printing "The deployment was successful!". Verify with
+> `func azure functionapp list-functions helpdesk-notify-func` — expect **25**.
 
 ## Functions
 

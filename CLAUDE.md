@@ -1,5 +1,26 @@
 # Claude Code Project Instructions
 
+## ⇢ Integrating with the ticketing system? Start here
+
+**[`docs/INTEGRATION.md`](docs/INTEGRATION.md)** is the single source of truth for the
+entire external surface: all 25 Functions (21 HTTP + 4 timers), the three auth
+schemes, the Uptime Kuma webhook, email-first approvals, notification suppression
+rules, every SharePoint list and enum, and the known limits.
+**[`docs/openapi.yaml`](docs/openapi.yaml)** is the machine-readable companion.
+
+Read it before writing any code that calls, alerts, or automates the Help Desk —
+it will save you from the usual wrong turns:
+
+- The agent API (`x-agent-key`) has **no create endpoint**. Ticket creation is
+  `POST /api/createticket`, gated by an Azure Functions **host key** (`?code=`).
+- Uptime Kuma needs **no adapter** — `CreateTicket` parses Kuma's native webhook
+  body, dedupes by monitor, maps tags to priority, and auto-closes on recovery.
+- Notification suppression (self-notify, opt-out, internal comments) lives at
+  shared chokepoints. Never re-implement it per call site.
+
+Adding an endpoint, env var, enum value, or webhook? Update both files in the same
+change.
+
 ## Project Overview
 
 This is the SkyPark Help Desk web UI - a React/Next.js application for viewing and managing support tickets stored in SharePoint Online.
