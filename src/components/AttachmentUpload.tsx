@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import {
+  DEFAULT_ACCEPTED_TYPES,
+  DEFAULT_MAX_SIZE_MB,
+  validateAttachment,
+} from "@/lib/attachmentValidation";
 
 interface AttachmentUploadProps {
   onUpload: (file: File) => Promise<boolean>;
@@ -9,42 +14,10 @@ interface AttachmentUploadProps {
   acceptedTypes?: string[];
 }
 
-// Allowed file types for help desk attachments
-const DEFAULT_ACCEPTED_TYPES = [
-  "image/*",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain",
-  "text/csv",
-  ".log",
-  ".txt",
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".xls",
-  ".xlsx",
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-];
-
-// Format file size
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
 export default function AttachmentUpload({
   onUpload,
   disabled = false,
-  maxSizeMB = 10,
+  maxSizeMB = DEFAULT_MAX_SIZE_MB,
   acceptedTypes = DEFAULT_ACCEPTED_TYPES,
 }: AttachmentUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -53,23 +26,9 @@ export default function AttachmentUpload({
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const maxSizeBytes = maxSizeMB * 1024 * 1024;
-
   const validateFile = useCallback(
-    (file: File): string | null => {
-      // Check file size
-      if (file.size > maxSizeBytes) {
-        return `File too large. Maximum size is ${maxSizeMB}MB.`;
-      }
-
-      // Check file size (SharePoint has limits)
-      if (file.size === 0) {
-        return "Cannot upload empty files.";
-      }
-
-      return null;
-    },
-    [maxSizeBytes, maxSizeMB]
+    (file: File): string | null => validateAttachment(file, maxSizeMB),
+    [maxSizeMB]
   );
 
   const handleFileUpload = useCallback(
