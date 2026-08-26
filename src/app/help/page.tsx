@@ -887,7 +887,9 @@ const helpSections: HelpSection[] = [
         </div>
 
         <p className="mt-3">
-          <strong>iPhone photos (HEIC):</strong> HEIC images are previewed through an
+          <strong>iPhone photos (HEIC):</strong> HEIC and HEIF files upload like any other
+          image. If a photo looks greyed out in the file picker on an older browser, drag it
+          onto the upload box instead. HEIC images are previewed through an
           auto-generated JPEG copy stored next to them (e.g. <code>IMG_0001.HEIC.jpg</code>),
           which is hidden from the attachment list. Note that a file you upload yourself named{" "}
           <code>X.HEIC.jpg</code> sitting next to an <code>X.HEIC</code> is treated as that
@@ -896,8 +898,10 @@ const helpSections: HelpSection[] = [
 
         <h4 className="font-semibold text-text-primary mt-6">File Size Limits</h4>
         <p>
-          The maximum file size for attachments is <strong>10 MB</strong> per file.
-          Files larger than this will be rejected with an error message.
+          The maximum file size for attachments is <strong>15 MB</strong> per file.
+          Files larger than this will be rejected with an error message. Photos straight
+          from a recent iPhone (48 MP, ProRAW, or Live Photos) can exceed this — email
+          them to the help desk, or resize before uploading.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Downloading Attachments</h4>
