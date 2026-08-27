@@ -247,7 +247,11 @@ export function canEditTicket(
  * If so, their tickets should not be visible to regular users via group sharing
  */
 export function isCreatorElevated(ticket: Ticket): boolean {
-  const creatorEmail = ticket.createdBy?.email || ticket.originalRequester || ticket.requester?.email;
+  // originalRequester first: tickets are created app-only by the Function App,
+  // so createdBy is the app identity, not a person. Reading createdBy first
+  // would short-circuit to a non-admin address and silently stop hiding
+  // admin-created tickets from regular users via group sharing.
+  const creatorEmail = ticket.originalRequester || ticket.createdBy?.email || ticket.requester?.email;
 
   if (!creatorEmail) return false;
 

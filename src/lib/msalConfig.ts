@@ -69,6 +69,18 @@ export const sharepointScopes = {
   ],
 };
 
+// Scope for the Function App's ticket-create endpoint, which is protected by
+// App Service Authentication (EasyAuth). Cross-origin calls can't rely on the
+// EasyAuth session cookie, so the SPA sends a bearer token for this scope and
+// EasyAuth validates it and injects x-ms-client-principal for the function.
+// Set NEXT_PUBLIC_FUNCTION_API_SCOPE to the exposed scope of the Function App's
+// AAD registration (e.g. "api://<client-id>/user_impersonation"). Unset ⇒ the
+// SPA keeps creating tickets directly via Graph (pre-lockdown behaviour).
+export const functionApiScope = process.env.NEXT_PUBLIC_FUNCTION_API_SCOPE || "";
+export const functionApiScopes = {
+  scopes: functionApiScope ? [functionApiScope] : [],
+};
+
 // Graph API endpoints
 export const graphConfig = {
   graphMeEndpoint: "https://graph.microsoft.com/v1.0/me",

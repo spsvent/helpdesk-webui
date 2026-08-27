@@ -386,6 +386,11 @@ export default function NewTicketPage() {
         isAdmin,
         creatorEmail: requesterEmail,
         creatorName: accounts[0]?.name,
+        // Enable the server-side create path (see createTicketViaFunction).
+        // isAdmin above is still passed for the direct-write fallback; the
+        // function ignores it and resolves admin status itself.
+        msalInstance: instance,
+        account: accounts[0],
       };
 
       const ticketData: CreateTicketData = {

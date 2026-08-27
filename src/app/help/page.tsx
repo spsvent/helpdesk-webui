@@ -293,6 +293,18 @@ const helpSections: HelpSection[] = [
           You can submit a new support ticket directly from the Help Desk application.
         </p>
 
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-900">
+            <strong>Always file tickets through this app.</strong> Adding a row directly to
+            the SharePoint Tickets list &mdash; including from the Microsoft Lists mobile
+            app &mdash; does <strong>not</strong> create a real ticket. It skips
+            auto&#8209;assignment, the approval step, and every notification, so nobody is
+            told the ticket exists and it can sit untouched for days. If you have the
+            Tickets list saved or bookmarked in Lists, use{" "}
+            <strong>New Ticket</strong> here instead.
+          </p>
+        </div>
+
         <h4 className="font-semibold text-text-primary mt-6">
           Problem vs. Request — Which One?
         </h4>

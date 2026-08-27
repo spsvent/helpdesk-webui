@@ -198,6 +198,7 @@ Location: `azure-functions/` directory in this repo
 | `checkEscalations` | Timer trigger | Scheduled escalation checks | N/A |
 | `runEscalationCheck` | `/api/runescalationcheck` | Manual escalation check trigger | Anonymous |
 | `syncToTodo` | `/api/synctotodo` | Mirrors assigned Tech tickets into a Microsoft To Do list (create/update/complete) | Anonymous |
+| `createUserTicket` | `/api/tickets` | Web-form ticket intake. Creates the list item **app-only** so the Tickets list can drop "Add Items" from users, blocking direct-in-SharePoint tickets that bypass all notifications (ticket #607). Resolves `isAdmin` server-side. | EasyAuth principal (`x-ms-client-principal`) |
 | `agentApi` (×4) | `/api/agent/tickets`, `/api/agent/tickets/{id}`, `/api/agent/tickets/{id}/comments`, `/api/agent/tickets/{id}/status` | Agent-facing REST API: read ticket + thread, list, comment, change status — with activity logging and participant notifications | `x-agent-key` header == `AGENT_API_KEY` env var (unset = API disabled) |
 
 > **Agent access:** headless agents (Fedora server, cron, etc.) use `tools/helpdesk-agent/`
@@ -250,6 +251,17 @@ Nobody is emailed about a change they made themselves. Two mirrored chokepoints 
 The three approval-request functions (`sendApprovalRequest`, `sendPurchaseApprovalRequest`, `sendCdwApprovalRequest`) drop the requester from the expanded GM group; if that empties the list they return `note: "self_only"` and send nothing — the item is still Pending in the app.
 
 **Deliberate limit:** suppression matches individual addresses only. Mail to a shared/M365 group address (e.g. an Inventory queue) still reaches every member including the actor — Graph has no per-recipient suppression, and expanding the group into N sends would break the shared queue's reply semantics. Distinct from `NOTIFICATION_OPTOUT_LIST_ID`, which suppresses by *recipient* regardless of who acted.
+
+#### For Web-Form Ticket Creation (createUserTicket)
+| Variable | Description |
+|----------|-------------|
+| `ADMIN_EMAILS` | Comma-separated admin addresses. Combined with `GENERAL_MANAGERS_GROUP_ID` to resolve admin status **server-side** — a client-supplied `isAdmin` would let anyone auto-approve their own Request. Resolution failures fall back to non-admin (Pending). |
+
+> Requires App Service Authentication (EasyAuth) enabled with **"Allow unauthenticated access"**.
+> Requiring auth app-wide breaks every anonymous endpoint and takes notifications down.
+> Frontend counterparts are `NEXT_PUBLIC_TICKET_CREATE_FUNCTION_URL` and
+> `NEXT_PUBLIC_FUNCTION_API_SCOPE`; with either unset the SPA falls back to writing to
+> the list directly. Full cutover steps: `docs/ticket-creation-lockdown.md`.
 
 #### For the Agent API (agentApi)
 | Variable | Description |

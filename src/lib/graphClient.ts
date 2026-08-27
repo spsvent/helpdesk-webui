@@ -1,6 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AccountInfo, InteractionRequiredAuthError, IPublicClientApplication } from "@azure/msal-browser";
-import { graphScopes, sharepointScopes } from "./msalConfig";
+import { graphScopes, sharepointScopes, functionApiScope, functionApiScopes } from "./msalConfig";
 import { isRunningInTeams, openTeamsAuthPopup, isNaaActive } from "./teamsAuth";
 import { authReady, renewalRedirectAllowed, markRenewalAttempt, isInteractionInProgressError, ssoSilentWithTimeout } from "./authActions";
 import { trackEvent } from "./appInsights";
@@ -17,6 +17,9 @@ import {
 // SharePoint site and list IDs - configure in .env.local
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const TICKETS_LIST_ID = process.env.NEXT_PUBLIC_TICKETS_LIST_ID || "";
+// Function App endpoint that creates tickets app-only. Unset ⇒ the SPA writes
+// to the list directly with the user's token (pre-lockdown behaviour).
+const TICKET_CREATE_FUNCTION_URL = process.env.NEXT_PUBLIC_TICKET_CREATE_FUNCTION_URL || "";
 const COMMENTS_LIST_ID = process.env.NEXT_PUBLIC_COMMENTS_LIST_ID || "";
 const AUTO_ASSIGN_LIST_ID = process.env.NEXT_PUBLIC_AUTO_ASSIGN_LIST_ID || "";
 const ESCALATION_LIST_ID = process.env.NEXT_PUBLIC_ESCALATION_LIST_ID || "";
@@ -424,6 +427,74 @@ export interface CreateTicketOptions {
   /** Creator's display name — mirrored into ApprovedByName on admin auto-approval
    *  so the approver resolves in the UI (person fields aren't expanded on read). */
   creatorName?: string;
+  /** MSAL handles, required only for the server-side create path (see
+   *  createTicketViaFunction). Without them the direct Graph write is used. */
+  msalInstance?: IPublicClientApplication;
+  account?: AccountInfo;
+}
+
+/**
+ * Create the ticket through the Function App instead of writing to the list
+ * with the user's delegated token.
+ *
+ * This exists so the Tickets list can drop "Add Items" from everyone's
+ * permission level: SharePoint can't distinguish our app's delegated write from
+ * a row added in the Lists app, which is how ticket #607 was created outside the
+ * app and never notified anyone. Creating app-only server-side closes that door.
+ *
+ * The endpoint is EasyAuth-protected, so we send a bearer token for the Function
+ * App's exposed scope; EasyAuth validates it and hands the function a trusted
+ * principal. Note `isAdmin` is deliberately NOT sent — the function resolves it
+ * from group membership, since a client-supplied flag would let anyone
+ * auto-approve their own Request.
+ */
+async function createTicketViaFunction(
+  client: Client,
+  ticketData: CreateTicketData,
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo
+): Promise<Ticket> {
+  let accessToken: string;
+  try {
+    const response = await msalInstance.acquireTokenSilent({ ...functionApiScopes, account });
+    accessToken = response.accessToken;
+  } catch (error) {
+    if (error instanceof InteractionRequiredAuthError) {
+      accessToken = await acquireTokenInteractive(msalInstance, account, functionApiScopes);
+    } else {
+      throw error;
+    }
+  }
+
+  const response = await fetch(TICKET_CREATE_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      title: ticketData.title,
+      description: ticketData.description,
+      category: ticketData.category,
+      priority: ticketData.priority,
+      problemType: ticketData.problemType,
+      problemTypeSub: ticketData.problemTypeSub,
+      problemTypeSub2: ticketData.problemTypeSub2,
+      location: ticketData.location,
+      assigneeEmail: ticketData.assigneeEmail,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Ticket create failed (${response.status}): ${detail || response.statusText}`);
+  }
+
+  const body = await response.json();
+  if (!body?.item) throw new Error("Ticket create returned no item");
+
+  invalidateTicketsCache();
+  return mapToTicket(body.item);
 }
 
 export async function createTicket(
@@ -432,6 +503,13 @@ export async function createTicket(
   requesterEmail?: string,
   options?: CreateTicketOptions
 ): Promise<Ticket> {
+  // Server-side create is used whenever it's configured and we have MSAL
+  // handles. Falling back to the direct write keeps local dev and any
+  // pre-lockdown deploy working unchanged.
+  if (TICKET_CREATE_FUNCTION_URL && functionApiScope && options?.msalInstance && options?.account) {
+    return createTicketViaFunction(client, ticketData, options.msalInstance, options.account);
+  }
+
   const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items`;
 
   // Build the fields object
