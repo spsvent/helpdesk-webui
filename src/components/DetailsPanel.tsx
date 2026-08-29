@@ -183,6 +183,10 @@ export default function DetailsPanel({
     );
     setHasChanges(false);
     setAutoAssignSuggestion(null);
+    // Deliberately keyed on ticket.id alone: this resets the form when a DIFFERENT
+    // ticket is selected. Adding the individual fields would re-run on every field
+    // change and discard the user's unsaved edits (see setHasChanges(false) above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id]);
 
   // Update sub-category options when problemType changes

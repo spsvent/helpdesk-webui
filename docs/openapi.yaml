@@ -1,0 +1,976 @@
+openapi: 3.1.0
+info:
+  title: SkyPark Help Desk — Function App API
+  version: "1.0.0"
+  description: |
+    Every externally-reachable HTTP endpoint of the SkyPark Help Desk Function App
+    (21 HTTP functions; 4 timer triggers are not represented here — see
+    docs/INTEGRATION.md §9).
+
+    Narrative reference, data model, notification rules, and operating notes:
+    docs/INTEGRATION.md
+
+    THREE AUTH SCHEMES — pick the right one:
+      * agentKey  — `x-agent-key` header. The 4 /agent/* endpoints only.
+      * hostKey   — `?code=` query param (Azure Functions host key).
+      * token     — HMAC-signed approval token, from an emailed link.
+    Endpoints with no security block are genuinely anonymous (called by the
+    static SPA, which cannot hold a secret).
+
+    NOTE: routes are matched case-insensitively by the Functions host, so
+    `/api/createticket` and `/api/CreateTicket` are the same endpoint.
+  contact:
+    name: Repo
+    url: https://github.com/spsvent/helpdesk-webui
+
+servers:
+  - url: https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api
+    description: Production (Flex Consumption — the long hostname is required)
+
+tags:
+  - name: agent
+    description: Agent API — generic ticket read/write, gated by x-agent-key
+  - name: intake
+    description: Ticket creation (incl. the native Uptime Kuma webhook)
+  - name: notifications
+    description: Email and Teams delivery
+  - name: approvals
+    description: Email-first approval workflows (mint + act)
+  - name: sync
+    description: Microsoft To Do / Vikunja task-manager sync
+  - name: ops
+    description: Manual triggers for the timer functions
+  - name: media
+    description: Image conversion
+
+security: []
+
+components:
+  securitySchemes:
+    agentKey:
+      type: apiKey
+      in: header
+      name: x-agent-key
+      description: Must equal the Function App's AGENT_API_KEY. Unset server-side ⇒ 503.
+    hostKey:
+      type: apiKey
+      in: query
+      name: code
+      description: Azure Functions host/function key (authLevel "function").
+    approvalToken:
+      type: apiKey
+      in: query
+      name: token
+      description: |
+        base64url(payload).base64url(HMAC-SHA256), signed with APPROVAL_LINK_SECRET.
+        Payload { tid, action, email, name, iat, exp, jti }; 14-day TTL.
+        On POST the token travels in the body instead.
+
+  parameters:
+    TicketId:
+      name: id
+      in: path
+      required: true
+      description: SharePoint list item id — the same number as in `?ticket=N` links.
+      schema: { type: integer, minimum: 1 }
+      example: 582
+
+  schemas:
+    Status:
+      type: string
+      description: The complete set of ticket statuses.
+      enum: [New, In Progress, On Hold, Resolved, Closed]
+    Priority:
+      type: string
+      enum: [Low, Normal, High, Urgent]
+    ProblemType:
+      type: string
+      description: >
+        Department. Canonical source is CATEGORY_HIERARCHY in src/lib/categoryConfig.ts;
+        mirrored in azure-functions/src/lib/ticketIntake.js. Keep both in sync.
+      enum:
+        [Tech, Operations, Facilities, Marketing, HR, Customer Service, Inventory,
+         Finance, Food & Beverage, Campground, Retail, Safety, Other]
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        author: { type: string, description: OriginalAuthor, else the creator's display name }
+        authorEmail: { type: string, format: email }
+        body: { type: string }
+        isInternal: { type: boolean }
+        created: { type: string, format: date-time }
+
+    TicketSummary:
+      type: object
+      properties:
+        id: { type: string }
+        ticketNumber: { type: integer }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { $ref: '#/components/schemas/Priority' }
+        problemType: { $ref: '#/components/schemas/ProblemType' }
+        assignedTo: { type: string, nullable: true }
+        created: { type: string, format: date-time }
+        modified: { type: string, format: date-time }
+
+    TicketFields:
+      type: object
+      description: >
+        The raw SharePoint `fields` bag — every column on the Tickets list, not a
+        curated subset. Named properties below are the ones you'll actually use.
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        Title: { type: string }
+        Description: { type: string }
+        Status: { $ref: '#/components/schemas/Status' }
+        Priority: { $ref: '#/components/schemas/Priority' }
+        ProblemType: { $ref: '#/components/schemas/ProblemType' }
+        ProblemTypeSub: { type: string }
+        ProblemTypeSub2: { type: string }
+        Category: { type: string, enum: [Request, Problem] }
+        Location: { type: string }
+        TicketNumber: { type: integer }
+        RequesterEmail:
+          type: string
+          description: Synthesised from the item's createdBy, not a stored column.
+        OriginalRequester: { type: string }
+        OriginalAssignedTo: { type: string }
+        ParticipantEmails: { type: string, description: "';' or ',' separated" }
+        SupportChannel: { type: string, description: '"API: <source>" for API-created tickets' }
+        ExternalRef: { type: string, description: Dedup key; "kuma-<id>" for Uptime Kuma }
+        ExternalRecoveredAt: { type: string, format: date-time, nullable: true }
+        ApprovalStatus:
+          type: string
+          enum: [None, Pending, Approved, Denied, Changes Requested]
+
+    AgentError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [unauthorized, agent_api_disabled, ticket_not_found, invalid_json,
+                 missing_text, invalid_status, internal_error]
+        detail: { type: string }
+        valid:
+          type: array
+          items: { type: string }
+          description: Present on invalid_status — the accepted values.
+
+    CreateTicketRequest:
+      type: object
+      required: [title, description, problemType]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        problemType: { $ref: '#/components/schemas/ProblemType' }
+        category:
+          type: string
+          enum: [Problem]
+          default: Problem
+          description: >
+            Must be "Problem". Request tickets need the GM approval flow and are not
+            supported via the API yet.
+        priority:
+          allOf: [{ $ref: '#/components/schemas/Priority' }]
+          default: Normal
+        problemTypeSub: { type: string }
+        problemTypeSub2: { type: string }
+        location: { type: string }
+        requesterEmail:
+          type: string
+          format: email
+          description: Resolved to a site-user id so the Requester person field populates.
+        assigneeEmail:
+          type: string
+          format: email
+          description: Overrides AutoAssignRules. Lookup failure ⇒ unassigned, not an error.
+        source: { type: string, description: Free text, e.g. "nagios", "uptime-kuma" }
+        externalRef:
+          type: string
+          description: >
+            Dedup key. An OPEN ticket with the same ref gets a throttled "Repeat alert"
+            comment instead of a duplicate. Use a STABLE value per alert condition —
+            a ref containing a timestamp defeats dedupe entirely.
+
+    KumaWebhook:
+      type: object
+      description: >
+        Uptime Kuma's native webhook body (Request Body = "Preset - application/json").
+        CreateTicket detects and adapts this shape automatically; no mapping needed.
+      required: [heartbeat, monitor]
+      properties:
+        heartbeat:
+          type: object
+          properties:
+            status:
+              type: integer
+              enum: [0, 1, 2, 3]
+              description: 0=DOWN (creates/dedupes), 1=UP (stamps recovery), 2=PENDING, 3=MAINTENANCE (both ignored)
+            msg: { type: string }
+        monitor:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            hostname: { type: string }
+            url: { type: string }
+            tags:
+              type: array
+              description: 'Most severe tag sets priority: Critical→Urgent, Important→High, Moderate→Normal.'
+              items:
+                type: object
+                properties:
+                  name: { type: string, enum: [Critical, Important, Moderate] }
+        msg: { type: string }
+
+    CreateTicketResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        id: { type: string }
+        ticketNumber: { type: integer }
+        url: { type: string, format: uri }
+        deduped: { type: boolean, description: Folded onto an existing open ticket }
+        commentThrottled:
+          type: boolean
+          description: Repeat suppressed by API_REPEAT_COMMENT_THROTTLE_MINUTES (default 30)
+        skipped: { type: boolean, description: Kuma event that was not DOWN }
+        reason: { type: string }
+
+    ApprovalActionResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        decision: { type: string, enum: [Approved, Denied, Changes Requested] }
+        reason:
+          type: string
+          enum: [malformed, bad_signature, expired, wrong_entity, bad_action,
+                 note_required, conflict_retry, server_error,
+                 cdw_list_not_configured, purchase_list_not_configured]
+
+    SyncRequest:
+      type: object
+      required: [eventType, ticketId]
+      properties:
+        eventType: { type: string }
+        ticketId: { type: [string, integer] }
+      additionalProperties: true
+
+  responses:
+    Unauthorized:
+      description: Bad or missing x-agent-key
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AgentError' }
+          example: { error: unauthorized }
+    AgentDisabled:
+      description: AGENT_API_KEY is not configured on the Function App — the whole agent API is off
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AgentError' }
+          example: { error: agent_api_disabled, detail: AGENT_API_KEY is not configured }
+    TicketNotFound:
+      description: No such ticket
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AgentError' }
+    CorsPreflight:
+      description: CORS preflight
+
+paths:
+
+  # ───────────────────────────── agent API ─────────────────────────────
+
+  /agent/tickets:
+    get:
+      tags: [agent]
+      operationId: agentListTickets
+      summary: List tickets (summary projection, newest-modified first)
+      security: [{ agentKey: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - name: top
+          in: query
+          description: Capped at 200.
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tickets:
+                    type: array
+                    items: { $ref: '#/components/schemas/TicketSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500':
+          description: Internal error
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentError' } } }
+        '503': { $ref: '#/components/responses/AgentDisabled' }
+
+  /agent/tickets/{id}:
+    get:
+      tags: [agent]
+      operationId: agentGetTicket
+      summary: Full ticket fields plus the entire comment thread (oldest first)
+      security: [{ agentKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/TicketId' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket: { $ref: '#/components/schemas/TicketFields' }
+                  comments:
+                    type: array
+                    items: { $ref: '#/components/schemas/Comment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/TicketNotFound' }
+        '503': { $ref: '#/components/responses/AgentDisabled' }
+
+  /agent/tickets/{id}/comments:
+    post:
+      tags: [agent]
+      operationId: agentAddComment
+      summary: Add a comment
+      description: >
+        Public comments email the requester, ParticipantEmails, and prior public
+        commenters — minus the actor, minus opt-outs. Internal comments NEVER email
+        anyone regardless of `notify`. Writes an ActivityLog entry either way.
+      security: [{ agentKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/TicketId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1 }
+                isInternal: { type: boolean, default: false, description: Staff-only; never emails }
+                notify: { type: boolean, default: true, description: false suppresses email on a public comment }
+                actorLabel: { type: string, default: Automation Agent, description: Recorded as the comment author }
+                actorEmail: { type: string, format: email, description: Enables self-notification suppression }
+            examples:
+              publicReply:
+                value: { text: "Fixed the DNS entry; please confirm.", actorLabel: "Claude (fedora-server)" }
+              internalNote:
+                value: { text: "root cause: stale cache", isInternal: true }
+      responses:
+        '200':
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ticketId: { type: string }
+                  isInternal: { type: boolean }
+                  notified:
+                    type: array
+                    items: { type: string, format: email }
+                    description: Who was actually emailed, after all suppression.
+        '400':
+          description: invalid_json or missing_text
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentError' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/TicketNotFound' }
+        '503': { $ref: '#/components/responses/AgentDisabled' }
+
+  /agent/tickets/{id}/status:
+    post:
+      tags: [agent]
+      operationId: agentSetStatus
+      summary: Change ticket status
+      description: >
+        Idempotent — setting the current status returns `unchanged: true` with no
+        email and no log entry. An optional `note` is recorded as an INTERNAL comment.
+        `Cancelled` is not settable here, though the intake deduper treats it as closed.
+      security: [{ agentKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/TicketId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/Status' }
+                note: { type: string, description: Recorded as an internal comment }
+                notify: { type: boolean, default: true }
+                actorLabel: { type: string, default: Automation Agent }
+                actorEmail: { type: string, format: email }
+            example: { status: Resolved, note: "Fixed by restarting the service" }
+      responses:
+        '200':
+          description: Status changed (or already at that value)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ticketId: { type: string }
+                  oldStatus: { type: string }
+                  status: { type: string }
+                  unchanged: { type: boolean }
+                  notified: { type: array, items: { type: string, format: email } }
+        '400':
+          description: invalid_json or invalid_status (body carries the valid list)
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentError' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/TicketNotFound' }
+        '503': { $ref: '#/components/responses/AgentDisabled' }
+    patch:
+      tags: [agent]
+      operationId: agentSetStatusPatch
+      summary: Change ticket status (PATCH alias — identical to POST)
+      security: [{ agentKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/TicketId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/Status' }
+                note: { type: string }
+                notify: { type: boolean, default: true }
+                actorLabel: { type: string }
+                actorEmail: { type: string, format: email }
+      responses:
+        '200': { description: Status changed }
+
+  # ───────────────────────────── intake ─────────────────────────────
+
+  /createticket:
+    post:
+      tags: [intake]
+      operationId: createTicket
+      summary: Create a ticket (machine-to-machine intake; also the Uptime Kuma webhook)
+      description: |
+        THE create endpoint — the agent API has none. Auth is a host key (`?code=`),
+        NOT `x-agent-key`.
+
+        Creates a full-fidelity ticket app-only: auto-assigns via AutoAssignRules,
+        emails the assignee, writes an ActivityLog entry, and dedupes on `externalRef`.
+
+        Accepts EITHER a CreateTicketRequest or Uptime Kuma's native webhook body —
+        the handler sniffs `{heartbeat, monitor}` and adapts. To wire up Kuma, point a
+        Webhook notification (Request Body: "Preset - application/json") at this URL.
+      security: [{ hostKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CreateTicketRequest'
+                - $ref: '#/components/schemas/KumaWebhook'
+            examples:
+              monitoringAlert:
+                summary: Generic monitoring alert with a stable dedup ref
+                value:
+                  title: Payment terminal offline
+                  description: POS-3 has not checked in for 10 minutes.
+                  problemType: Tech
+                  priority: High
+                  location: Main Lodge
+                  source: nagios
+                  externalRef: pos3-offline
+              kumaDown:
+                summary: Uptime Kuma DOWN event (sent verbatim by Kuma)
+                value:
+                  heartbeat: { status: 0, msg: "connect ETIMEDOUT" }
+                  monitor:
+                    id: 12
+                    name: SkyPark POS
+                    hostname: pos.skypark.local
+                    tags: [{ name: Critical }]
+                  msg: "SkyPark POS is down"
+      responses:
+        '201':
+          description: Ticket created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateTicketResponse' }
+        '200':
+          description: >
+            Deduped onto an existing open ticket (`deduped: true`), or a non-DOWN Kuma
+            event that was acknowledged without creating anything (`skipped: true`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateTicketResponse' }
+              examples:
+                deduped:
+                  value: { ok: true, deduped: true, commentThrottled: false, id: "582", ticketNumber: 582, url: "https://tickets.spsvent.net/?ticket=582" }
+                kumaUp:
+                  value: { ok: true, skipped: true, reason: "uptime-kuma event is not DOWN" }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              example:
+                ok: false
+                error: validation failed
+                details: ["title is required", "problemType must be one of: Tech, Operations, …"]
+        '500': { description: 'Server not configured (SHAREPOINT_SITE_ID / TICKETS_LIST_ID unset)' }
+        '502': { description: Graph auth failed, or the SharePoint create failed }
+
+  # ───────────────────────────── notifications ─────────────────────────────
+
+  /sendemail:
+    options: { tags: [notifications], operationId: sendEmailPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [notifications]
+      operationId: sendEmail
+      summary: Send an email via Microsoft Graph from the shared mailbox
+      description: >
+        Anonymous — called by the browser SPA. Applies BOTH suppression layers:
+        self-notification (via `actorEmail`) and the NotificationOptOut list. A fully
+        suppressed send still returns 200 with `suppressed: true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, subject, htmlContent]
+              properties:
+                to:
+                  oneOf: [{ type: string }, { type: array, items: { type: string } }]
+                subject:
+                  type: string
+                  description: >
+                    Outbound subjects MUST contain "Ticket #<id>" — inbound reply
+                    polling recovers the ticket id from the subject.
+                htmlContent: { type: string }
+                actorEmail:
+                  type: string
+                  description: Recipient == actor ⇒ the send is skipped. Pass "" to force a self-email.
+      responses:
+        '200':
+          description: Sent, or deliberately suppressed
+          content:
+            application/json:
+              examples:
+                sent: { value: { success: true, message: Email sent successfully } }
+                self: { value: { success: true, suppressed: true, message: Recipient is the actor } }
+                optOut: { value: { success: true, suppressed: true, message: All recipients opted out of notifications } }
+        '400': { description: 'Missing required fields: to, subject, htmlContent' }
+        '500': { description: Graph send failed }
+
+  /sendteamsnotification:
+    options: { tags: [notifications], operationId: sendTeamsPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [notifications]
+      operationId: sendTeamsNotification
+      summary: Post an Adaptive Card to a Teams channel via Bot Framework
+      description: >
+        Uses Bot Framework proactive messaging, not Graph — Graph requires a user
+        context. The Help Desk Teams app must be installed in the target Team or the
+        bot is "not part of the conversation roster".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, channelId, card]
+              properties:
+                teamId: { type: string }
+                channelId: { type: string }
+                card: { type: object, description: Adaptive Card payload }
+      responses:
+        '200': { description: Teams notification sent }
+        '400': { description: Missing required fields }
+        '500': { description: Bot Framework send failed }
+
+  # ───────────────────────────── approvals ─────────────────────────────
+
+  /sendapprovalrequest:
+    options: { tags: [approvals], operationId: sendApprovalRequestPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [approvals]
+      operationId: sendApprovalRequest
+      summary: Mint and email a one-click approval request for a ticket
+      description: >
+        Expands the GeneralManagers group and drops the requester. If that empties the
+        list, returns `note: "self_only"` and sends nothing — the item stays Pending.
+      security: [{ hostKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticketId]
+              properties:
+                ticketId: { type: integer }
+                requesterName: { type: string }
+      responses:
+        '200': { description: 'Sent, or note: self_only (nothing sent — the only approver was the requester)' }
+        '400': { description: Invalid or missing ticketId }
+
+  /sendpurchaseapprovalrequest:
+    options: { tags: [approvals], operationId: sendPurchaseApprovalRequestPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [approvals]
+      operationId: sendPurchaseApprovalRequest
+      summary: Mint and email a one-click approval request for a purchase request
+      security: [{ hostKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purchaseId]
+              properties:
+                purchaseId: { type: integer }
+                requesterName: { type: string }
+      responses:
+        '200': { description: 'Sent, or note: self_only (nothing sent — the only approver was the requester)' }
+        '400': { description: Invalid or missing purchaseId }
+
+  /sendcdwapprovalrequest:
+    options: { tags: [approvals], operationId: sendCdwApprovalRequestPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [approvals]
+      operationId: sendCdwApprovalRequest
+      summary: Mint and email a one-click approval request for a CDW brief
+      security: [{ hostKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cdwId]
+              properties:
+                cdwId: { type: integer }
+                requesterName: { type: string }
+      responses:
+        '200': { description: 'Sent, or note: self_only (nothing sent — the only approver was the requester)' }
+        '400': { description: Invalid or missing cdwId }
+
+  /approvalaction:
+    options: { tags: [approvals], operationId: approvalActionPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    get:
+      tags: [approvals]
+      operationId: approvalActionPreview
+      summary: Preview a ticket approval decision (does not commit)
+      security: [{ approvalToken: [] }]
+      responses:
+        '200': { description: Decision preview }
+        '400': { description: 'malformed | bad_signature | expired | wrong_entity | bad_action' }
+    post:
+      tags: [approvals]
+      operationId: approvalActionCommit
+      summary: Commit a ticket approval decision
+      description: >
+        Optimistic concurrency on the item ETag — two approvers clicking at once
+        produce one decision and one 409, never a silent last-write-wins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                note: { type: string, description: Required when the action is `changes`. }
+      responses:
+        '200':
+          description: Decision committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalActionResult' } } }
+        '400':
+          description: 'Bad token, bad action, or note_required'
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalActionResult' } } }
+        '409': { description: Already decided, or ETag race (`conflict_retry`) }
+        '500': { description: server_error }
+
+  /purchaseapprovalaction:
+    options: { tags: [approvals], operationId: purchaseApprovalActionPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    get:
+      tags: [approvals]
+      operationId: purchaseApprovalActionPreview
+      summary: Preview a purchase approval decision (does not commit)
+      security: [{ approvalToken: [] }]
+      responses:
+        '200': { description: Decision preview }
+        '400': { description: Bad token or action }
+    post:
+      tags: [approvals]
+      operationId: purchaseApprovalActionCommit
+      summary: Commit a purchase approval decision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties: { token: { type: string }, note: { type: string } }
+      responses:
+        '200':
+          description: Decision committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalActionResult' } } }
+        '400': { description: Bad token, bad action, or note_required }
+        '409': { description: Already decided, or ETag race }
+        '500': { description: server_error or purchase_list_not_configured }
+
+  /cdwapprovalaction:
+    options: { tags: [approvals], operationId: cdwApprovalActionPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    get:
+      tags: [approvals]
+      operationId: cdwApprovalActionPreview
+      summary: Preview a CDW approval decision (does not commit)
+      security: [{ approvalToken: [] }]
+      responses:
+        '200': { description: Decision preview }
+        '400': { description: Bad token or action }
+    post:
+      tags: [approvals]
+      operationId: cdwApprovalActionCommit
+      summary: Commit a CDW approval decision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties: { token: { type: string }, note: { type: string } }
+      responses:
+        '200':
+          description: Decision committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalActionResult' } } }
+        '400': { description: Bad token, bad action, or note_required }
+        '409': { description: Already decided, or ETag race }
+        '500': { description: server_error or cdw_list_not_configured }
+
+  # ───────────────────────────── sync ─────────────────────────────
+
+  /synctotodo:
+    options: { tags: [sync], operationId: syncToTodoPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [sync]
+      operationId: syncToTodo
+      summary: Mirror a ticket into Microsoft To Do
+      description: >
+        One-directional (Help Desk → To Do). Only tickets with ProblemType "Tech" AND
+        an assignee are mirrored. Frontend kill switch: NEXT_PUBLIC_TODO_SYNC_ENABLED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SyncRequest'
+                - type: object
+                  properties:
+                    eventType:
+                      type: string
+                      enum: [ticket_created, ticket_updated, ticket_recategorized]
+      responses:
+        '200': { description: Synced }
+        '400': { description: Missing eventType/ticketId, or unknown eventType }
+        '500': { description: 'To Do sync not configured, or the sync failed' }
+
+  /synctovikunja:
+    options: { tags: [sync], operationId: syncToVikunjaPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [sync]
+      operationId: syncToVikunja
+      summary: Mirror a ticket into Vikunja
+      description: 'Frontend kill switch: NEXT_PUBLIC_VIKUNJA_SYNC_ENABLED.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SyncRequest'
+                - type: object
+                  properties:
+                    eventType:
+                      type: string
+                      enum: [ticket_created, ticket_updated, ticket_resolved, ticket_recategorized, comment_added]
+      responses:
+        '200': { description: Synced }
+        '400': { description: Missing eventType/ticketId, or unknown eventType }
+        '500': { description: 'Vikunja configuration not set, or the sync failed' }
+
+  /vikunjawebhook:
+    options: { tags: [sync], operationId: vikunjaWebhookPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [sync]
+      operationId: vikunjaWebhook
+      summary: Vikunja → Help Desk reverse sync
+      description: >
+        Anonymous but HMAC-verified via the X-Vikunja-Signature header against
+        VIKUNJA_WEBHOOK_SECRET. Unmapped or paused tasks are skipped cleanly with 200,
+        not treated as errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_name, data]
+              properties:
+                event_name: { type: string, enum: [task.updated, task.comment.created] }
+                time: { type: string, format: date-time }
+                data:
+                  type: object
+                  properties:
+                    task: { type: object }
+                    doer: { type: object }
+                    comment: { type: object }
+      responses:
+        '200':
+          description: Processed, or skipped
+          content:
+            application/json:
+              example: { success: true, action: skipped, reason: no_mapping }
+        '400': { description: Missing event or data }
+        '401': { description: Invalid webhook signature }
+        '500': { description: Webhook processing failed }
+
+  # ───────────────────────────── media ─────────────────────────────
+
+  /convertheic:
+    options: { tags: [media], operationId: convertHeicPreflight, responses: { '204': { $ref: '#/components/responses/CorsPreflight' } } }
+    post:
+      tags: [media]
+      operationId: convertHeic
+      summary: Convert HEIC bytes to JPEG
+      description: >
+        Stateless. Deliberately has NO SharePoint/Graph access — the SPA stores the
+        returned JPEG itself using the caller's own token, so this endpoint never
+        touches tenant data. Host-key gated because WASM decode is CPU/memory heavy;
+        input is size-capped and magic-byte sniffed.
+      security: [{ hostKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: JPEG bytes
+          content: { image/jpeg: { schema: { type: string, format: binary } } }
+        '400':
+          description: 'unreadable_body | not_heic | invalid input'
+          content: { application/json: { example: { ok: false, reason: not_heic } } }
+        '413': { description: Over the size cap }
+        '500': { description: convert_failed }
+
+  # ───────────────────────────── ops (manual timer triggers) ─────────────────────────────
+
+  /runescalationcheck:
+    get:
+      tags: [ops]
+      operationId: runEscalationCheck
+      summary: Run the escalation sweep now (normally hourly, `0 0 * * * *`)
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Sweep result }
+        '500': { description: Sweep failed }
+    post:
+      tags: [ops]
+      operationId: runEscalationCheckPost
+      summary: (POST alias) Run the escalation sweep now (normally hourly, `0 0 * * * *`)
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Sweep result }
+        '500': { description: Sweep failed }
+    
+
+  /runautocloserecovered:
+    get:
+      tags: [ops]
+      operationId: runAutoCloseRecovered
+      summary: Run the Uptime Kuma auto-close sweep now (normally hourly)
+      description: >
+        Closes tickets whose Kuma monitor recovered and held for
+        KUMA_AUTO_CLOSE_MINUTES (default 60), only while status is still "New" and no
+        human has commented. Nobody is emailed. Set the var to 0 to disable.
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Sweep result }
+        '500': { description: Sweep failed }
+    post:
+      tags: [ops]
+      operationId: runAutoCloseRecoveredPost
+      summary: (POST alias) Run the Uptime Kuma auto-close sweep now (normally hourly)
+      description: >
+        Closes tickets whose Kuma monitor recovered and held for
+        KUMA_AUTO_CLOSE_MINUTES (default 60), only while status is still "New" and no
+        human has commented. Nobody is emailed. Set the var to 0 to disable.
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Sweep result }
+        '500': { description: Sweep failed }
+    
+
+  /runinboundpoll:
+    get:
+      tags: [ops]
+      operationId: runInboundPoll
+      summary: Poll the support mailbox now (normally every 2 minutes)
+      description: >
+        Turns email replies into ticket comments. The ticket id is recovered from the
+        subject via /Ticket #(\d+)/i, so outbound subjects must keep that token.
+        Auto-replies and OOO are detected and dropped. Kill switch: INBOUND_POLL_DISABLED.
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Poll result }
+    post:
+      tags: [ops]
+      operationId: runInboundPollPost
+      summary: (POST alias) Poll the support mailbox now (normally every 2 minutes)
+      description: >
+        Turns email replies into ticket comments. The ticket id is recovered from the
+        subject via /Ticket #(\d+)/i, so outbound subjects must keep that token.
+        Auto-replies and OOO are detected and dropped. Kill switch: INBOUND_POLL_DISABLED.
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Poll result }
+    
+
+  /runpurchasereminders:
+    get:
+      tags: [ops]
+      operationId: runPurchaseReminders
+      summary: Send purchase reminders now (normally daily at 16:00 UTC)
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Reminder run result }
+        '500': { description: Run failed }
+    post:
+      tags: [ops]
+      operationId: runPurchaseRemindersPost
+      summary: (POST alias) Send purchase reminders now (normally daily at 16:00 UTC)
+      security: [{ hostKey: [] }]
+      responses:
+        '200': { description: Reminder run result }
+        '500': { description: Run failed }
+    

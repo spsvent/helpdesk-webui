@@ -2318,6 +2318,38 @@ const helpSections: HelpSection[] = [
             <code className="bg-blue-100 px-1 rounded">DEPLOYMENT.md</code> file in the repository.
           </p>
         </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Connecting Another System to the Help Desk</h4>
+        <p>
+          If you want a monitoring tool, script, or automation to file tickets, post
+          comments, or close tickets on its own, everything it needs is documented in{" "}
+          <code className="bg-gray-100 px-1 rounded">docs/INTEGRATION.md</code> in the
+          repository — every endpoint, the keys each one requires, the SharePoint
+          columns, and the limits. <code className="bg-gray-100 px-1 rounded">docs/openapi.yaml</code>{" "}
+          is the same information in machine-readable form.
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-4 mt-3">
+          <li>
+            <strong>Uptime Kuma</strong> needs no custom script — point a Webhook
+            notification at the ticket-intake endpoint and it handles the rest
+            (see <em>Automatic Monitoring Tickets</em> above)
+          </li>
+          <li>
+            <strong>Headless agents and cron jobs</strong> should use the command-line
+            tool in <code className="bg-gray-100 px-1 rounded">tools/helpdesk-agent/</code>{" "}
+            rather than writing to SharePoint directly — writing directly skips the
+            email notifications and the activity log
+          </li>
+        </ul>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Ticket creation and the agent API use{" "}
+            <strong>different keys</strong>. Reading, commenting, and changing status use
+            the agent key; creating a ticket uses an Azure Functions host key. The
+            integration guide explains which is which.
+          </p>
+        </div>
       </div>
     ),
   },
