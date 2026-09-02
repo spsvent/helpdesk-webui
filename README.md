@@ -2,6 +2,13 @@
 
 A React/Next.js web application for viewing and managing helpdesk tickets stored in SharePoint Online.
 
+> **Integrating with the ticketing system rather than editing the UI?**
+> See **[`docs/INTEGRATION.md`](docs/INTEGRATION.md)** — every endpoint, auth scheme,
+> webhook, SharePoint list, enum, environment variable, and known limit, with
+> **[`docs/openapi.yaml`](docs/openapi.yaml)** as the machine-readable companion.
+> Headless agents and scripts should use [`tools/helpdesk-agent/`](tools/helpdesk-agent/)
+> (CLI + MCP server) instead of hand-rolled HTTP or raw Graph writes.
+
 ## Architecture Overview
 
 ```
