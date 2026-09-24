@@ -23,11 +23,6 @@ const {
 // (host key, Uptime Kuma payloads, externalRef dedup, Problem-only). Keeping
 // them apart avoids risking the alerting path on a web-form change.
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": config.appUrl,
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -58,21 +53,20 @@ async function findSiteUserId(client, email) {
 }
 
 /**
- * Is this caller an admin? Resolved server-side ONLY — a client-supplied flag
- * would let anyone auto-approve their own Request ticket.
+ * Is this caller a General Manager? Only GMs auto-approve their own Requests —
+ * app admins who aren't GMs wait at Pending like everyone else. Resolved
+ * server-side ONLY: a client-supplied flag would let anyone self-approve.
  * Errors resolve to false: failing closed leaves the request at Pending, which
  * is recoverable, whereas failing open would silently approve it.
  */
-async function resolveIsAdmin(client, email) {
+async function resolveIsGeneralManager(client, email) {
   const lower = (email || "").toLowerCase();
-  if (!lower) return false;
-  if (ADMIN_EMAILS.includes(lower)) return true;
-  if (!config.generalManagersGroupId) return false;
+  if (!lower || !config.generalManagersGroupId) return false;
   try {
     const members = await getGroupMembers(client, config.generalManagersGroupId);
     return (members || []).some((m) => (m.email || "").toLowerCase() === lower);
   } catch (e) {
-    console.error("resolveIsAdmin failed, treating as non-admin:", e.message);
+    console.error("resolveIsGeneralManager failed, treating as non-GM:", e.message);
     return false;
   }
 }
@@ -137,16 +131,16 @@ app.http("createUserTicket", {
       };
     }
 
-    const isAdmin = await resolveIsAdmin(client, actor.email);
+    const isGeneralManager = await resolveIsGeneralManager(client, actor.email);
     const requesterSiteUserId = await findSiteUserId(client, actor.email);
     // Same person, so the approver lookup is the requester lookup.
-    const adminSiteUserId = isAdmin ? requesterSiteUserId : null;
+    const adminSiteUserId = isGeneralManager ? requesterSiteUserId : null;
 
     const fields = buildWebTicketFields(
       value,
       actor,
       { requesterSiteUserId, adminSiteUserId },
-      isAdmin,
+      isGeneralManager,
       new Date().toISOString()
     );
 
@@ -184,7 +178,7 @@ app.http("createUserTicket", {
     }
 
     context.log(
-      `createUserTicket: #${created.id} by ${actor.email} (${value.category}/${value.problemType}, admin=${isAdmin})`
+      `createUserTicket: #${created.id} by ${actor.email} (${value.category}/${value.problemType}, gm=${isGeneralManager})`
     );
 
     return { status: 201, headers: corsHeaders, jsonBody: { ok: true, id: created.id, item } };

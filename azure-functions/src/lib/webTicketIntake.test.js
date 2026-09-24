@@ -67,7 +67,7 @@ test("records the real submitter in OriginalRequester (Author is the app identit
   assert.equal(fields.OriginalRequester, ACTOR.email);
 });
 
-test("non-admin Request waits at Pending", () => {
+test("non-GM Request (including non-GM admins) waits at Pending", () => {
   const { value } = validateWebTicketInput({ ...validBody, category: "Request" });
   const fields = buildWebTicketFields(
     value,
@@ -82,7 +82,7 @@ test("non-admin Request waits at Pending", () => {
   assert.ok(!("ApprovedByEmail" in fields));
 });
 
-test("admin Request is auto-approved with the approver mirrored to text columns", () => {
+test("GM Request is auto-approved with the approver mirrored to text columns", () => {
   const { value } = validateWebTicketInput({ ...validBody, category: "Request" });
   const fields = buildWebTicketFields(
     value,
@@ -107,9 +107,9 @@ test("Problem tickets get no approval fields at all", () => {
 test("a Request is never created with ApprovalStatus None", () => {
   // #607's signature — unreachable through the app, so it proves a direct
   // SharePoint write. Guard both admin and non-admin paths.
-  for (const isAdmin of [true, false]) {
+  for (const isGeneralManager of [true, false]) {
     const { value } = validateWebTicketInput({ ...validBody, category: "Request" });
-    const fields = buildWebTicketFields(value, ACTOR, NO_LOOKUPS, isAdmin, NOW);
+    const fields = buildWebTicketFields(value, ACTOR, NO_LOOKUPS, isGeneralManager, NOW);
     assert.notEqual(fields.ApprovalStatus, "None");
     assert.ok(["Approved", "Pending"].includes(fields.ApprovalStatus));
   }

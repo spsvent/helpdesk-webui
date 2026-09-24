@@ -13,7 +13,7 @@ import { saveDraft, loadDraft, clearDraft } from "@/lib/formDraft";
 import { ensureFreshToken } from "@/lib/authActions";
 import { useRBAC } from "@/contexts/RBACContext";
 import { creatableModules } from "@/shared/formModules";
-import { sendNewTicketEmail, sendApprovalRequestEmail } from "@/lib/emailService";
+import { sendNewTicketEmail, sendApprovalRequestEmail, getApproverEmails } from "@/lib/emailService";
 import { sendNewTicketTeamsNotification } from "@/lib/teamsService";
 import { syncTicketCreated } from "@/lib/vikunjaSyncService";
 import { syncTodoCreated } from "@/lib/todoSyncService";
@@ -49,7 +49,6 @@ export default function NewTicketPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const { permissions } = useRBAC();
-  const isAdmin = permissions?.role === "admin";
   // When purchases are available to this user, Requests get a pointer to the
   // dedicated Purchase Request form (same gating as the "+ New" menu).
   const purchaseHref =
@@ -381,14 +380,21 @@ export default function NewTicketPage() {
       }
 
       // Build options for ticket creation. Approval only applies to Request
-      // tickets; admin-created Requests are auto-approved by the creator.
+      // tickets; only General Managers auto-approve their own Requests — admins
+      // who aren't GMs go to Pending like everyone else. A failed lookup yields
+      // [] → not a GM → Pending, which fails safe.
+      const isGeneralManager =
+        formData.category === "Request" &&
+        (await getApproverEmails(client)).some(
+          (e) => !!requesterEmail && e.toLowerCase() === requesterEmail.toLowerCase()
+        );
       const createOptions: CreateTicketOptions = {
-        isAdmin,
+        isGeneralManager,
         creatorEmail: requesterEmail,
         creatorName: accounts[0]?.name,
         // Enable the server-side create path (see createTicketViaFunction).
-        // isAdmin above is still passed for the direct-write fallback; the
-        // function ignores it and resolves admin status itself.
+        // isGeneralManager above is only used by the direct-write fallback; the
+        // function ignores it and resolves GM membership itself.
         msalInstance: instance,
         account: accounts[0],
       };
@@ -478,8 +484,9 @@ export default function NewTicketPage() {
         );
       }
 
-      // 5. For Request tickets, send approval notification
-      if (formData.category === "Request") {
+      // 5. For Request tickets awaiting a decision, send approval notification
+      // (a GM's own Request is auto-approved, so there's nothing to ask for)
+      if (formData.category === "Request" && newTicket.approvalStatus === "Pending") {
         postCreationTasks.push(
           (async () => {
             try {
