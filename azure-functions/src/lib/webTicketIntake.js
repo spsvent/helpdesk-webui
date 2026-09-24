@@ -84,17 +84,17 @@ function validateWebTicketInput(body) {
  * Build the SharePoint field bag for a web-form ticket.
  *
  * Mirrors the field set the SPA used to write directly, so existing tickets and
- * new ones stay indistinguishable downstream. `isAdmin` MUST be resolved
- * server-side from the caller's group membership — trusting a client-supplied
+ * new ones stay indistinguishable downstream. `isGeneralManager` MUST be
+ * resolved server-side from the caller's group membership — trusting a client-supplied
  * flag would let anyone self-approve their own Request.
  *
  * @param {object} value       validated input from validateWebTicketInput
  * @param {object} actor       { email, name } from the EasyAuth principal
  * @param {object} lookups     { requesterSiteUserId, adminSiteUserId } (may be null)
- * @param {boolean} isAdmin    server-resolved admin status of `actor`
+ * @param {boolean} isGeneralManager  server-resolved GM-group membership of `actor`
  * @param {string} nowIso      timestamp to stamp approval dates with
  */
-function buildWebTicketFields(value, actor, lookups, isAdmin, nowIso) {
+function buildWebTicketFields(value, actor, lookups, isGeneralManager, nowIso) {
   const fields = {
     Title: value.title,
     Description: value.description,
@@ -121,10 +121,10 @@ function buildWebTicketFields(value, actor, lookups, isAdmin, nowIso) {
   if (lookups.requesterSiteUserId) fields.RequesterLookupId = lookups.requesterSiteUserId;
 
   // Approval applies to Request tickets ONLY — Problem tickets keep the "None"
-  // default. Request by admin is auto-approved (they are the approver of
-  // record); by anyone else it waits at Pending.
+  // default. Request by a GM is auto-approved (they are the approver of
+  // record); by anyone else — including non-GM admins — it waits at Pending.
   if (value.category === "Request") {
-    if (isAdmin && actor.email) {
+    if (isGeneralManager && actor.email) {
       fields.ApprovalStatus = "Approved";
       fields.ApprovalDate = nowIso;
       if (lookups.adminSiteUserId) fields.ApprovedByLookupId = lookups.adminSiteUserId;

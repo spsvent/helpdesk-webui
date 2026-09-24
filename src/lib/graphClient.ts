@@ -422,7 +422,9 @@ export interface CreateTicketData {
 
 // Options for ticket creation (creator info for auto-approval)
 export interface CreateTicketOptions {
-  isAdmin?: boolean;
+  /** Creator is in the General Managers group. Only GMs auto-approve their own
+   *  Requests — app admins who aren't GMs still need a GM's approval. */
+  isGeneralManager?: boolean;
   creatorEmail?: string;
   /** Creator's display name — mirrored into ApprovedByName on admin auto-approval
    *  so the approver resolves in the UI (person fields aren't expanded on read). */
@@ -444,8 +446,8 @@ export interface CreateTicketOptions {
  *
  * The endpoint is EasyAuth-protected, so we send a bearer token for the Function
  * App's exposed scope; EasyAuth validates it and hands the function a trusted
- * principal. Note `isAdmin` is deliberately NOT sent — the function resolves it
- * from group membership, since a client-supplied flag would let anyone
+ * principal. Note `isGeneralManager` is deliberately NOT sent — the function
+ * resolves it from group membership, since a client-supplied flag would let anyone
  * auto-approve their own Request.
  */
 async function createTicketViaFunction(
@@ -552,10 +554,10 @@ export async function createTicket(
 
   // Approval workflow applies to Request tickets ONLY — Problem tickets have no
   // approval step, so their ApprovalStatus stays at the "None" default.
-  // - Request by admin:     auto-approved (the admin is the approver of record)
-  // - Request by non-admin: requires manager approval (Pending)
+  // - Request by a GM:     auto-approved (the GM is the approver of record)
+  // - Request by anyone else, including non-GM admins: Pending until a GM decides
   if (ticketData.category === "Request") {
-    if (options?.isAdmin && options?.creatorEmail) {
+    if (options?.isGeneralManager && options?.creatorEmail) {
       fields.ApprovalStatus = "Approved";
       fields.ApprovalDate = new Date().toISOString();
       const adminSiteUserId = await getSiteUserId(client, options.creatorEmail);

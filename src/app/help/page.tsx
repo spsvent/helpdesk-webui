@@ -1093,6 +1093,26 @@ const helpSections: HelpSection[] = [
           </div>
         </div>
 
+        <h4 className="font-semibold text-text-primary mt-6">New Request Tickets</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Filed by a General Manager:</strong> approved automatically, with the GM
+            recorded as the approver.
+          </li>
+          <li>
+            <strong>Filed by anyone else — including app admins who aren&apos;t GMs:</strong> starts
+            as <strong>Pending Approval</strong> and the General Managers are emailed to approve,
+            deny, or request changes.
+          </li>
+        </ul>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Admins:</strong> being an app admin no longer approves your own Requests. If
+            you aren&apos;t in the General Managers group, a GM must approve them.
+          </p>
+        </div>
+
         <h4 className="font-semibold text-text-primary mt-6">For Support Staff: Requesting Approval</h4>
         <ol className="list-decimal list-inside space-y-2 ml-4">
           <li>Open a ticket you have permission to edit</li>
