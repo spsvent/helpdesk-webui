@@ -158,6 +158,12 @@ const helpSections: HelpSection[] = [
           from SharePoint, bypassing any in-memory cache. The icon spins while the refresh is in
           progress.
         </p>
+        <p className="mt-2">
+          All active tickets are loaded, even when the ticket history is large.
+          Active tickets remain available regardless of age; use Load archived tickets for resolved
+          or closed tickets created more than 90 days ago. Your permissions and selected
+          filters still determine which tickets appear.
+        </p>
 
         <h4 className="font-semibold text-text-primary mt-6">
           Switching Color Modes

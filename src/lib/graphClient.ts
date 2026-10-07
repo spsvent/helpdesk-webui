@@ -250,9 +250,15 @@ async function getAllTicketsCached(client: Client): Promise<Ticket[]> {
     return ticketsCache.data;
   }
 
-  const endpoint = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
-  const response: SharePointListResponse = await client.api(endpoint).get();
-  const allTickets = response.value.map(mapToTicket);
+  let endpoint: string | undefined = `/sites/${SITE_ID}/lists/${TICKETS_LIST_ID}/items?$expand=fields&$top=500&$orderby=createdDateTime desc`;
+  const allTickets: Ticket[] = [];
+  // $top is a page size, not a guarantee that all tickets were returned.
+  // Follow Graph's continuation URLs before filtering or caching the list.
+  while (endpoint) {
+    const response: SharePointListResponse = await client.api(endpoint).get();
+    allTickets.push(...response.value.map(mapToTicket));
+    endpoint = response["@odata.nextLink"];
+  }
 
   ticketsCache = { data: allTickets, timestamp: now };
   return allTickets;
