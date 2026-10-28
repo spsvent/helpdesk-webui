@@ -21,6 +21,7 @@ export const LOCATION_OPTIONS = [
   "Gingerbread House Bakery",
   "Grounds Office",
   "Kringle's Coffee & Gifts",
+  "Last Stop Shop (Exit Shop)",
   "Magic Tree Bouldering Room",
   "Merry Moments Photo Shoppe",
   "Park Wide",
@@ -54,4 +55,21 @@ export type Location = typeof LOCATION_OPTIONS[number];
 
 export function getLocations(): readonly string[] {
   return LOCATION_OPTIONS;
+}
+
+// Locations that always sit at the bottom of the dropdown, in this order.
+const PINNED_LAST = ["Other", "N/A"];
+
+/** Merge built-in and admin-added locations: A–Z, de-duplicated, "Other"/"N/A" last. */
+export function mergeLocations(custom: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const named: string[] = [];
+  for (const name of [...LOCATION_OPTIONS, ...custom]) {
+    const key = name.trim().toLowerCase();
+    if (!key || seen.has(key) || PINNED_LAST.some((p) => p.toLowerCase() === key)) continue;
+    seen.add(key);
+    named.push(name.trim());
+  }
+  named.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...named, ...PINNED_LAST];
 }
