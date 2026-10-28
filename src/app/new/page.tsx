@@ -42,7 +42,8 @@ const PRIORITY_OPTIONS = [
   { value: "Urgent", label: "Urgent", description: "Drop everything - full company resources, critical business impact" },
 ] as const;
 
-import { LOCATION_OPTIONS } from "@/lib/locationConfig";
+import { mergeLocations } from "@/lib/locationConfig";
+import { fetchAllLocations } from "@/lib/locationService";
 
 export default function NewTicketPage() {
   const router = useRouter();
@@ -158,6 +159,12 @@ export default function NewTicketPage() {
     }
     return null;
   }, [instance, accounts]);
+
+  // Built-in locations plus any admins added in Settings → Locations
+  const [locationOptions, setLocationOptions] = useState<string[]>(() => mergeLocations([]));
+  useEffect(() => {
+    if (graphClient) fetchAllLocations(graphClient).then(setLocationOptions);
+  }, [graphClient]);
 
   // Pre-fetch auto-assign config on mount (avoid fetch during submit)
   const [autoAssignConfig, setAutoAssignConfig] = useState<Awaited<ReturnType<typeof fetchAutoAssignConfig>> | null>(null);
@@ -1074,7 +1081,7 @@ export default function NewTicketPage() {
                   className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
                 >
                   <option value="">Select a location...</option>
-                  {LOCATION_OPTIONS.map((opt) => (
+                  {locationOptions.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}
                     </option>

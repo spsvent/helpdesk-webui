@@ -1863,6 +1863,26 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "admin-locations",
+    title: "Adding Locations (Admin)",
+    content: (
+      <div className="space-y-4">
+        <p className="text-text-secondary">
+          The <strong>Location</strong> dropdown on the new ticket form can be extended without a code change.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-text-secondary">
+          <li>Go to <strong>Settings → Locations</strong> (admins only).</li>
+          <li>Type the new location name and click <strong>Add Location</strong>.</li>
+          <li>It shows up in the ticket form dropdown, sorted A–Z with the built-in locations ("Other" and "N/A" stay last).</li>
+          <li>Use <strong>Remove</strong> to take an added location out of the dropdown. Existing tickets keep their location.</li>
+        </ol>
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          Built-in locations are listed on the same tab but can only be changed in code.
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "notification-optout",
     title: "Notification Opt-Out (Admin)",
     content: (
@@ -3751,6 +3771,7 @@ const helpCategories: {
       "merging-tickets",
       "admin-rbac",
       "notification-optout",
+      "admin-locations",
       "admin-deployment",
       "admin-teams-config",
       "vikunja-sync",
