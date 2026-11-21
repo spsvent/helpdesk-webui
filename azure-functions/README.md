@@ -4,7 +4,7 @@ Azure Functions for the Help Desk app — notifications, ticket intake, approval
 escalations, inbound mail, and task-manager sync.
 
 > **Full API reference:** [`../docs/INTEGRATION.md`](../docs/INTEGRATION.md) documents
-> all 25 functions (21 HTTP + 4 timers), their auth schemes, request/response shapes,
+> all 28 functions (23 HTTP + 5 timers), their auth schemes, request/response shapes,
 > and every environment variable. [`../docs/openapi.yaml`](../docs/openapi.yaml) is the
 > machine-readable spec. The sections below cover a subset — the doc is authoritative.
 >

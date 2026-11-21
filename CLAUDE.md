@@ -3,7 +3,7 @@
 ## ⇢ Integrating with the ticketing system? Start here
 
 **[`docs/INTEGRATION.md`](docs/INTEGRATION.md)** is the single source of truth for the
-entire external surface: all 25 Functions (21 HTTP + 4 timers), the three auth
+entire external surface: all 28 Functions (23 HTTP + 5 timers), the three auth
 schemes, the Uptime Kuma webhook, email-first approvals, notification suppression
 rules, every SharePoint list and enum, and the known limits.
 **[`docs/openapi.yaml`](docs/openapi.yaml)** is the machine-readable companion.
@@ -284,6 +284,13 @@ The three approval-request functions (`sendApprovalRequest`, `sendPurchaseApprov
 > `NEXT_PUBLIC_FUNCTION_API_SCOPE`; with either unset the SPA falls back to writing to
 > the list directly. Full cutover steps: `docs/ticket-creation-lockdown.md`.
 
+#### For the Weekly Digest (weeklyDigest)
+| Variable | Description |
+|----------|-------------|
+| `WEEKLY_DIGEST_RECIPIENTS` | Who gets the Tuesday 10 AM (Pacific) summary and which queue addresses each one watches: `person@x.com=queue@x.com;queue2@x.com,other@x.com`. Unset = timer is a no-op. Manual run: `GET /api/runweeklydigest?code=<host key>&dryRun=1&html=1`. |
+
+> The timer fires at 17:00 **and** 18:00 UTC on Tuesdays and the code keeps whichever is 10 AM in Los Angeles (Flex Consumption on Linux can't take `WEBSITE_TIME_ZONE`). Purchase "changes" come from each request's own event dates, never `Modified` — `purchaseReminders` re-stamps `Modified` daily.
+
 #### For the Agent API (agentApi)
 | Variable | Description |
 |----------|-------------|
@@ -362,14 +369,14 @@ func azure functionapp publish helpdesk-notify-func --javascript --build remote
 
 ```bash
 func azure functionapp list-functions helpdesk-notify-func
-# Expect 25 functions (21 httpTrigger + 4 timerTrigger). Zero or a short list = broken deploy.
+# Expect 28 functions (23 httpTrigger + 5 timerTrigger). Zero or a short list = broken deploy.
 curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
   https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail
 # Expect 204. A 404 means the app has no functions loaded.
 ```
 
 Timer triggers (`checkEscalations`, `purchaseReminders`, `pollInboundReplies`,
-`autoCloseRecovered`) fail silently when a deploy breaks — nothing 404s visibly, the
+`autoCloseRecovered`, `weeklyDigest`) fail silently when a deploy breaks — nothing 404s visibly, the
 scheduled work just never runs. Always check the full list, not just one endpoint.
 
 ### Testing Functions Manually
