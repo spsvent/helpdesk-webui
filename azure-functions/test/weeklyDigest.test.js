@@ -123,6 +123,9 @@ test("buildTicketDigest: mine vs queue vs closed-this-week; others' and stale-cl
     { id: "10", Title: "old closed, thank-you comment", Status: "Closed", OriginalAssignedTo: "me@x.com" },
     { id: "11", Title: "Kuma resolved by a person", Status: "Resolved", OriginalAssignedTo: "itav@x.com", ExternalRef: "kuma-14" },
     { id: "12", Title: "Vikunja-resolved", Status: "Resolved", OriginalAssignedTo: "me@x.com" },
+    { id: "13", Title: "old closed, category edited", Status: "Closed", OriginalAssignedTo: "me@x.com" },
+    { id: "14", Title: "old closed merge primary", Status: "Closed", OriginalAssignedTo: "me@x.com" },
+    { id: "15", Title: "merged away (secondary)", Status: "Closed", OriginalAssignedTo: "me@x.com" },
     { id: "6", Title: "closed long ago", Status: "Closed", OriginalAssignedTo: "me@x.com" },
     { id: "7", Title: "someone else", Status: "New", OriginalAssignedTo: "ops@x.com" },
     { id: "8", Title: "Kuma blip", Status: "Closed", OriginalAssignedTo: "itav@x.com", ExternalRef: "kuma-12" },
@@ -132,6 +135,9 @@ test("buildTicketDigest: mine vs queue vs closed-this-week; others' and stale-cl
     { TicketId: "2", EventType: "ticket_assigned", Title: "Assigned", Created: during },
     { TicketId: "5", EventType: "ticket_status_changed", Title: "x", Details: '{"oldStatus":"New","newStatus":"Resolved"}', Created: during },
     { TicketId: "11", EventType: "ticket_status_changed", Title: 'Status changed from "New" to "Resolved"', Created: during },
+    { TicketId: "13", EventType: "ticket_converted", Title: "Category changed", Details: '{"oldCategory":"Problem","newCategory":"Request"}', Created: during },
+    { TicketId: "14", EventType: "ticket_merged", Title: "Ticket #15 merged into #14", Details: '{"secondaryId":"15","primaryId":"14"}', Created: during },
+    { TicketId: "15", EventType: "ticket_merged", Title: "Ticket #15 merged into #14 and closed", Details: '{"secondaryId":"15","primaryId":"14"}', Created: during },
     { TicketId: "7", EventType: "ticket_status_changed", Title: "x", Created: during },
     { TicketId: "8", EventType: "StatusChanged", Title: "Ticket auto-closed after monitor recovery", Details: '{"from":"New","to":"Closed"}', Created: during },
   ];
@@ -148,7 +154,9 @@ test("buildTicketDigest: mine vs queue vs closed-this-week; others' and stale-cl
   assert.deepEqual(d.queues[0].open.map((t) => t.id), ["4", "9"]);
   // A comment on an old closed ticket isn't a closure; a person-resolved Kuma ticket
   // stays a full card; the Vikunja path closes via a Status Change comment.
-  assert.deepEqual(d.closed.map((t) => t.id), ["12", "11", "5"]);
+  // A category change or being a merge's primary isn't a closure; the merged-away
+  // secondary is.
+  assert.deepEqual(d.closed.map((t) => t.id), ["15", "12", "11", "5"]);
   assert.deepEqual(d.monitorAlerts.map((t) => t.id), ["8"], "auto-closed Kuma blips are folded");
 });
 

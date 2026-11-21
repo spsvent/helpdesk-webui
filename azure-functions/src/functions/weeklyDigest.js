@@ -207,8 +207,9 @@ app.timer("weeklyDigest", {
 });
 
 // Manual run (host key required). Ignores the Tuesday-10-AM gate but uses the same
-// window: the most recent completed Tuesday-to-Tuesday week, so a manual run
-// re-sends exactly what that Tuesday's digest contained (no de-duplication).
+// window: the most recent completed Tuesday-to-Tuesday week. It rebuilds that
+// event window from CURRENT records (assignment/status as of now, not a snapshot)
+// and is not de-duplicated against the timer — a non-dry run sends again.
 //   ?dryRun=1   build the digests, send nothing (add &html=1 to get the HTML back)
 //   ?to=email   only this configured recipient
 app.http("runWeeklyDigest", {

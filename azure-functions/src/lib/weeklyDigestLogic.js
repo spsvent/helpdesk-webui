@@ -175,17 +175,22 @@ const CLOSE_STATUS_RE = /\bto\s+"?(Resolved|Closed)"?/i;
 
 // Did this ActivityLog row move the ticket to Resolved/Closed? Status-change rows
 // carry the new status in Details (newStatus from the SPA/agent API, `to` from the
-// Kuma sweep); merges and purchase conversions close the ticket as a side effect.
+// Kuma sweep). A merge closes only the SECONDARY ticket — the same event is also
+// logged on the surviving primary. (ticket_converted is NOT a closure: the SPA logs
+// it for category changes.)
 function isClosingActivity(a) {
-  if (a.EventType === "ticket_merged" || a.EventType === "ticket_converted") return true;
-  if (a.EventType !== "ticket_status_changed" && a.EventType !== "StatusChanged") return false;
+  let d = {};
   try {
-    const d = JSON.parse(a.Details || "{}");
-    const to = d.newStatus || d.to;
-    if (to) return CLOSED_STATUSES.has(to);
+    d = JSON.parse(a.Details || "{}") || {};
   } catch {
-    // fall through to the description text
+    d = {};
   }
+  if (a.EventType === "ticket_merged") {
+    return d.secondaryId != null && String(d.secondaryId) === String(a.TicketId || "");
+  }
+  if (a.EventType !== "ticket_status_changed" && a.EventType !== "StatusChanged") return false;
+  const to = d.newStatus || d.to;
+  if (to) return CLOSED_STATUSES.has(to);
   return CLOSE_STATUS_RE.test(String(a.Title || ""));
 }
 
