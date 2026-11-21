@@ -3292,8 +3292,9 @@ const helpSections: HelpSection[] = [
       <div className="space-y-4">
         <p>
           Staff who are signed up get one email every <strong>Tuesday at 10 AM</strong>{" "}
-          (Pacific) summarizing the past 7 days. It is sent from the support desk
-          mailbox and replaces nothing — your normal ticket emails keep coming.
+          (Pacific) summarizing the week since the previous Tuesday at 10 AM. It is
+          sent from the support desk mailbox and replaces nothing — your normal
+          ticket emails keep coming.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">What&apos;s in It</h4>
@@ -3309,13 +3310,15 @@ const helpSections: HelpSection[] = [
           </li>
           <li>
             <strong>Resolved or closed this week</strong> — tickets from either list
-            that were finished during the week. Monitoring alerts that opened and
-            closed on their own are folded into a single line.
+            that were closed during the week. Monitoring alerts that Uptime Kuma
+            closed automatically after recovering are folded into a single line.
           </li>
           <li>
             <strong>Your purchase requests</strong> — requests you submitted, approved,
             ordered, received, cancelled or are on, that were approved, denied,
-            ordered, received, cancelled or messaged this week
+            ordered, received, cancelled or messaged this week. Changes recorded
+            with only a date (no time) that fall on the Tuesday itself show up in
+            the following week&apos;s email.
           </li>
         </ul>
 
@@ -3340,8 +3343,9 @@ const helpSections: HelpSection[] = [
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
           <p className="text-sm text-yellow-800">
             <strong>Note:</strong> Don&apos;t reply to the summary — replies aren&apos;t
-            read. Comment on the ticket itself. People on the Notification Opt-Out list
-            don&apos;t receive it.
+            read. Comment on the ticket itself. The summary includes internal notes, so
+            only sign up staff. People on the Notification Opt-Out list don&apos;t
+            receive it.
           </p>
         </div>
       </div>

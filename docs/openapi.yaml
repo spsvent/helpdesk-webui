@@ -965,8 +965,10 @@ paths:
       description: >
         One email per WEEKLY_DIGEST_RECIPIENTS entry: open tickets assigned to that person and
         to the queue addresses they watch, tickets closed in the last 7 days, and changes to the
-        purchase requests they are involved in. Read-only against SharePoint. Ignores the
-        Tuesday-10-AM gate the timer applies.
+        purchase requests they are involved in, for the most recent completed
+        Tuesday-10-AM-to-Tuesday-10-AM (Pacific) week. Read-only against SharePoint.
+        Ignores the Tuesday-10-AM gate the timer applies and does not de-duplicate,
+        so a non-dry run re-sends that week's digest.
       security: [{ hostKey: [] }]
       parameters:
         - { name: dryRun, in: query, required: false, schema: { type: string, enum: ["1", "true"] }, description: Build the digests but send nothing }

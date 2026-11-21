@@ -580,7 +580,7 @@ deploy — see §11.
 | `autoCloseRecovered` | `0 0 * * * *` (hourly) | Closes recovered Kuma tickets (§4) | `KUMA_AUTO_CLOSE_MINUTES=0` |
 | `pollInboundReplies` | `0 */2 * * * *` (2 min) | Reads the support mailbox, turns replies into comments | `INBOUND_POLL_DISABLED` |
 | `purchaseReminders` | `0 0 16 * * *` (daily 16:00 UTC) | Nudges on stale purchase requests | — |
-| `weeklyDigest` | `0 0 17,18 * * 2` (Tue 17:00 + 18:00 UTC; code keeps the one that is 10 AM Pacific) | Per-person weekly summary: open tickets assigned to them + watched queues, closed this week, their purchase requests' changes. Read-only. | `WEEKLY_DIGEST_RECIPIENTS` unset |
+| `weeklyDigest` | `0 0 17,18 * * 2` (Tue 17:00 + 18:00 UTC; code keeps the one that is 10 AM Pacific) | Per-person weekly summary for the fixed window previous-Tue-10-AM → this-Tue-10-AM Pacific: open tickets assigned to them + watched queues, tickets closed in the window, their purchase requests' changes. Includes internal notes (staff recipients only). Read-only; no send ledger, so a manual run re-sends. | `WEEKLY_DIGEST_RECIPIENTS` unset |
 
 > ⚠️ **Timers fail silently on a broken deploy.** Nothing 404s visibly; the scheduled
 > work just never runs. Always verify the function *list*, not one endpoint.

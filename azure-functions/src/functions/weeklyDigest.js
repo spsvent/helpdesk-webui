@@ -1,11 +1,13 @@
 const { app } = require("@azure/functions");
 const { config, getGraphClient, sendMail } = require("../lib/graphHelpers");
 const { weeklyDigestEmail } = require("../lib/weeklyDigestEmail");
-const { parseRecipients, isDigestTime, buildTicketDigest, buildPurchaseDigest } = require("../lib/weeklyDigestLogic");
+const { getOptOutEmails, isSuppressed } = require("../lib/optOut");
+const { parseRecipients, isDigestTime, digestWindow, buildTicketDigest, buildPurchaseDigest } = require("../lib/weeklyDigestLogic");
 
 // Weekly personal digest — Tuesdays 10 AM Pacific.
 //
-// For each person in WEEKLY_DIGEST_RECIPIENTS, one email covering the last 7 days:
+// For each person in WEEKLY_DIGEST_RECIPIENTS, one email covering the week from the
+// previous Tuesday 10 AM to this Tuesday 10 AM (Pacific, see digestWindow):
 // their open tickets, the open tickets in queue addresses they watch, tickets in
 // either group that were resolved/closed this week, and the purchase requests they
 // are involved in that changed. All decisions live in weeklyDigestLogic.js.
@@ -17,7 +19,6 @@ const { parseRecipients, isDigestTime, buildTicketDigest, buildPurchaseDigest } 
 //   WEEKLY_DIGEST_RECIPIENTS  "person@x.com=queue@x.com;queue2@x.com,other@x.com"
 //                             Unset/empty = no digests (timer is a no-op).
 
-const WINDOW_DAYS = 7;
 const PREFER_NON_INDEXED = "HonorNonIndexedQueriesWarningMayFailRandomly";
 
 // Follow @odata.nextLink so a list over one page (Tickets is 600+) is read in full.
@@ -75,10 +76,16 @@ async function fetchPurchases(client) {
 
 // Site-user id → email, for just the addresses we care about. Older tickets only
 // carry the AssignedTo person field (AssignedToLookupId), not the email text column.
+// `failed` lists addresses whose lookup ERRORED (vs. simply not being a site user),
+// so the digest can say its lookup-only tickets may be missing instead of silently
+// dropping them.
 async function siteUserIds(client, emails) {
   const map = {};
+  const failed = [];
   for (const email of emails) {
     const esc = email.replace(/'/g, "''");
+    let errored = false;
+    let found = false;
     for (const field of ["EMail", "UserName"]) {
       try {
         const res = await client
@@ -90,14 +97,17 @@ async function siteUserIds(client, emails) {
           .get();
         if (res.value && res.value.length > 0) {
           map[String(res.value[0].id)] = email;
+          found = true;
           break;
         }
-      } catch {
-        // Unresolvable address: its lookup-only tickets just won't match.
+      } catch (e) {
+        errored = true;
+        console.warn(`weeklyDigest: site-user lookup for ${email} by ${field} failed:`, e.message);
       }
     }
+    if (!found && errored) failed.push(email);
   }
-  return map;
+  return { map, failed };
 }
 
 // options: { dryRun, includeHtml, only } — `only` limits the run to one configured
@@ -115,33 +125,39 @@ async function runWeeklyDigest(context, options = {}) {
     return { skipped: true, recipients: [] };
   }
 
-  const endMs = Date.now();
-  const startMs = endMs - WINDOW_DAYS * 86400000;
+  const nowMs = Date.now();
+  const { startMs, endMs } = digestWindow(nowMs);
   const sinceIso = new Date(startMs).toISOString().replace(/\.\d{3}Z$/, "Z");
   const client = await getGraphClient();
 
   const addresses = Array.from(new Set(recipients.flatMap((r) => [r.email, ...r.queues])));
-  const [tickets, activity, comments, purchases, siteUserEmailById] = await Promise.all([
+  const [tickets, activity, comments, purchases, siteUsers, optOut] = await Promise.all([
     fetchTickets(client),
     fetchActivitySince(client, sinceIso),
     fetchCommentsSince(client, sinceIso),
     fetchPurchases(client),
     siteUserIds(client, addresses),
+    getOptOutEmails(client),
   ]);
+  const siteUserEmailById = siteUsers.map;
   context.log(
-    `weeklyDigest: ${tickets.length} tickets, ${activity.length} activity rows, ${comments.length} comments, ${purchases.length} purchases since ${sinceIso}`
+    `weeklyDigest: ${tickets.length} tickets, ${activity.length} activity rows, ${comments.length} comments, ${purchases.length} purchases; window ${sinceIso} – ${new Date(endMs).toISOString()}`
   );
 
   const results = [];
   for (const recipient of recipients) {
+    const warnings = siteUsers.failed
+      .filter((a) => a === recipient.email || recipient.queues.includes(a))
+      .map((a) => `Couldn't look up ${a} in SharePoint, so older tickets assigned to it through the person field may be missing.`);
     const digest = {
       recipient,
       startMs,
       endMs,
+      warnings,
       tickets: buildTicketDigest({ tickets, activity, comments, recipient, siteUserEmailById, startMs, endMs }),
       purchases: buildPurchaseDigest({ purchases, email: recipient.email, startMs, endMs }),
     };
-    const { subject, html } = weeklyDigestEmail(digest, endMs);
+    const { subject, html } = weeklyDigestEmail(digest, nowMs);
     const summary = {
       email: recipient.email,
       subject,
@@ -149,10 +165,14 @@ async function runWeeklyDigest(context, options = {}) {
       queues: digest.tickets.queues.map((q) => ({ address: q.address, open: q.open.length })),
       closed: digest.tickets.closed.length,
       purchases: digest.purchases.length,
+      warnings,
+      // sent = handed to Graph for delivery. suppressed = on the NotificationOptOut
+      // list, so sendMail drops it (it returns normally either way).
       sent: false,
+      suppressed: isSuppressed(recipient.email, optOut),
     };
     if (options.includeHtml) summary.html = html;
-    if (!options.dryRun) {
+    if (!options.dryRun && !summary.suppressed) {
       try {
         await sendMail(client, recipient.email, subject, html);
         summary.sent = true;
@@ -165,7 +185,12 @@ async function runWeeklyDigest(context, options = {}) {
   }
 
   context.log("weeklyDigest: done", JSON.stringify(results.map(({ html, ...r }) => r)));
-  return { skipped: false, dryRun: Boolean(options.dryRun), recipients: results };
+  return {
+    skipped: false,
+    dryRun: Boolean(options.dryRun),
+    window: { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() },
+    recipients: results,
+  };
 }
 
 // Tuesdays at 17:00 and 18:00 UTC; isDigestTime() keeps whichever one is 10 AM in
@@ -181,14 +206,16 @@ app.timer("weeklyDigest", {
   },
 });
 
-// Manual run (host key required). Ignores the Tuesday-10-AM gate.
+// Manual run (host key required). Ignores the Tuesday-10-AM gate but uses the same
+// window: the most recent completed Tuesday-to-Tuesday week, so a manual run
+// re-sends exactly what that Tuesday's digest contained (no de-duplication).
 //   ?dryRun=1   build the digests, send nothing (add &html=1 to get the HTML back)
 //   ?to=email   only this configured recipient
 app.http("runWeeklyDigest", {
   methods: ["GET", "POST"],
   authLevel: "function",
   handler: async (request, context) => {
-    const flag = (name) => ["1", "true", "yes"].includes(String(request.query.get(name) || "").toLowerCase());
+    const flag = (name) => ["1", "true"].includes(String(request.query.get(name) || "").toLowerCase());
     try {
       const result = await runWeeklyDigest(context, {
         dryRun: flag("dryRun"),

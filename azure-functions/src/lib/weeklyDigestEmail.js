@@ -57,7 +57,7 @@ function eventList(events, recipientEmail) {
 
 function ticketRow(t, recipientEmail, nowMs) {
   const color = PRIORITY_COLORS[t.priority] || PRIORITY_COLORS.Normal;
-  const meta = [t.status, `<span style="color:${color};">${escapeHtml(t.priority)}</span>`, escapeHtml(t.department), daysOpen(t.created, nowMs)]
+  const meta = [escapeHtml(t.status), `<span style="color:${color};">${escapeHtml(t.priority)}</span>`, escapeHtml(t.department), daysOpen(t.created, nowMs)]
     .filter(Boolean)
     .join(" · ");
   return `<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:8px 0;">
@@ -104,6 +104,11 @@ function weeklyDigestEmail(digest, nowMs = Date.now()) {
   const openTotal = tickets.mine.length + queueOpen;
 
   const parts = [];
+  for (const w of digest.warnings || []) {
+    parts.push(
+      `<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:6px;padding:10px;font-size:13px;margin-bottom:8px;">${escapeHtml(w)}</div>`
+    );
+  }
   parts.push(
     `<p style="margin:0 0 8px 0;">Here's your week in the Help Desk (${escapeHtml(range)}):
       <strong>${tickets.mine.length}</strong> open ticket${tickets.mine.length === 1 ? "" : "s"} assigned to you${
@@ -133,7 +138,7 @@ function weeklyDigestEmail(digest, nowMs = Date.now()) {
 
   const alerts = tickets.monitorAlerts || [];
   const alertLine = alerts.length
-    ? `<p style="color:#6b7280;font-size:13px;margin:8px 0;">Plus ${alerts.length} monitor alert${alerts.length === 1 ? "" : "s"} that Uptime Kuma opened and auto-closed: ${alerts
+    ? `<p style="color:#6b7280;font-size:13px;margin:8px 0;">Plus ${alerts.length} monitor alert${alerts.length === 1 ? "" : "s"} that Uptime Kuma auto-closed after the monitor recovered: ${alerts
         .map((t) => `<a href="${ticketUrl(t.id)}" style="color:#6b7280;">#${escapeHtml(t.id)} ${escapeHtml(t.title)}</a>`)
         .join(", ")}.</p>`
     : "";
