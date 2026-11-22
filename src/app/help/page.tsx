@@ -3286,6 +3286,72 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "weekly-summary",
+    title: "Weekly Summary Email",
+    content: (
+      <div className="space-y-4">
+        <p>
+          Staff who are signed up get one email every <strong>Tuesday at 10 AM</strong>{" "}
+          (Pacific) summarizing the week since the previous Tuesday at 10 AM. It is
+          sent from the support desk mailbox and replaces nothing — your normal
+          ticket emails keep coming.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">What&apos;s in It</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Assigned to you</strong> — every open ticket assigned to you, with
+            what changed this week (status, priority, reassignment, approvals,
+            comments and internal notes). Tickets that changed are listed first.
+          </li>
+          <li>
+            <strong>Queues</strong> — the same view for any shared queue address you
+            watch (for example <code className="bg-bg-subtle px-1 rounded">itav@</code>)
+          </li>
+          <li>
+            <strong>Resolved or closed this week</strong> — tickets from either list
+            that were closed during the week. Monitoring alerts that Uptime Kuma
+            closed automatically after recovering are folded into a single line.
+          </li>
+          <li>
+            <strong>Your purchase requests</strong> — requests you submitted, approved,
+            ordered, received, cancelled or are on, that were approved, denied,
+            ordered, received, cancelled or messaged this week. Changes recorded
+            with only a date (no time) that fall on the Tuesday itself show up in
+            the following week&apos;s email.
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Signing Someone Up</h4>
+        <p>
+          The list of people (and the queues each one watches) is the{" "}
+          <code className="bg-bg-subtle px-1 rounded">WEEKLY_DIGEST_RECIPIENTS</code>{" "}
+          setting on the Function App, for example{" "}
+          <code className="bg-bg-subtle px-1 rounded">
+            person@skyparksantasvillage.com=itav@skyparksantasvillage.com
+          </code>
+          . Separate people with commas and queues with semicolons.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Every ticket and purchase request in the email is a
+            link straight to it in the Help Desk.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> Don&apos;t reply to the summary — replies aren&apos;t
+            read. Comment on the ticket itself. The summary includes internal notes, so
+            only sign up staff. People on the Notification Opt-Out list don&apos;t
+            receive it.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "monitoring-alerts",
     title: "Automatic Monitoring Tickets",
     content: (
@@ -3755,6 +3821,7 @@ const helpCategories: {
       "admin-teams-config",
       "vikunja-sync",
       "todo-sync",
+      "weekly-summary",
       "staff-resources",
     ],
   },

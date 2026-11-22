@@ -540,11 +540,11 @@ Agent-API writes set `EventType` to `comment_added` / `ticket_status_changed` an
 
 ## 9. Complete endpoint inventory
 
-**25 functions: 21 HTTP + 4 timer.** After any deploy, `func azure functionapp
-list-functions helpdesk-notify-func` must show 25. A short list means a broken
+**28 functions: 23 HTTP + 5 timer.** After any deploy, `func azure functionapp
+list-functions helpdesk-notify-func` must show 28. A short list means a broken
 deploy — see §11.
 
-### HTTP (21)
+### HTTP (23)
 
 | Function | Route | Methods | Auth | Purpose |
 |---|---|---|---|---|
@@ -569,8 +569,10 @@ deploy — see §11.
 | `runAutoCloseRecovered` | `/api/runautocloserecovered` | GET, POST | host key | Manual Kuma auto-close sweep |
 | `runInboundPoll` | `/api/runinboundpoll` | GET, POST | host key | Manual inbound mail poll |
 | `runPurchaseReminders` | `/api/runpurchasereminders` | GET, POST | host key | Manual purchase reminders |
+| `runWeeklyDigest` | `/api/runweeklydigest` | GET, POST | host key | Manual weekly digest (`?dryRun=1[&html=1]`, `?to=<email>`) |
+| `createUserTicket` | `/api/tickets` | POST, OPTIONS | EasyAuth principal | Web-form ticket intake (app-only create) |
 
-### Timers (4)
+### Timers (5)
 
 | Function | Cron | Does | Kill switch |
 |---|---|---|---|
@@ -578,6 +580,7 @@ deploy — see §11.
 | `autoCloseRecovered` | `0 0 * * * *` (hourly) | Closes recovered Kuma tickets (§4) | `KUMA_AUTO_CLOSE_MINUTES=0` |
 | `pollInboundReplies` | `0 */2 * * * *` (2 min) | Reads the support mailbox, turns replies into comments | `INBOUND_POLL_DISABLED` |
 | `purchaseReminders` | `0 0 16 * * *` (daily 16:00 UTC) | Nudges on stale purchase requests | — |
+| `weeklyDigest` | `0 0 17,18 * * 2` (Tue 17:00 + 18:00 UTC; code keeps the one that is 10 AM Pacific) | Per-person weekly summary for the fixed window previous-Tue-10-AM → this-Tue-10-AM Pacific: open tickets assigned to them + watched queues, tickets closed in the window, their purchase requests' changes. Includes internal notes (staff recipients only). Read-only; no send ledger, so a manual run re-sends. | `WEEKLY_DIGEST_RECIPIENTS` unset |
 
 > ⚠️ **Timers fail silently on a broken deploy.** Nothing 404s visibly; the scheduled
 > work just never runs. Always verify the function *list*, not one endpoint.
@@ -638,6 +641,7 @@ Environment variables**. These are runtime values; changing one restarts the app
 | Inbound mail | `INBOUND_POLL_DISABLED` |
 | To Do | `TODO_TARGET_USER` · `TODO_SYNC_MAP_LIST_ID` · `TODO_LIST_NAME` · `TODO_LIST_ID` |
 | Vikunja | `VIKUNJA_BASE_URL` · `VIKUNJA_API_TOKEN` · `VIKUNJA_PROJECT_ID` · `VIKUNJA_SYNC_MAP_LIST_ID` · `VIKUNJA_WEBHOOK_SECRET` |
+| Weekly digest | `WEEKLY_DIGEST_RECIPIENTS` — `person@x=queue@x;queue2@x,other@x` (people comma-separated; each may watch `;`-separated queue addresses). Unset ⇒ no digests |
 | Misc | `APP_URL` · `APPLICATIONINSIGHTS_CONNECTION_STRING` |
 
 ### 10.2 Frontend
@@ -696,7 +700,7 @@ func azure functionapp publish helpdesk-notify-func --javascript --build remote
 Verify:
 
 ```bash
-func azure functionapp list-functions helpdesk-notify-func   # expect 25
+func azure functionapp list-functions helpdesk-notify-func   # expect 28
 curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
   https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendemail
 # expect 204; 404 = no functions loaded
