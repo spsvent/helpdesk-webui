@@ -125,7 +125,8 @@ export async function imageFrameKind(read: ByteReader, size: number): Promise<Fr
   // then compatible brands to the end of the box)
   if (tag(head, 4) === "ftyp") {
     const boxSize = head[0] * 0x1000000 + (head[1] << 16) + (head[2] << 8) + head[3];
-    if (boxSize < 16 || boxSize > MAX_FTYP || boxSize > size) return "unknown";
+    // Brands are 4 bytes each after the 16-byte header; a partial one = damaged box.
+    if (boxSize < 16 || boxSize > MAX_FTYP || boxSize > size || (boxSize - 16) % 4 !== 0) return "unknown";
     const box = await read(0, boxSize);
     if (box.length < boxSize) return "unknown";
     const brands = [tag(box, 8)];

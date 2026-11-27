@@ -217,6 +217,8 @@ describe("imageFrameKind", () => {
   });
   it("a malformed ftyp size is unknown", async () => {
     expect(await kind(bytes(be32(9999999), "ftyp", "heic", new Array(8).fill(0)))).toBe("unknown");
+    // 17 bytes = header + one stray byte, not a whole brand.
+    expect(await kind(bytes(be32(17), "ftyp", "heic", [0, 0, 0, 0], [0x6d], new Array(8).fill(0)))).toBe("unknown");
   });
   it("anything unrecognised or tiny is unknown", async () => {
     expect(await kind(bytes("GIF89a", new Array(10).fill(0)))).toBe("unknown");
