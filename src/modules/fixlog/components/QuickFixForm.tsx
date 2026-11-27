@@ -77,6 +77,7 @@ export default function QuickFixForm({
   const [timeValue, setTimeValue] = useState(initialTimeValue);
   const [files, setFiles] = useState<File[]>([]);
   const [confirmed, setConfirmed] = useState(false);
+  const [photosPending, setPhotosPending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +116,8 @@ export default function QuickFixForm({
   }
 
   async function handleSave() {
-    if (!accounts[0] || saving) return;
+    // Not while a picked photo is still being checked (it would be left out).
+    if (!accounts[0] || saving || photosPending) return;
     const now = new Date();
     const timeChanged = !editing || timeValue !== initialTimeValue;
     const fixedAtIso = !timeChanged
@@ -321,6 +323,7 @@ export default function QuickFixForm({
               onChange={setFiles}
               confirmed={confirmed}
               onConfirmedChange={setConfirmed}
+              onPendingChange={setPhotosPending}
               disabled={saving}
             />
           </div>
@@ -385,10 +388,10 @@ export default function QuickFixForm({
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || photosPending}
           className="px-5 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:bg-brand-primary-light disabled:opacity-60 touch-manipulation"
         >
-          {saving ? "Saving…" : editing ? "Save changes" : "Log fix"}
+          {saving ? "Saving…" : photosPending ? "Checking photo…" : editing ? "Save changes" : "Log fix"}
         </button>
       </div>
     </div>

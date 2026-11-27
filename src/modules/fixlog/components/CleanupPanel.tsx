@@ -74,6 +74,11 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
         }
         // If-Match on the fresh etag: an edit made after this re-check wins, and
         // the entry is reported as skipped rather than overwritten or deleted.
+        // No version token → no unconditional write; skip it.
+        if (job !== "photos" && !fresh.etag) {
+          skipped++;
+          continue;
+        }
         if (job === "photos") await deleteAllEntryPhotos(client, e.id, instance, accounts[0]);
         else if (job === "staff")
           await updateEntry(client, e.id, { stationStaffName: "", stationStaffEmail: "" }, fresh.etag);

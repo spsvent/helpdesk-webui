@@ -44,6 +44,7 @@ export default function FixLogDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [newPhotos, setNewPhotos] = useState<File[]>([]);
   const [confirmed, setConfirmed] = useState(false);
+  const [photosPending, setPhotosPending] = useState(false);
 
   const loadPhotos = useCallback(async () => {
     if (!account) return;
@@ -128,7 +129,7 @@ export default function FixLogDetail({ id }: { id: string }) {
   }
 
   async function uploadPhotos() {
-    if (!account || newPhotos.length === 0) return;
+    if (!account || newPhotos.length === 0 || photosPending) return;
     if (!confirmed) {
       setPhotoError("Tick the box confirming no people or personal details are in the photos.");
       return;
@@ -302,13 +303,14 @@ export default function FixLogDetail({ id }: { id: string }) {
               onChange={setNewPhotos}
               confirmed={confirmed}
               onConfirmedChange={setConfirmed}
+              onPendingChange={setPhotosPending}
               disabled={busy}
             />
             {newPhotos.length > 0 && (
               <button
                 type="button"
                 onClick={uploadPhotos}
-                disabled={busy}
+                disabled={busy || photosPending}
                 className="px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium disabled:opacity-60"
               >
                 {busy ? "Uploading…" : `Upload ${newPhotos.length} photo${newPhotos.length > 1 ? "s" : ""}`}

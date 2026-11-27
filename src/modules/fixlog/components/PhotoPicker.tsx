@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { DEFAULT_MAX_SIZE_MB, validateAttachment } from "@/lib/attachmentValidation";
-import { isAnimatedImage, isStillPhoto } from "../fixLog";
+import { imageFrameKind, isStillPhoto } from "../fixLog";
 
 // Wording from the attorney check (2026-11-27) — keep it verbatim.
 export const PHOTO_GUIDANCE =
@@ -17,14 +17,20 @@ export default function PhotoPicker({
   onChange,
   confirmed,
   onConfirmedChange,
+  onPendingChange,
   disabled,
 }: {
   files: File[];
-  onChange: (files: File[]) => void;
+  // A state setter, so async validation results apply to the CURRENT staged set
+  // (a photo removed meanwhile stays removed; overlapping picks are all kept).
+  onChange: Dispatch<SetStateAction<File[]>>;
   confirmed: boolean;
   onConfirmedChange: (v: boolean) => void;
+  // True while picked files are still being checked — the parent must not save then.
+  onPendingChange?: (pending: boolean) => void;
   disabled?: boolean;
 }) {
+  const pending = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,29 +46,47 @@ export default function PhotoPicker({
   async function add(list: File[]) {
     if (!list.length) return;
     setError(null);
+    pending.current++;
+    onPendingChange?.(true);
     const next: File[] = [];
-    for (const f of list) {
-      let animated = false;
-      try {
-        animated = isAnimatedImage(new Uint8Array(await f.slice(0, 65536).arrayBuffer()));
-      } catch {
-        /* unreadable header: fall through to the type check */
+    try {
+      for (const f of list) {
+        if (!isStillPhoto(f.name, f.type)) {
+          setError(`${f.name} isn't a still photo (JPEG, PNG, HEIC or WebP).`);
+          continue;
+        }
+        let kind: "still" | "animated" | "unknown" = "unknown";
+        try {
+          kind = await imageFrameKind(
+            async (off, len) => new Uint8Array(await f.slice(off, off + len).arrayBuffer()),
+            f.size
+          );
+        } catch {
+          kind = "unknown";
+        }
+        if (kind !== "still") {
+          setError(
+            kind === "animated"
+              ? `${f.name} is animated. Only still photos are allowed.`
+              : `Couldn't read ${f.name} as a photo. Try taking it again.`
+          );
+          continue;
+        }
+        const err = validateAttachment(f, DEFAULT_MAX_SIZE_MB);
+        if (err) {
+          setError(err);
+          continue;
+        }
+        next.push(f);
       }
-      if (animated || !isStillPhoto(f.name, f.type)) {
-        setError(`${f.name} isn't a still photo (JPEG, PNG, HEIC or WebP).`);
-        continue;
+      if (next.length) {
+        onChange((cur) => [...cur, ...next]);
+        // A new photo needs a fresh check of what's in frame.
+        onConfirmedChange(false);
       }
-      const err = validateAttachment(f, DEFAULT_MAX_SIZE_MB);
-      if (err) {
-        setError(err);
-        continue;
-      }
-      next.push(f);
-    }
-    if (next.length) {
-      onChange([...files, ...next]);
-      // A new photo needs a fresh check of what's in frame.
-      onConfirmedChange(false);
+    } finally {
+      pending.current--;
+      onPendingChange?.(pending.current > 0);
     }
   }
 
@@ -81,7 +105,7 @@ export default function PhotoPicker({
             <button
               type="button"
               onClick={() => {
-                onChange(files.filter((_, j) => j !== i));
+                onChange((cur) => cur.filter((f2) => f2 !== f));
                 // The confirmation covers the staged set; re-check after any change.
                 onConfirmedChange(false);
               }}

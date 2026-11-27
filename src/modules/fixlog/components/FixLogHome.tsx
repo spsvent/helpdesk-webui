@@ -70,9 +70,12 @@ export default function FixLogHome() {
     }
   }, [account, instance, rangeDays]);
 
+  // Bumped after a save; the effect always runs with the current range's loader
+  // (calling a loader captured before a range switch would load the old range).
+  const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
     loadEntries();
-  }, [loadEntries]);
+  }, [loadEntries, refreshTick]);
 
   const shown = useMemo(
     () =>
@@ -97,7 +100,7 @@ export default function FixLogHome() {
     // Show it straight away (the range filter in `shown` hides it if it's outside
     // the range), then refresh so a load that was in flight can't drop it.
     setEntries((prev) => [r.entry, ...prev.filter((e) => e.id !== r.entry.id)]);
-    loadEntries();
+    setRefreshTick((t) => t + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 

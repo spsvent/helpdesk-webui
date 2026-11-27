@@ -88,7 +88,9 @@ const str = (v: unknown): string | undefined =>
 
 export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
   const f = (item.fields || {}) as Record<string, unknown>;
-  const etag = (item as unknown as Record<string, unknown>)["@odata.etag"];
+  // Graph returns the version as the "@odata.etag" annotation and/or an eTag property.
+  const raw = item as unknown as Record<string, unknown>;
+  const etag = raw["@odata.etag"] ?? raw.eTag;
   return {
     id: item.id,
     issue: str(f.Title) || "",

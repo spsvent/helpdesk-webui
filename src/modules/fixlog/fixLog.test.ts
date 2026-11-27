@@ -6,7 +6,7 @@ import { mapToFixLogEntry, mapToFixLogIssue } from "./types";
 import {
   filterEntries,
   fromLocalInputValue,
-  isAnimatedImage,
+  imageFrameKind,
   isStillPhoto,
   stillDue,
   nextSortOrder,
@@ -167,22 +167,43 @@ describe("isStillPhoto", () => {
   });
 });
 
-describe("isAnimatedImage", () => {
+describe("imageFrameKind", () => {
   const bytes = (...parts: (number[] | string)[]) =>
     new Uint8Array(parts.flatMap((p) => (typeof p === "string" ? Array.from(p, (c) => c.charCodeAt(0)) : p)));
+  const reader = (b: Uint8Array) => async (off: number, len: number) => b.slice(off, off + len);
+  const kind = (b: Uint8Array) => imageFrameKind(reader(b), b.length);
+  const be32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const chunk = (type: string, data: number[] = []) => [...be32(data.length), ...Array.from(type, (c) => c.charCodeAt(0)), ...data, 0, 0, 0, 0];
   const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  it("spots animated PNG (acTL before IDAT) and leaves plain PNG alone", () => {
-    expect(isAnimatedImage(bytes(PNG, "....IHDR....acTL....IDAT"))).toBe(true);
-    expect(isAnimatedImage(bytes(PNG, "....IHDR....IDAT....acTL"))).toBe(false);
-    expect(isAnimatedImage(bytes(PNG, "....IHDR....IDAT"))).toBe(false);
+
+  it("PNG: acTL before IDAT is animated; plain PNG is still", async () => {
+    expect(await kind(bytes(PNG, chunk("IHDR", new Array(13).fill(0)), chunk("acTL", new Array(8).fill(0)), chunk("IDAT", [1])))).toBe("animated");
+    expect(await kind(bytes(PNG, chunk("IHDR", new Array(13).fill(0)), chunk("IDAT", [1]), chunk("IEND")))).toBe("still");
   });
-  it("spots animated WebP (ANIM chunk) and leaves still WebP alone", () => {
-    expect(isAnimatedImage(bytes("RIFF", [0, 0, 0, 0], "WEBPVP8X", [0, 0, 0, 0], "ANIM"))).toBe(true);
-    expect(isAnimatedImage(bytes("RIFF", [0, 0, 0, 0], "WEBPVP8 ", [0, 0, 0, 0]))).toBe(false);
+  it("PNG: walks real chunk boundaries — a huge metadata chunk before acTL is still found", async () => {
+    const big = new Array(200000).fill(0x41);
+    expect(await kind(bytes(PNG, chunk("IHDR", new Array(13).fill(0)), chunk("tEXt", big), chunk("acTL", new Array(8).fill(0)), chunk("IDAT", [1])))).toBe("animated");
   });
-  it("ignores JPEG and junk", () => {
-    expect(isAnimatedImage(bytes([0xff, 0xd8, 0xff], "ANIMacTL"))).toBe(false);
-    expect(isAnimatedImage(new Uint8Array())).toBe(false);
+  it("PNG: the text 'acTL' inside a metadata chunk is NOT animation", async () => {
+    expect(await kind(bytes(PNG, chunk("IHDR", new Array(13).fill(0)), chunk("tEXt", Array.from("Comment\0acTL", (c) => c.charCodeAt(0))), chunk("IDAT", [1])))).toBe("still");
+  });
+  it("PNG: truncated before IDAT is unknown", async () => {
+    expect(await kind(bytes(PNG, chunk("IHDR", new Array(13).fill(0)), be32(500), "tEXt"))).toBe("unknown");
+  });
+  it("WebP: VP8/VP8L still, VP8X uses the animation flag", async () => {
+    expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8 ", [0, 0, 0, 0], [0]))).toBe("still");
+    expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8L", [0, 0, 0, 0], [0]))).toBe("still");
+    expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8X", [10, 0, 0, 0], [0x02]))).toBe("animated");
+    expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8X", [10, 0, 0, 0], [0x10]))).toBe("still");
+  });
+  it("JPEG and HEIC are still; HEIF image sequences are animated", async () => {
+    expect(await kind(bytes([0xff, 0xd8, 0xff, 0xe0], new Array(12).fill(0)))).toBe("still");
+    expect(await kind(bytes([0, 0, 0, 24], "ftyp", "heic", new Array(8).fill(0)))).toBe("still");
+    expect(await kind(bytes([0, 0, 0, 24], "ftyp", "msf1", new Array(8).fill(0)))).toBe("animated");
+  });
+  it("anything unrecognised or tiny is unknown", async () => {
+    expect(await kind(bytes("GIF89a", new Array(10).fill(0)))).toBe("unknown");
+    expect(await kind(new Uint8Array(4))).toBe("unknown");
   });
 });
 
@@ -258,9 +279,12 @@ describe("mappers", () => {
     // No Attachments field at all → "unknown", which the cleanup refuses to trust.
     expect(e.attachmentsKnown).toBe(false);
   });
-  it("reads the etag and survives a POST body without fields", () => {
+  it("reads the etag (annotation or eTag property) and survives a POST body without fields", () => {
     const item = { ...base, "@odata.etag": '"abc,1"' } as unknown as Parameters<typeof mapToFixLogEntry>[0];
     expect(mapToFixLogEntry(item).etag).toBe('"abc,1"');
+    const item2 = { ...base, eTag: '"abc,2"' } as unknown as Parameters<typeof mapToFixLogEntry>[0];
+    expect(mapToFixLogEntry(item2).etag).toBe('"abc,2"');
+    expect(mapToFixLogEntry({ ...base, fields: {} }).etag).toBeUndefined();
     const bare = { id: "8", createdBy: { user: {} } } as unknown as Parameters<typeof mapToFixLogEntry>[0];
     expect(() => mapToFixLogEntry(bare)).not.toThrow();
     expect(() => mapToFixLogIssue(bare)).not.toThrow();

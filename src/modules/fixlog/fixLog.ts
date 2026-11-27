@@ -68,29 +68,55 @@ export function isStillPhoto(name: string, type: string): boolean {
   return STILL_EXT.test(name);
 }
 
-const ascii = (s: string) => Array.from(s, (c) => c.charCodeAt(0));
-function indexOf(bytes: Uint8Array, needle: number[], from = 0, to = bytes.length): number {
-  outer: for (let i = from; i <= Math.min(to, bytes.length) - needle.length; i++) {
-    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
-    return i;
-  }
-  return -1;
-}
+// --- still vs animated, from the file's own structure ---------------------------
 
-// By content: true for an animated PNG (an "acTL" chunk before the first IDAT) or
-// an animated WebP (RIFF/WEBP with an "ANIM" chunk). Pass the file's first bytes
-// (64 KB is plenty — both markers sit in the header area).
-export function isAnimatedImage(bytes: Uint8Array): boolean {
+export type ByteReader = (offset: number, length: number) => Promise<Uint8Array>;
+export type FrameKind = "still" | "animated" | "unknown";
+
+const tag = (b: Uint8Array, at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+const MAX_PNG_CHUNKS = 100000;
+// ISO-BMFF brands for image *sequences* (animated HEIF/AVIF).
+const SEQUENCE_BRANDS = new Set(["msf1", "hevs", "hevm", "avis"]);
+
+/**
+ * Walks the real container structure (only small header reads, any file size):
+ * - PNG: chunk by chunk — "acTL" before the first "IDAT" = animated (APNG).
+ * - WebP: first chunk VP8 / VP8L = still; VP8X = check its animation flag.
+ * - JPEG = still. HEIC/HEIF = still unless the brand is an image sequence.
+ * Anything else, truncated or unparseable = "unknown" (callers reject it).
+ */
+export async function imageFrameKind(read: ByteReader, size: number): Promise<FrameKind> {
+  const head = await read(0, 16);
+  if (head.length < 12) return "unknown";
+  // PNG
   const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (indexOf(bytes, PNG, 0, 8) === 0) {
-    const idat = indexOf(bytes, ascii("IDAT"));
-    const actl = indexOf(bytes, ascii("acTL"), 0, idat === -1 ? bytes.length : idat);
-    return actl !== -1;
+  if (PNG.every((v, i) => head[i] === v)) {
+    let off = 8;
+    for (let n = 0; n < MAX_PNG_CHUNKS && off + 8 <= size; n++) {
+      const h = await read(off, 8);
+      if (h.length < 8) return "unknown";
+      const len = h[0] * 0x1000000 + (h[1] << 16) + (h[2] << 8) + h[3];
+      const type = tag(h, 4);
+      if (type === "acTL") return "animated";
+      if (type === "IDAT" || type === "IEND") return "still";
+      off += 12 + len; // length + type + data + CRC
+    }
+    return "unknown";
   }
-  if (indexOf(bytes, ascii("RIFF"), 0, 4) === 0 && indexOf(bytes, ascii("WEBP"), 8, 12) === 8) {
-    return indexOf(bytes, ascii("ANIM"), 12) !== -1;
+  // WebP: "RIFF" <size> "WEBP" <first chunk fourcc> <size> <payload…>
+  if (tag(head, 0) === "RIFF" && tag(head, 8) === "WEBP") {
+    const c = await read(12, 9);
+    if (c.length < 9) return "unknown";
+    const fourcc = tag(c, 0);
+    if (fourcc === "VP8 " || fourcc === "VP8L") return "still";
+    if (fourcc === "VP8X") return c[8] & 0x02 ? "animated" : "still"; // flags byte, A bit
+    return "unknown";
   }
-  return false;
+  // JPEG
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "still";
+  // HEIC / HEIF (ISO-BMFF "ftyp" box)
+  if (tag(head, 4) === "ftyp") return SEQUENCE_BRANDS.has(tag(head, 8)) ? "animated" : "still";
+  return "unknown";
 }
 
 // --- list filtering + summary ---------------------------------------------------

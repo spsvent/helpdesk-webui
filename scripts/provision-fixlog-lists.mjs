@@ -219,10 +219,22 @@ async function lock() {
     let url = `${site}/_api/${path}`;
     while (url) {
       const r = await call(url, token, {}, V);
-      out.push(...(r.d.results || []));
+      // A page without a results array is unknown state, never "empty".
+      if (!Array.isArray(r?.d?.results)) throw new Error(`Unexpected response shape from ${url}`);
+      out.push(...r.d.results);
       url = r.d.__next;
     }
     return out;
+  };
+  // Every item must report an id and an explicit HasUniqueRoleAssignments boolean,
+  // or the list can't be declared locked.
+  const itemScopes = async (base) => {
+    const items = await spAll(`${base}/items?$select=Id,HasUniqueRoleAssignments&$top=5000`);
+    for (const i of items) {
+      if (!Number.isInteger(i?.Id) || typeof i?.HasUniqueRoleAssignments !== "boolean")
+        throw new Error(`${base}: item without a readable permission scope (${JSON.stringify(i)})`);
+    }
+    return items;
   };
   const roleAssignments = (base) => spAll(`${base}/roleassignments?$expand=Member,RoleDefinitionBindings`);
 
@@ -248,6 +260,8 @@ async function lock() {
   for (const [id, label] of [[logId, "QuickFixLog"], [issuesId, "QuickFixIssues"]]) {
     const l = (await sp(`web/lists(guid'${id}')?$select=Title,HasUniqueRoleAssignments`)).d;
     if (l.Title !== label) throw new Error(`List ${id} is "${l.Title}", expected "${label}"`);
+    // Unreadable item scopes fail here, before any permission is changed.
+    await itemScopes(`web/lists(guid'${id}')`);
     lists.push({ id, title: l.Title, unique: l.HasUniqueRoleAssignments });
   }
 
@@ -275,7 +289,7 @@ async function lock() {
     }
     // Items shared on their own (unique permissions) would keep access the list
     // no longer grants — reset every such item to inherit from the list.
-    const items = await spAll(`${base}/items?$select=Id,HasUniqueRoleAssignments&$top=5000`);
+    const items = await itemScopes(base);
     for (const it of items.filter((i) => i.HasUniqueRoleAssignments)) {
       await sp(`${base}/items(${it.Id})/resetroleinheritance`, { method: "POST" });
       console.log(`  ~ item ${it.Id} reset to inherit list permissions`);
@@ -312,9 +326,7 @@ async function lock() {
         if (!(roles.length === 1 && roles[0] === want)) problems.push(`${r.Member.Title} has [${roles}] not [${want}]`);
       }
     }
-    const stillUnique = (await spAll(`${base}/items?$select=Id,HasUniqueRoleAssignments&$top=5000`)).filter(
-      (i) => i.HasUniqueRoleAssignments
-    );
+    const stillUnique = (await itemScopes(base)).filter((i) => i.HasUniqueRoleAssignments);
     if (stillUnique.length) problems.push(`items with their own permissions: ${stillUnique.map((i) => i.Id).join(", ")}`);
     for (const pid of expected.keys()) if (!seen.has(pid)) problems.push(`principal ${pid} has no access`);
     const props = (await sp(`${base}?$select=HasUniqueRoleAssignments,WriteSecurity,EnableVersioning`)).d;
