@@ -77,12 +77,15 @@ export default function FixLogHome() {
   const shown = useMemo(
     () =>
       filterEntries(entries, {
+        // Always the CURRENT range, so a save that resolved after a range switch
+        // (or an older response) can never show a row from outside it.
+        sinceIso: rangeStartIso(rangeDays, new Date()),
         location: location || undefined,
         issue: issue || undefined,
         mineEmail: mineOnly ? permissions?.email : undefined,
         search,
       }),
-    [entries, location, issue, mineOnly, permissions?.email, search]
+    [entries, rangeDays, location, issue, mineOnly, permissions?.email, search]
   );
   const topLocations = useMemo(() => topCounts(shown, "location"), [shown]);
   const topIssues = useMemo(() => topCounts(shown, "issue"), [shown]);
@@ -91,13 +94,10 @@ export default function FixLogHome() {
 
   function handleSaved(r: SaveResult) {
     setSaved(r);
-    // Add it to the list only if it falls inside the range being shown.
-    const since = rangeStartIso(rangeDays, new Date());
-    const inRange = !since || new Date(r.entry.fixedAt).getTime() >= new Date(since).getTime();
-    setEntries((prev) => {
-      const rest = prev.filter((e) => e.id !== r.entry.id);
-      return inRange ? [r.entry, ...rest] : rest;
-    });
+    // Show it straight away (the range filter in `shown` hides it if it's outside
+    // the range), then refresh so a load that was in flight can't drop it.
+    setEntries((prev) => [r.entry, ...prev.filter((e) => e.id !== r.entry.id)]);
+    loadEntries();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 

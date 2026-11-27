@@ -30,6 +30,11 @@ export interface FixLogEntry {
   // SharePoint's built-in "Attachments" flag — authoritative "has photos", used by
   // the retention cleanup so a stale PhotoCount can't hide a photo.
   hasAttachments: boolean;
+  // False when SharePoint didn't report the Attachments flag at all — the cleanup
+  // refuses to trust a scan containing such a row rather than treat it as "none".
+  attachmentsKnown: boolean;
+  // Concurrency token for conditional (If-Match) writes by the cleanup.
+  etag?: string;
   // Immutable SharePoint creator (LoggedByEmail is a plain, editable text column).
   createdByEmail: string;
   created: string; // true time the entry was saved (kept alongside a back-dated fixedAt)
@@ -37,7 +42,10 @@ export interface FixLogEntry {
 }
 
 export type FixLogWritable = Partial<
-  Omit<FixLogEntry, "id" | "created" | "modified" | "hasAttachments" | "createdByEmail">
+  Omit<
+    FixLogEntry,
+    "id" | "created" | "modified" | "hasAttachments" | "attachmentsKnown" | "etag" | "createdByEmail"
+  >
 >;
 
 export const FIXLOG_COLUMN_MAP: Record<keyof FixLogWritable, string> = {
@@ -79,7 +87,8 @@ const str = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v : undefined;
 
 export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
-  const f = item.fields as Record<string, unknown>;
+  const f = (item.fields || {}) as Record<string, unknown>;
+  const etag = (item as unknown as Record<string, unknown>)["@odata.etag"];
   return {
     id: item.id,
     issue: str(f.Title) || "",
@@ -96,6 +105,8 @@ export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
     department: str(f.Department) || FIXLOG_DEPARTMENT,
     photoCount: typeof f.PhotoCount === "number" ? f.PhotoCount : 0,
     hasAttachments: f.Attachments === true,
+    attachmentsKnown: typeof f.Attachments === "boolean",
+    etag: typeof etag === "string" ? etag : undefined,
     createdByEmail: item.createdBy?.user?.email || "",
     created: item.createdDateTime,
     modified: item.lastModifiedDateTime,
@@ -103,7 +114,7 @@ export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
 }
 
 export function mapToFixLogIssue(item: SharePointListItem): FixLogIssue {
-  const f = item.fields as Record<string, unknown>;
+  const f = (item.fields || {}) as Record<string, unknown>;
   return {
     id: item.id,
     label: str(f.Title) || "",

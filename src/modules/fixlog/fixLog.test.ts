@@ -6,6 +6,7 @@ import { mapToFixLogEntry, mapToFixLogIssue } from "./types";
 import {
   filterEntries,
   fromLocalInputValue,
+  isAnimatedImage,
   isStillPhoto,
   stillDue,
   nextSortOrder,
@@ -31,6 +32,7 @@ function entry(over: Partial<FixLogEntry> = {}): FixLogEntry {
     department: "Tech",
     photoCount: 0,
     hasAttachments: false,
+    attachmentsKnown: true,
     createdByEmail: "it@x.com",
     created: "2026-11-27T19:00:00Z",
     modified: "2026-11-27T19:00:00Z",
@@ -158,6 +160,29 @@ describe("isStillPhoto", () => {
     expect(isStillPhoto("a.jpg", "image/gif")).toBe(false);
     expect(isStillPhoto("a.mov", "video/quicktime")).toBe(false);
     expect(isStillPhoto("a.pdf", "application/pdf")).toBe(false);
+    expect(isStillPhoto("a.gif", "")).toBe(false);
+  });
+  it("trusts a stated type over the file name", () => {
+    expect(isStillPhoto("clip.jpg", "video/mp4")).toBe(false);
+  });
+});
+
+describe("isAnimatedImage", () => {
+  const bytes = (...parts: (number[] | string)[]) =>
+    new Uint8Array(parts.flatMap((p) => (typeof p === "string" ? Array.from(p, (c) => c.charCodeAt(0)) : p)));
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  it("spots animated PNG (acTL before IDAT) and leaves plain PNG alone", () => {
+    expect(isAnimatedImage(bytes(PNG, "....IHDR....acTL....IDAT"))).toBe(true);
+    expect(isAnimatedImage(bytes(PNG, "....IHDR....IDAT....acTL"))).toBe(false);
+    expect(isAnimatedImage(bytes(PNG, "....IHDR....IDAT"))).toBe(false);
+  });
+  it("spots animated WebP (ANIM chunk) and leaves still WebP alone", () => {
+    expect(isAnimatedImage(bytes("RIFF", [0, 0, 0, 0], "WEBPVP8X", [0, 0, 0, 0], "ANIM"))).toBe(true);
+    expect(isAnimatedImage(bytes("RIFF", [0, 0, 0, 0], "WEBPVP8 ", [0, 0, 0, 0]))).toBe(false);
+  });
+  it("ignores JPEG and junk", () => {
+    expect(isAnimatedImage(bytes([0xff, 0xd8, 0xff], "ANIMacTL"))).toBe(false);
+    expect(isAnimatedImage(new Uint8Array())).toBe(false);
   });
 });
 
@@ -227,9 +252,18 @@ describe("mappers", () => {
       createdByEmail: "creator@x.com",
       department: "Tech",
     });
-    expect(
-      mapToFixLogEntry({ ...base, fields: { Title: "X", Attachments: true } }).hasAttachments
-    ).toBe(true);
+    const withFlag = mapToFixLogEntry({ ...base, fields: { Title: "X", Attachments: true } });
+    expect(withFlag.hasAttachments).toBe(true);
+    expect(withFlag.attachmentsKnown).toBe(true);
+    // No Attachments field at all → "unknown", which the cleanup refuses to trust.
+    expect(e.attachmentsKnown).toBe(false);
+  });
+  it("reads the etag and survives a POST body without fields", () => {
+    const item = { ...base, "@odata.etag": '"abc,1"' } as unknown as Parameters<typeof mapToFixLogEntry>[0];
+    expect(mapToFixLogEntry(item).etag).toBe('"abc,1"');
+    const bare = { id: "8", createdBy: { user: {} } } as unknown as Parameters<typeof mapToFixLogEntry>[0];
+    expect(() => mapToFixLogEntry(bare)).not.toThrow();
+    expect(() => mapToFixLogIssue(bare)).not.toThrow();
   });
   it("treats a missing Active as active", () => {
     expect(mapToFixLogIssue({ ...base, fields: { Title: "X" } }).active).toBe(true);

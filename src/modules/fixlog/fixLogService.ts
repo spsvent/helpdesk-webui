@@ -109,22 +109,53 @@ export async function createEntry(client: Client, input: FixLogWritable): Promis
   const created = await client
     .api(itemsUrl(ENTRIES_LIST_ID))
     .post({ fields: toFields(input, FIXLOG_COLUMN_MAP) });
-  // The item exists now. If only the re-read fails, use the POST response rather
-  // than throwing — a thrown error here invites a second, duplicate POST.
-  return getEntry(client, created.id).catch(() => mapToFixLogEntry(created));
+  // The item exists now. If only the re-read fails, build the entry from what was
+  // submitted plus the POST's identity rather than throwing — a thrown error here
+  // invites a second, duplicate POST.
+  return getEntry(client, created.id).catch(() =>
+    mapToFixLogEntry({
+      ...created,
+      createdDateTime: created.createdDateTime || new Date().toISOString(),
+      lastModifiedDateTime: created.lastModifiedDateTime || new Date().toISOString(),
+      fields: { ...toFields(input, FIXLOG_COLUMN_MAP), ...(created.fields || {}) },
+    })
+  );
 }
 
-export async function updateEntry(client: Client, id: string, patch: FixLogWritable): Promise<FixLogEntry> {
+/** Thrown when an If-Match write finds the entry changed since it was read. */
+export class EntryChangedError extends Error {}
+
+const isPreconditionFailed = (e: unknown) => (e as { statusCode?: number })?.statusCode === 412;
+
+/** Pass `ifMatch` (an entry's etag) to write only if nobody changed it meanwhile. */
+export async function updateEntry(
+  client: Client,
+  id: string,
+  patch: FixLogWritable,
+  ifMatch?: string
+): Promise<FixLogEntry> {
   requireEntries();
-  await client
-    .api(`${itemsUrl(ENTRIES_LIST_ID)}/${id}`)
-    .patch({ fields: toFields(patch, FIXLOG_COLUMN_MAP) });
+  const req = client.api(`${itemsUrl(ENTRIES_LIST_ID)}/${id}`);
+  if (ifMatch) req.header("If-Match", ifMatch);
+  try {
+    await req.patch({ fields: toFields(patch, FIXLOG_COLUMN_MAP) });
+  } catch (e) {
+    if (isPreconditionFailed(e)) throw new EntryChangedError(`Entry ${id} changed`);
+    throw e;
+  }
   return getEntry(client, id);
 }
 
-export async function deleteEntry(client: Client, id: string): Promise<void> {
+export async function deleteEntry(client: Client, id: string, ifMatch?: string): Promise<void> {
   requireEntries();
-  await client.api(`${itemsUrl(ENTRIES_LIST_ID)}/${id}`).delete();
+  const req = client.api(`${itemsUrl(ENTRIES_LIST_ID)}/${id}`);
+  if (ifMatch) req.header("If-Match", ifMatch);
+  try {
+    await req.delete();
+  } catch (e) {
+    if (isPreconditionFailed(e)) throw new EntryChangedError(`Entry ${id} changed`);
+    throw e;
+  }
 }
 
 // --- photos (SharePoint attachments on the entry) ------------------------------
@@ -253,7 +284,12 @@ export async function createIssue(client: Client, input: FixLogIssueWritable): P
     .api(`${itemsUrl(ISSUES_LIST_ID)}/${created.id}?$expand=fields`)
     .get()
     .then(mapToFixLogIssue)
-    .catch(() => mapToFixLogIssue(created));
+    .catch(() =>
+      mapToFixLogIssue({
+        ...created,
+        fields: { ...toFields(input, FIXLOG_ISSUE_COLUMN_MAP), ...(created.fields || {}) },
+      })
+    );
 }
 
 export async function updateIssue(

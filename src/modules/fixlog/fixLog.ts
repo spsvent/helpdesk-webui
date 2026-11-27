@@ -56,13 +56,41 @@ export function stillDue(entry: FixLogEntry, job: keyof RetentionDue, now: Date)
 
 // --- photos -----------------------------------------------------------------------
 
-// Still photos only: no GIFs (can be animated) and no video.
+// Still photos only: no GIFs, no video, no animated PNG/WebP.
 const STILL_EXT = /\.(jpe?g|png|hei[cf]|webp)$/i;
 const STILL_MIME = /^image\/(jpeg|png|heic|heif|webp)$/i;
 
+// By type: a stated MIME type must itself be a still format (a "video/…" file
+// named .jpg is refused). The extension is only consulted when the browser gave
+// no type at all, which is common for HEIC.
 export function isStillPhoto(name: string, type: string): boolean {
-  if (type && /^image\/gif$/i.test(type)) return false;
-  return STILL_MIME.test(type) || STILL_EXT.test(name);
+  if (type) return STILL_MIME.test(type);
+  return STILL_EXT.test(name);
+}
+
+const ascii = (s: string) => Array.from(s, (c) => c.charCodeAt(0));
+function indexOf(bytes: Uint8Array, needle: number[], from = 0, to = bytes.length): number {
+  outer: for (let i = from; i <= Math.min(to, bytes.length) - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+    return i;
+  }
+  return -1;
+}
+
+// By content: true for an animated PNG (an "acTL" chunk before the first IDAT) or
+// an animated WebP (RIFF/WEBP with an "ANIM" chunk). Pass the file's first bytes
+// (64 KB is plenty — both markers sit in the header area).
+export function isAnimatedImage(bytes: Uint8Array): boolean {
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (indexOf(bytes, PNG, 0, 8) === 0) {
+    const idat = indexOf(bytes, ascii("IDAT"));
+    const actl = indexOf(bytes, ascii("acTL"), 0, idat === -1 ? bytes.length : idat);
+    return actl !== -1;
+  }
+  if (indexOf(bytes, ascii("RIFF"), 0, 4) === 0 && indexOf(bytes, ascii("WEBP"), 8, 12) === 8) {
+    return indexOf(bytes, ascii("ANIM"), 12) !== -1;
+  }
+  return false;
 }
 
 // --- list filtering + summary ---------------------------------------------------

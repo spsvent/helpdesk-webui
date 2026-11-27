@@ -4,7 +4,14 @@ import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/shared/graph";
 import { RETENTION, retentionDue, stillDue, type RetentionDue } from "../fixLog";
-import { deleteAllEntryPhotos, deleteEntry, getEntry, listEntries, updateEntry } from "../fixLogService";
+import {
+  EntryChangedError,
+  deleteAllEntryPhotos,
+  deleteEntry,
+  getEntry,
+  listEntries,
+  updateEntry,
+} from "../fixLogService";
 
 type Job = "photos" | "staff" | "entries";
 
@@ -24,6 +31,10 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
     if (!keepMessage) setMessage(null);
     try {
       const all = await listEntries(getGraphClient(instance, accounts[0]));
+      // Photo eligibility rests on SharePoint's Attachments flag; a scan where it
+      // is missing can't be trusted, so say so instead of under-reporting photos.
+      const unknown = all.filter((e) => !e.attachmentsKnown).length;
+      if (unknown) throw new Error(`SharePoint didn't report attachments for ${unknown} entr${unknown === 1 ? "y" : "ies"}`);
       setDue(retentionDue(all, new Date()));
     } catch (e) {
       console.error("[CleanupPanel] check failed:", e);
@@ -56,15 +67,23 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
         // Re-read and re-check right before acting: the scan may be stale (e.g. the
         // fix date was corrected in another tab, or photos were already removed).
         const fresh = await getEntry(client, e.id);
+        if (!fresh.attachmentsKnown) throw new Error(`attachments unknown for entry ${e.id}`);
         if (!stillDue(fresh, job, new Date())) {
           skipped++;
           continue;
         }
+        // If-Match on the fresh etag: an edit made after this re-check wins, and
+        // the entry is reported as skipped rather than overwritten or deleted.
         if (job === "photos") await deleteAllEntryPhotos(client, e.id, instance, accounts[0]);
-        else if (job === "staff") await updateEntry(client, e.id, { stationStaffName: "", stationStaffEmail: "" });
-        else await deleteEntry(client, e.id);
+        else if (job === "staff")
+          await updateEntry(client, e.id, { stationStaffName: "", stationStaffEmail: "" }, fresh.etag);
+        else await deleteEntry(client, e.id, fresh.etag);
         done++;
       } catch (err) {
+        if (err instanceof EntryChangedError) {
+          skipped++;
+          continue;
+        }
         console.error(`[CleanupPanel] ${job} failed for entry ${e.id}:`, err);
         failed++;
       }

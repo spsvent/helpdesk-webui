@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_MAX_SIZE_MB, validateAttachment } from "@/lib/attachmentValidation";
-import { isStillPhoto } from "../fixLog";
+import { isAnimatedImage, isStillPhoto } from "../fixLog";
 
 // Wording from the attorney check (2026-11-27) — keep it verbatim.
 export const PHOTO_GUIDANCE =
@@ -37,12 +37,18 @@ export default function PhotoPicker({
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [files]);
 
-  function add(list: FileList | null) {
-    if (!list) return;
+  async function add(list: File[]) {
+    if (!list.length) return;
     setError(null);
     const next: File[] = [];
-    for (const f of Array.from(list)) {
-      if (!isStillPhoto(f.name, f.type)) {
+    for (const f of list) {
+      let animated = false;
+      try {
+        animated = isAnimatedImage(new Uint8Array(await f.slice(0, 65536).arrayBuffer()));
+      } catch {
+        /* unreadable header: fall through to the type check */
+      }
+      if (animated || !isStillPhoto(f.name, f.type)) {
         setError(`${f.name} isn't a still photo (JPEG, PNG, HEIC or WebP).`);
         continue;
       }
@@ -108,8 +114,10 @@ export default function PhotoPicker({
           capture="environment"
           className="hidden"
           onChange={(e) => {
-            add(e.target.files);
+            // Copy first: clearing the input can empty a live FileList.
+            const picked = Array.from(e.target.files || []);
             e.target.value = "";
+            add(picked);
           }}
         />
       </div>

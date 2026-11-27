@@ -33,8 +33,10 @@
 //   plus, on QuickFixLog only: item-level "edit only items you created"
 //   (WriteSecurity=2 — Contribute can't bypass it, Edit/Full Control can) and
 //   version history OFF, so a cleared station-staff name doesn't live on in old
-//   versions. Any other assignment is removed (the caller's own is kept only if
-//   removing it could lock them out — the script says so).
+//   versions. Any other list-level assignment is removed, and any item with its own
+//   (unique) permissions is reset to inherit from the list.
+//   The caller must be a site collection admin or a member of the site's Owners
+//   group (so they can never lock themselves out); otherwise nothing is changed.
 //   Claims: security group "c:0t.c|tenant|<id>"; Microsoft 365 group members
 //   "c:0o.c|federateddirectoryclaimprovider|<id>". Safe to re-run.
 // =============================================================================
@@ -109,11 +111,11 @@ async function ensureList(token, siteId, displayName, description, columns) {
     console.log(`= ${displayName} exists (${listId})`);
   } else {
     created = true;
-    const created = await call(`${GRAPH}/sites/${siteId}/lists`, token, {
+    const res = await call(`${GRAPH}/sites/${siteId}/lists`, token, {
       method: "POST",
       body: JSON.stringify({ displayName, description, list: { template: "genericList" } }),
     });
-    listId = created.id;
+    listId = res.id;
     console.log(`+ created ${displayName} (${listId})`);
   }
   const cols = () => call(`${GRAPH}/sites/${siteId}/lists/${listId}/columns?$select=id,name,indexed`, token);
@@ -196,6 +198,7 @@ async function provision() {
 const ROLE_FULL = 1073741829; // SharePoint built-in "Full Control"
 const ROLE_EDIT = 1073741830; // "Edit" (includes Manage Lists → bypasses item-level rules)
 const ROLE_CONTRIBUTE = 1073741827; // "Contribute"
+const KIND_LIMITED = 1; // RoleTypeKind "Guest" = the system-managed "Limited Access" (locale-independent)
 const V = "application/json;odata=verbose";
 
 const claimsFrom = (name) => need(name).split(",").map((s) => s.trim()).filter(Boolean);
@@ -210,11 +213,27 @@ async function lock() {
   if (!adminClaims.length || !techClaims.length) throw new Error("ADMIN_CLAIMS and TECH_CLAIMS must both be non-empty");
   if (logId === issuesId) throw new Error("LOG_LIST_ID and ISSUES_LIST_ID must differ");
   const sp = (path, init) => call(`${site}/_api/${path}`, token, init, V);
+  // Collection reads follow odata=verbose paging (d.__next) to the end.
+  const spAll = async (path) => {
+    const out = [];
+    let url = `${site}/_api/${path}`;
+    while (url) {
+      const r = await call(url, token, {}, V);
+      out.push(...(r.d.results || []));
+      url = r.d.__next;
+    }
+    return out;
+  };
+  const roleAssignments = (base) => spAll(`${base}/roleassignments?$expand=Member,RoleDefinitionBindings`);
 
   // ---- preflight: everything resolvable BEFORE any permission change ----------
   const me = (await sp("web/currentuser?$select=Id,Title,IsSiteAdmin")).d;
   const owners = (await sp("web/associatedownergroup?$select=Id,Title")).d;
-  const ownerIds = new Set((await sp(`web/sitegroups(${owners.Id})/users?$select=Id`)).d.results.map((u) => u.Id));
+  const ownerIds = new Set((await spAll(`web/sitegroups(${owners.Id})/users?$select=Id`)).map((u) => u.Id));
+  // The caller keeps access through the site, not through anything this script
+  // touches — so removing every other list grant can never lock them out.
+  if (!me.IsSiteAdmin && !ownerIds.has(me.Id))
+    throw new Error(`${me.Title} is neither a site collection admin nor in "${owners.Title}" — refusing to change permissions`);
   for (const id of [ROLE_FULL, ROLE_EDIT, ROLE_CONTRIBUTE]) await sp(`web/roledefinitions(${id})?$select=Name`);
   const ensure = async (logonName) => {
     const u = (await sp("web/ensureuser", { method: "POST", body: JSON.stringify({ logonName }) })).d;
@@ -236,7 +255,6 @@ async function lock() {
   const expected = new Map([[owners.Id, ROLE_FULL]]);
   for (const p of techs) if (!expected.has(p.id)) expected.set(p.id, ROLE_CONTRIBUTE);
   for (const p of admins) if (expected.get(p.id) !== ROLE_FULL) expected.set(p.id, ROLE_EDIT);
-  const canRemoveMe = me.IsSiteAdmin || ownerIds.has(me.Id) || expected.has(me.Id);
   console.log(`Caller: ${me.Title} (site admin: ${me.IsSiteAdmin}, in Owners: ${ownerIds.has(me.Id)})`);
   console.log(`Owners: ${owners.Title} → Full Control`);
   for (const p of admins) console.log(`Admin:  ${p.title} → Edit`);
@@ -255,17 +273,19 @@ async function lock() {
     for (const [pid, role] of expected) {
       await sp(`${base}/roleassignments/addroleassignment(principalid=${pid},roledefid=${role})`, { method: "POST" });
     }
-    const ra = (await sp(`${base}/roleassignments?$expand=Member,RoleDefinitionBindings`)).d.results;
-    for (const r of ra) {
+    // Items shared on their own (unique permissions) would keep access the list
+    // no longer grants — reset every such item to inherit from the list.
+    const items = await spAll(`${base}/items?$select=Id,HasUniqueRoleAssignments&$top=5000`);
+    for (const it of items.filter((i) => i.HasUniqueRoleAssignments)) {
+      await sp(`${base}/items(${it.Id})/resetroleinheritance`, { method: "POST" });
+      console.log(`  ~ item ${it.Id} reset to inherit list permissions`);
+    }
+    for (const r of await roleAssignments(base)) {
       const pid = r.PrincipalId;
       const want = expected.get(pid);
       for (const b of r.RoleDefinitionBindings.results) {
         if (b.Id === want) continue;
-        if (b.Name === "Limited Access") continue; // system-managed, can't be removed
-        if (pid === me.Id && !canRemoveMe) {
-          console.log(`  ! kept caller's own ${b.Name} (removing it could lock you out)`);
-          continue;
-        }
+        if (b.RoleTypeKind === KIND_LIMITED) continue; // system-managed; checked via items above
         await sp(`${base}/roleassignments/removeroleassignment(principalid=${pid},roledefid=${b.Id})`, { method: "POST" });
         console.log(`  - removed ${r.Member.Title} ${b.Name}`);
       }
@@ -279,22 +299,23 @@ async function lock() {
     }
 
     // ---- verify exactly -------------------------------------------------------
-    const final = (await sp(`${base}/roleassignments?$expand=Member,RoleDefinitionBindings`)).d.results;
     const problems = [];
     const seen = new Set();
-    for (const r of final) {
-      const roles = r.RoleDefinitionBindings.results.filter((b) => b.Name !== "Limited Access").map((b) => b.Id);
+    for (const r of await roleAssignments(base)) {
+      const roles = r.RoleDefinitionBindings.results.filter((b) => b.RoleTypeKind !== KIND_LIMITED).map((b) => b.Id);
       const want = expected.get(r.PrincipalId);
-      const callerKept = r.PrincipalId === me.Id && !canRemoveMe;
       console.log(`  ${r.Member.Title} → ${r.RoleDefinitionBindings.results.map((b) => b.Name).join(", ")}`);
       if (want === undefined) {
-        if (!callerKept && roles.length) problems.push(`unexpected access for ${r.Member.Title}`);
+        if (roles.length) problems.push(`unexpected access for ${r.Member.Title}`);
       } else {
         seen.add(r.PrincipalId);
-        if (!(roles.length === 1 && roles[0] === want) && !callerKept)
-          problems.push(`${r.Member.Title} has [${roles}] not [${want}]`);
+        if (!(roles.length === 1 && roles[0] === want)) problems.push(`${r.Member.Title} has [${roles}] not [${want}]`);
       }
     }
+    const stillUnique = (await spAll(`${base}/items?$select=Id,HasUniqueRoleAssignments&$top=5000`)).filter(
+      (i) => i.HasUniqueRoleAssignments
+    );
+    if (stillUnique.length) problems.push(`items with their own permissions: ${stillUnique.map((i) => i.Id).join(", ")}`);
     for (const pid of expected.keys()) if (!seen.has(pid)) problems.push(`principal ${pid} has no access`);
     const props = (await sp(`${base}?$select=HasUniqueRoleAssignments,WriteSecurity,EnableVersioning`)).d;
     if (!props.HasUniqueRoleAssignments) problems.push("still inheriting permissions");
