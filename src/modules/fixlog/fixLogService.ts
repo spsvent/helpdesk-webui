@@ -27,7 +27,10 @@ import {
 const SITE_ID = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_ID || "";
 const ENTRIES_LIST_ID = process.env.NEXT_PUBLIC_FIXLOG_LIST_ID || "";
 const ISSUES_LIST_ID = process.env.NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID || "";
-const SHAREPOINT_SITE_URL = process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "";
+// Same default as graphClient's attachment helpers, so photo uploads and the
+// strict photo listing below always talk to the same site.
+const SHAREPOINT_SITE_URL =
+  process.env.NEXT_PUBLIC_SHAREPOINT_SITE_URL || "https://skyparksv.sharepoint.com/sites/helpdesk";
 
 export function isFixLogConfigured(): boolean {
   return !!ENTRIES_LIST_ID;
@@ -106,7 +109,9 @@ export async function createEntry(client: Client, input: FixLogWritable): Promis
   const created = await client
     .api(itemsUrl(ENTRIES_LIST_ID))
     .post({ fields: toFields(input, FIXLOG_COLUMN_MAP) });
-  return getEntry(client, created.id);
+  // The item exists now. If only the re-read fails, use the POST response rather
+  // than throwing — a thrown error here invites a second, duplicate POST.
+  return getEntry(client, created.id).catch(() => mapToFixLogEntry(created));
 }
 
 export async function updateEntry(client: Client, id: string, patch: FixLogWritable): Promise<FixLogEntry> {
@@ -136,6 +141,9 @@ export async function listEntryPhotos(
   account: AccountInfo
 ): Promise<Attachment[]> {
   requireEntries();
+  // Never acquire a SharePoint token for anything but an absolute https site URL.
+  if (!/^https:\/\//.test(SHAREPOINT_SITE_URL))
+    throw new Error("NEXT_PUBLIC_SHAREPOINT_SITE_URL must be an https URL");
   const token = await getSharePointToken(instance, account);
   const res = await fetch(
     `${SHAREPOINT_SITE_URL}/_api/web/lists(guid'${ENTRIES_LIST_ID}')/items(${id})/AttachmentFiles`,
@@ -143,7 +151,10 @@ export async function listEntryPhotos(
   );
   if (!res.ok) throw new Error(`Couldn't read photos for entry ${id} (${res.status})`);
   const data = await res.json();
-  return ((data.d?.results || []) as Record<string, unknown>[]).map((a) => ({
+  const results = data?.d?.results;
+  // An unexpected body must not read as "no photos".
+  if (!Array.isArray(results)) throw new Error(`Unexpected photo listing for entry ${id}`);
+  return (results as Record<string, unknown>[]).map((a) => ({
     name: a.FileName as string,
     contentType: "application/octet-stream",
     size: 0,
@@ -158,6 +169,8 @@ export function uploadEntryPhoto(
   instance: IPublicClientApplication,
   account: AccountInfo
 ): Promise<Attachment | null> {
+  // The shared helpers fall back to the Tickets list when listId is empty.
+  requireEntries();
   return uploadAttachment(client, id, file, instance, account, ENTRIES_LIST_ID);
 }
 
@@ -168,6 +181,7 @@ export function deleteEntryPhoto(
   instance: IPublicClientApplication,
   account: AccountInfo
 ): Promise<boolean> {
+  requireEntries();
   return deleteAttachment(client, id, filename, instance, account, ENTRIES_LIST_ID);
 }
 
@@ -178,6 +192,7 @@ export function downloadEntryPhoto(
   instance: IPublicClientApplication,
   account: AccountInfo
 ): Promise<Blob | null> {
+  requireEntries();
   return downloadAttachment(client, id, filename, instance, account, ENTRIES_LIST_ID);
 }
 
@@ -234,8 +249,11 @@ export async function createIssue(client: Client, input: FixLogIssueWritable): P
   const created = await client
     .api(itemsUrl(ISSUES_LIST_ID))
     .post({ fields: toFields(input, FIXLOG_ISSUE_COLUMN_MAP) });
-  const item = await client.api(`${itemsUrl(ISSUES_LIST_ID)}/${created.id}?$expand=fields`).get();
-  return mapToFixLogIssue(item);
+  return client
+    .api(`${itemsUrl(ISSUES_LIST_ID)}/${created.id}?$expand=fields`)
+    .get()
+    .then(mapToFixLogIssue)
+    .catch(() => mapToFixLogIssue(created));
 }
 
 export async function updateIssue(

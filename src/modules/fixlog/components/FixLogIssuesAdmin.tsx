@@ -63,7 +63,8 @@ export default function FixLogIssuesAdmin() {
 
   function add() {
     const label = newLabel.trim();
-    if (!label) return;
+    // Enter can fire while a write (or the first load) is still running.
+    if (!label || busy || loading) return;
     if (issues.some((i) => i.label.toLowerCase() === label.toLowerCase())) {
       setError("That issue already exists.");
       return;
@@ -130,7 +131,7 @@ export default function FixLogIssuesAdmin() {
         <button
           type="button"
           onClick={add}
-          disabled={busy || !newLabel.trim()}
+          disabled={busy || loading || !newLabel.trim()}
           className="px-3 py-1.5 rounded-lg bg-brand-primary text-white text-sm font-medium disabled:opacity-50"
         >
           Add

@@ -71,9 +71,10 @@ export default function QuickFixForm({
     initial?.stationStaffName ? { name: initial.stationStaffName, email: initial.stationStaffEmail } : null
   );
   const [customTime, setCustomTime] = useState(editing);
-  const [timeValue, setTimeValue] = useState(
-    initial ? toLocalInputValue(new Date(initial.fixedAt)) : ""
-  );
+  // Edit mode keeps the original ISO FixedAt unless this box is actually changed
+  // (the minute-precision local value would drop seconds and can shift across DST).
+  const initialTimeValue = initial ? toLocalInputValue(new Date(initial.fixedAt)) : "";
+  const [timeValue, setTimeValue] = useState(initialTimeValue);
   const [files, setFiles] = useState<File[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,7 +90,16 @@ export default function QuickFixForm({
   }, [initial?.location]);
 
   const picked = sorted.find((i) => i.id === choice);
-  const issueLabel = choice === OTHER ? otherText.trim() : picked?.label || "";
+  // Edit mode: the stored issue snapshot (label/id/category) is only rewritten when
+  // the user changes the selection, so renaming/retiring an issue later — or the
+  // issue list failing to load — never alters an existing entry's history.
+  const issueChanged =
+    !editing || choice !== initialChoice || (choice === OTHER && otherText.trim() !== (initial?.issue || ""));
+  const issueLabel = !issueChanged
+    ? initial?.issue || ""
+    : choice === OTHER
+      ? otherText.trim()
+      : picked?.label || "";
 
   function reset() {
     setLocation("");
@@ -107,7 +117,12 @@ export default function QuickFixForm({
   async function handleSave() {
     if (!accounts[0] || saving) return;
     const now = new Date();
-    const fixedAtIso = customTime ? fromLocalInputValue(timeValue) : now.toISOString();
+    const timeChanged = !editing || timeValue !== initialTimeValue;
+    const fixedAtIso = !timeChanged
+      ? initial?.fixedAt
+      : customTime
+        ? fromLocalInputValue(timeValue)
+        : now.toISOString();
     const err = validateDraft(
       { location, issue: issueLabel, fixedAtIso, photoCount: files.length, photosConfirmed: confirmed },
       now
@@ -121,12 +136,16 @@ export default function QuickFixForm({
     const client = getGraphClient(instance, accounts[0]);
     try {
       const fields: FixLogWritable = {
-        issue: issueLabel,
-        // Blank (not omitted) so switching an edited entry to "Other" clears the old link.
-        issueId: picked?.id || "",
-        category: picked?.category || "",
+        ...(issueChanged
+          ? {
+              issue: issueLabel,
+              // Blank (not omitted) so switching an edited entry to "Other" clears the old link.
+              issueId: picked?.id || "",
+              category: picked?.category || "",
+            }
+          : {}),
         location,
-        fixedAt: fixedAtIso,
+        ...(timeChanged ? { fixedAt: fixedAtIso } : {}),
         // Edit sends "" to clear a field; create just leaves it out.
         device: device.trim() || (editing ? "" : undefined),
         notes: notes.trim() || (editing ? "" : undefined),
@@ -169,7 +188,12 @@ export default function QuickFixForm({
       } catch {
         /* private mode — recent chips just won't persist */
       }
-      trackEvent("QuickFixLogged", { location, issue: issueLabel, category: picked?.category || "" });
+      // Controlled values only — never the typed "Other" text, notes or names.
+      trackEvent("QuickFixLogged", {
+        location,
+        category: picked?.category || "",
+        commonIssue: picked ? "yes" : "no",
+      });
       reset();
       onSaved({ entry, photoFailures });
     } catch (e) {

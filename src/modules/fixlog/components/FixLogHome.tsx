@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/shared/graph";
@@ -13,8 +13,12 @@ import { canRunCleanup } from "../access";
 import QuickFixForm, { type SaveResult } from "./QuickFixForm";
 import CleanupPanel from "./CleanupPanel";
 
-export function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+// Year shown when asked for, or whenever it isn't the current year.
+export function formatWhen(iso: string, opts?: { year?: boolean }): string {
+  const d = new Date(iso);
+  const showYear = opts?.year || d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleString(undefined, {
+    ...(showYear ? { year: "numeric" as const } : {}),
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -46,18 +50,23 @@ export default function FixLogHome() {
       .catch((e) => console.error("[FixLog] issues load failed:", e));
   }, [account, instance]);
 
+  // Only the newest request may update the list (switching ranges quickly must not
+  // let an older, slower response win).
+  const loadGen = useRef(0);
   const loadEntries = useCallback(async () => {
     if (!account) return;
+    const gen = ++loadGen.current;
     setLoading(true);
     setError(null);
     try {
       const since = rangeStartIso(rangeDays, new Date());
-      setEntries(await listEntries(getGraphClient(instance, account), since));
+      const rows = await listEntries(getGraphClient(instance, account), since);
+      if (gen === loadGen.current) setEntries(rows);
     } catch (e) {
       console.error("[FixLog] entries load failed:", e);
-      setError("Couldn't load the fix log.");
+      if (gen === loadGen.current) setError("Couldn't load the fix log.");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [account, instance, rangeDays]);
 
@@ -82,7 +91,13 @@ export default function FixLogHome() {
 
   function handleSaved(r: SaveResult) {
     setSaved(r);
-    setEntries((prev) => [r.entry, ...prev.filter((e) => e.id !== r.entry.id)]);
+    // Add it to the list only if it falls inside the range being shown.
+    const since = rangeStartIso(rangeDays, new Date());
+    const inRange = !since || new Date(r.entry.fixedAt).getTime() >= new Date(since).getTime();
+    setEntries((prev) => {
+      const rest = prev.filter((e) => e.id !== r.entry.id);
+      return inRange ? [r.entry, ...rest] : rest;
+    });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -201,9 +216,9 @@ export default function FixLogHome() {
                       <div className="text-sm text-text-secondary">
                         {e.location}
                         {e.device && <> · {e.device}</>}
-                        {e.photoCount > 0 && (
-                          <span className="ml-1" title={`${e.photoCount} photo(s)`}>
-                            · 📷 {e.photoCount}
+                        {(e.photoCount > 0 || e.hasAttachments) && (
+                          <span className="ml-1" title="Has photos">
+                            · 📷{e.photoCount > 0 ? ` ${e.photoCount}` : ""}
                           </span>
                         )}
                         <span className="ml-1">· {e.loggedByName || e.loggedByEmail}</span>

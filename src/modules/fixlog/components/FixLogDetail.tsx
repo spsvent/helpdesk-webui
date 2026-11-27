@@ -35,6 +35,9 @@ export default function FixLogDetail({ id }: { id: string }) {
   const [issues, setIssues] = useState<FixLogIssue[] | null>(null);
   const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  // Read failures (listing) and action failures (upload/delete) are kept apart so
+  // a successful reload never wipes the message about a failed upload.
+  const [photoLoadError, setPhotoLoadError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -46,10 +49,10 @@ export default function FixLogDetail({ id }: { id: string }) {
     if (!account) return;
     try {
       setPhotos(await listEntryPhotos(getGraphClient(instance, account), id, instance, account));
-      setPhotoError(null);
+      setPhotoLoadError(null);
     } catch (e) {
       console.error("[FixLogDetail] photos load failed:", e);
-      setPhotoError("Couldn't load photos.");
+      setPhotoLoadError("Couldn't load photos.");
     }
   }, [account, instance, id]);
 
@@ -108,6 +111,7 @@ export default function FixLogDetail({ id }: { id: string }) {
   async function removePhoto(name: string) {
     if (!account || !window.confirm(`Delete photo ${name}?`)) return;
     setBusy(true);
+    setPhotoError(null);
     const client = getGraphClient(instance, account);
     try {
       const ok = await deleteEntryPhoto(client, id, name, instance, account);
@@ -132,11 +136,12 @@ export default function FixLogDetail({ id }: { id: string }) {
     setBusy(true);
     setPhotoError(null);
     const client = getGraphClient(instance, account);
-    let failed = 0;
+    const failedFiles: File[] = [];
     for (const f of newPhotos) {
       const ok = await uploadEntryPhoto(client, id, f, instance, account).catch(() => null);
-      if (!ok) failed++;
+      if (!ok) failedFiles.push(f);
     }
+    const failed = failedFiles.length;
     try {
       const count = await syncPhotoCount(client, id, instance, account);
       setEntry((e) => (e ? { ...e, photoCount: count } : e));
@@ -144,7 +149,8 @@ export default function FixLogDetail({ id }: { id: string }) {
       console.warn("[FixLogDetail] photo count sync failed:", e);
     }
     if (failed) setPhotoError(`${failed} photo${failed > 1 ? "s" : ""} didn't upload. Try again.`);
-    setNewPhotos([]);
+    // Keep the ones that failed staged so "Upload" can simply be pressed again.
+    setNewPhotos(failedFiles);
     setConfirmed(false);
     await loadPhotos();
     setBusy(false);
@@ -176,7 +182,6 @@ export default function FixLogDetail({ id }: { id: string }) {
   if (!entry || issues === null) return <LoadingSpinner />;
 
   const canModify = canModifyEntry(entry, permissions);
-  const backdated = Math.abs(new Date(entry.created).getTime() - new Date(entry.fixedAt).getTime()) > 10 * 60 * 1000;
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -231,13 +236,10 @@ export default function FixLogDetail({ id }: { id: string }) {
 
           <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
             <dt className="text-text-secondary">Fixed</dt>
-            <dd className="text-text-primary">{formatWhen(entry.fixedAt)}</dd>
-            {backdated && (
-              <>
-                <dt className="text-text-secondary">Logged</dt>
-                <dd className="text-text-primary">{formatWhen(entry.created)}</dd>
-              </>
-            )}
+            <dd className="text-text-primary">{formatWhen(entry.fixedAt, { year: true })}</dd>
+            {/* Always shown: the real save time, kept alongside a back-dated fix time. */}
+            <dt className="text-text-secondary">Logged</dt>
+            <dd className="text-text-primary">{formatWhen(entry.created, { year: true })}</dd>
             <dt className="text-text-secondary">Logged by</dt>
             <dd className="text-text-primary">{entry.loggedByName || entry.loggedByEmail}</dd>
             {entry.device && (
@@ -260,7 +262,8 @@ export default function FixLogDetail({ id }: { id: string }) {
 
       <div className="bg-bg-card border border-border rounded-xl p-4 sm:p-6 space-y-3">
         <h2 className="text-sm font-semibold text-text-primary">Photos</h2>
-        {photos.length === 0 && !photoError && <p className="text-sm text-text-secondary">No photos.</p>}
+        {photos.length === 0 && !photoLoadError && <p className="text-sm text-text-secondary">No photos.</p>}
+        {photoLoadError && <p className="text-sm text-red-600">{photoLoadError}</p>}
         <div className="flex flex-wrap gap-3">
           {photos.map((p) => (
             <div key={p.name} className="relative">

@@ -24,11 +24,27 @@ export default function StaffPicker({
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  // Bumped on every keystroke/reset; a directory answer for an older value is dropped.
+  const generation = useRef(0);
+
+  useEffect(
+    () => () => {
+      generation.current++;
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
 
   // Keep the box in step when the parent resets/loads the value.
   useEffect(() => {
     setText(value?.name || "");
-  }, [value?.name]);
+    if (!value) {
+      generation.current++;
+      if (timer.current) clearTimeout(timer.current);
+      setResults([]);
+      setOpen(false);
+    }
+  }, [value]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -43,17 +59,20 @@ export default function StaffPicker({
     // Typing replaces any directory pick: a free-text name carries no email.
     onChange(v.trim() ? { name: v } : null);
     if (timer.current) clearTimeout(timer.current);
+    const gen = ++generation.current;
     if (v.trim().length < 2 || !accounts[0]) {
       setResults([]);
+      setOpen(false);
       return;
     }
     timer.current = setTimeout(async () => {
       try {
         const users = await searchUsers(getGraphClient(instance, accounts[0]), v.trim(), 8);
+        if (gen !== generation.current) return;
         setResults(users.map((u) => ({ displayName: u.displayName, email: u.email })));
         setOpen(true);
       } catch {
-        setResults([]);
+        if (gen === generation.current) setResults([]);
       }
     }, 300);
   }
@@ -79,6 +98,7 @@ export default function StaffPicker({
               <button
                 type="button"
                 onClick={() => {
+                  generation.current++;
                   onChange({ name: u.displayName, email: u.email || undefined });
                   setText(u.displayName);
                   setOpen(false);

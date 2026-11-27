@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/shared/graph";
-import { RETENTION, retentionDue, type RetentionDue } from "../fixLog";
-import { deleteAllEntryPhotos, deleteEntry, listEntries, updateEntry } from "../fixLogService";
+import { RETENTION, retentionDue, stillDue, type RetentionDue } from "../fixLog";
+import { deleteAllEntryPhotos, deleteEntry, getEntry, listEntries, updateEntry } from "../fixLogService";
 
 type Job = "photos" | "staff" | "entries";
 
@@ -17,16 +17,19 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
   const [running, setRunning] = useState<Job | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function check() {
+  // keepMessage: re-scan after a run without wiping that run's summary.
+  async function check(keepMessage = false) {
     if (!accounts[0]) return;
     setChecking(true);
-    setMessage(null);
+    if (!keepMessage) setMessage(null);
     try {
       const all = await listEntries(getGraphClient(instance, accounts[0]));
       setDue(retentionDue(all, new Date()));
     } catch (e) {
       console.error("[CleanupPanel] check failed:", e);
-      setMessage("Couldn't read the log.");
+      // A failed scan must not leave an older due-list actionable.
+      setDue(null);
+      setMessage((m) => (keepMessage && m ? `${m} Couldn't re-check the log.` : "Couldn't read the log."));
     } finally {
       setChecking(false);
     }
@@ -46,9 +49,17 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
     setMessage(null);
     const client = getGraphClient(instance, accounts[0]);
     let done = 0;
+    let skipped = 0;
     let failed = 0;
     for (const e of rows) {
       try {
+        // Re-read and re-check right before acting: the scan may be stale (e.g. the
+        // fix date was corrected in another tab, or photos were already removed).
+        const fresh = await getEntry(client, e.id);
+        if (!stillDue(fresh, job, new Date())) {
+          skipped++;
+          continue;
+        }
         if (job === "photos") await deleteAllEntryPhotos(client, e.id, instance, accounts[0]);
         else if (job === "staff") await updateEntry(client, e.id, { stationStaffName: "", stationStaffEmail: "" });
         else await deleteEntry(client, e.id);
@@ -59,9 +70,13 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
       }
     }
     setRunning(null);
-    setMessage(`Done: ${done} updated${failed ? `, ${failed} failed (try again)` : ""}.`);
+    setMessage(
+      `Done: ${done} cleaned up${skipped ? `, ${skipped} no longer due` : ""}${
+        failed ? `, ${failed} failed (run it again)` : ""
+      }.`
+    );
     onDone();
-    await check();
+    await check(true);
   }
 
   const row = (job: Job, label: string) => {
@@ -73,7 +88,7 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
         </span>
         <button
           type="button"
-          disabled={!n || !!running}
+          disabled={!n || !!running || checking}
           onClick={() => run(job)}
           className="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 text-sm disabled:opacity-40"
         >
@@ -96,7 +111,7 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
         </p>
         <button
           type="button"
-          onClick={check}
+          onClick={() => check()}
           disabled={checking || !!running}
           className="px-3 py-1.5 rounded-lg border border-border text-sm text-text-primary disabled:opacity-50"
         >

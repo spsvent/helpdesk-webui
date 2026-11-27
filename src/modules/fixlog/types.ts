@@ -26,12 +26,19 @@ export interface FixLogEntry {
   loggedByName: string;
   loggedByEmail: string;
   department: string;
-  photoCount: number;
+  photoCount: number; // app-maintained; display only
+  // SharePoint's built-in "Attachments" flag — authoritative "has photos", used by
+  // the retention cleanup so a stale PhotoCount can't hide a photo.
+  hasAttachments: boolean;
+  // Immutable SharePoint creator (LoggedByEmail is a plain, editable text column).
+  createdByEmail: string;
   created: string; // true time the entry was saved (kept alongside a back-dated fixedAt)
   modified: string;
 }
 
-export type FixLogWritable = Partial<Omit<FixLogEntry, "id" | "created" | "modified">>;
+export type FixLogWritable = Partial<
+  Omit<FixLogEntry, "id" | "created" | "modified" | "hasAttachments" | "createdByEmail">
+>;
 
 export const FIXLOG_COLUMN_MAP: Record<keyof FixLogWritable, string> = {
   issue: "Title",
@@ -88,6 +95,8 @@ export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
     loggedByEmail: str(f.LoggedByEmail) || item.createdBy?.user?.email || "",
     department: str(f.Department) || FIXLOG_DEPARTMENT,
     photoCount: typeof f.PhotoCount === "number" ? f.PhotoCount : 0,
+    hasAttachments: f.Attachments === true,
+    createdByEmail: item.createdBy?.user?.email || "",
     created: item.createdDateTime,
     modified: item.lastModifiedDateTime,
   };

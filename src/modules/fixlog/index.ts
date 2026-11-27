@@ -15,7 +15,7 @@
 
 import type { FormModule } from "@/shared/formModules";
 import { canUseFixLog } from "./access";
-import { isFixLogConfigured } from "./fixLogService";
+import { isFixLogConfigured, isFixLogIssuesConfigured } from "./fixLogService";
 
 export const fixLogModule: FormModule = {
   id: "fixlog",
@@ -29,4 +29,14 @@ export const fixLogModule: FormModule = {
   workspaceHref: "/fixlog",
   workspaceLabel: "Fix Log",
   workspaceOrder: 30,
+  // Settings is admin-only, so admins also get the issue editor there; IT staff use
+  // the "Manage issues" link on the Fix Log page (same component).
+  settingsTabs: [
+    {
+      id: "fixlog-issues",
+      label: "Quick Fix Issues",
+      load: () => import("./components/FixLogIssuesAdmin"),
+      visibleWhen: (perms) => perms?.role === "admin" && isFixLogIssuesConfigured(),
+    },
+  ],
 };

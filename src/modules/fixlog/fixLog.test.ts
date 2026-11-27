@@ -6,6 +6,8 @@ import { mapToFixLogEntry, mapToFixLogIssue } from "./types";
 import {
   filterEntries,
   fromLocalInputValue,
+  isStillPhoto,
+  stillDue,
   nextSortOrder,
   pushRecentLocation,
   retentionDue,
@@ -28,6 +30,8 @@ function entry(over: Partial<FixLogEntry> = {}): FixLogEntry {
     loggedByEmail: "it@x.com",
     department: "Tech",
     photoCount: 0,
+    hasAttachments: false,
+    createdByEmail: "it@x.com",
     created: "2026-11-27T19:00:00Z",
     modified: "2026-11-27T19:00:00Z",
     ...over,
@@ -49,6 +53,23 @@ describe("retentionDue", () => {
     expect(due.staff.map((e) => e.id)).toEqual(["oldStaff"]);
     // An entry due for deletion isn't double-counted in the photo/staff buckets.
     expect(due.entries.map((e) => e.id)).toEqual(["ancient"]);
+  });
+
+  it("finds photos from SharePoint's Attachments flag even when PhotoCount is stale (0)", () => {
+    const due = retentionDue(
+      [entry({ id: "stale", photoCount: 0, hasAttachments: true, fixedAt: "2026-08-01T00:00:00Z" })],
+      NOW
+    );
+    expect(due.photos.map((e) => e.id)).toEqual(["stale"]);
+  });
+
+  it("stillDue rechecks one fresh entry before a cleanup acts on it", () => {
+    const old = entry({ hasAttachments: true, fixedAt: "2026-08-01T00:00:00Z" });
+    expect(stillDue(old, "photos", NOW)).toBe(true);
+    // Date corrected in another tab → no longer due.
+    expect(stillDue({ ...old, fixedAt: "2026-11-20T00:00:00Z" }, "photos", NOW)).toBe(false);
+    // Photos already removed → no longer due.
+    expect(stillDue({ ...old, hasAttachments: false }, "photos", NOW)).toBe(false);
   });
 
   it("ignores entries with no photos / no staff name", () => {
@@ -125,6 +146,21 @@ describe("issues helpers", () => {
   });
 });
 
+describe("isStillPhoto", () => {
+  it("accepts still formats by MIME or extension (HEIC often has no MIME)", () => {
+    expect(isStillPhoto("a.jpg", "image/jpeg")).toBe(true);
+    expect(isStillPhoto("IMG_1.HEIC", "")).toBe(true);
+    expect(isStillPhoto("a.png", "image/png")).toBe(true);
+    expect(isStillPhoto("a.webp", "image/webp")).toBe(true);
+  });
+  it("rejects GIFs, video and non-images", () => {
+    expect(isStillPhoto("a.gif", "image/gif")).toBe(false);
+    expect(isStillPhoto("a.jpg", "image/gif")).toBe(false);
+    expect(isStillPhoto("a.mov", "video/quicktime")).toBe(false);
+    expect(isStillPhoto("a.pdf", "application/pdf")).toBe(false);
+  });
+});
+
 describe("pushRecentLocation", () => {
   it("moves to front, dedupes, caps", () => {
     expect(pushRecentLocation(["A", "B", "C"], "B", 3)).toEqual(["B", "A", "C"]);
@@ -187,8 +223,13 @@ describe("mappers", () => {
       loggedByName: "Creator",
       loggedByEmail: "creator@x.com",
       photoCount: 0,
+      hasAttachments: false,
+      createdByEmail: "creator@x.com",
       department: "Tech",
     });
+    expect(
+      mapToFixLogEntry({ ...base, fields: { Title: "X", Attachments: true } }).hasAttachments
+    ).toBe(true);
   });
   it("treats a missing Active as active", () => {
     expect(mapToFixLogIssue({ ...base, fields: { Title: "X" } }).active).toBe(true);
@@ -204,12 +245,22 @@ describe("access", () => {
     expect(canUseFixLog(perms({ role: "support", editableDepartments: ["Facilities"] }))).toBe(false);
     expect(canUseFixLog(perms({ role: "user" }))).toBe(false);
   });
-  it("lets the logger or an admin modify an entry", () => {
-    const e = { loggedByEmail: "IT@x.com" };
+  it("lets the creator or an admin modify an entry", () => {
+    const e = { createdByEmail: "IT@x.com", loggedByEmail: "IT@x.com" };
     expect(canModifyEntry(e, perms({ role: "support", email: "it@x.com" }))).toBe(true);
     expect(canModifyEntry(e, perms({ role: "support", email: "other@x.com" }))).toBe(false);
     expect(canModifyEntry(e, perms({ role: "admin", email: "gm@x.com" }))).toBe(true);
-    expect(canModifyEntry({ loggedByEmail: "" }, perms({ role: "support", email: "" }))).toBe(false);
+    expect(
+      canModifyEntry({ createdByEmail: "", loggedByEmail: "" }, perms({ role: "support", email: "" }))
+    ).toBe(false);
+  });
+  it("trusts the immutable creator over the editable LoggedByEmail text", () => {
+    const forged = { createdByEmail: "real@x.com", loggedByEmail: "me@x.com" };
+    expect(canModifyEntry(forged, perms({ role: "support", email: "me@x.com" }))).toBe(false);
+    // Falls back to LoggedByEmail only when Graph omits the creator email.
+    expect(
+      canModifyEntry({ createdByEmail: "", loggedByEmail: "me@x.com" }, perms({ role: "support", email: "me@x.com" }))
+    ).toBe(true);
   });
   it("limits cleanup to admins", () => {
     expect(canRunCleanup(perms({ role: "admin" }))).toBe(true);

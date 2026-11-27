@@ -547,8 +547,11 @@ Photos are item attachments. `QuickFixIssues`: `Title` · `Category` · `SortOrd
 `Active` · `Department`.
 
 Written only by the SPA (`src/modules/fixlog/`); no Function reads them and nothing
-notifies. Both lists have **unique permissions** (IT group + GMs edit, site Owners full
-control), so an agent's delegated token for anyone else gets 403. Retention (photos 90
+notifies. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
+IT group Contribute. On `QuickFixLog` IT can edit only items they created (item-level
+`WriteSecurity=2`) and version history is off, so cleared names don't survive in old
+versions. A delegated token for anyone else gets 403. Residual: anyone with read access
+can still open the raw list in SharePoint and sort or export it there. Retention (photos 90
 days, station-staff name 12 months, entries 3 years) is applied **by hand** from the Fix
 Log page's admin cleanup panel; there is no timer. Provisioning + lock:
 `scripts/provision-fixlog-lists.mjs`.

@@ -37,12 +37,32 @@ export function retentionDue(all: FixLogEntry[], now: Date): RetentionDue {
   return {
     entries,
     // Rows about to be deleted outright aren't double-counted in the other buckets.
-    photos: all.filter((e) => !deleting.has(e.id) && e.photoCount > 0 && older(e, c.photos)),
+    // hasAttachments is SharePoint's own flag; PhotoCount is only a cache.
+    photos: all.filter(
+      (e) => !deleting.has(e.id) && (e.hasAttachments || e.photoCount > 0) && older(e, c.photos)
+    ),
     staff: all.filter(
       (e) =>
         !deleting.has(e.id) && !!(e.stationStaffName || e.stationStaffEmail) && older(e, c.staff)
     ),
   };
+}
+
+// Re-check one freshly read entry right before a cleanup action touches it, so a
+// stale scan (date corrected in another tab, photos already removed) is skipped.
+export function stillDue(entry: FixLogEntry, job: keyof RetentionDue, now: Date): boolean {
+  return retentionDue([entry], now)[job].length === 1;
+}
+
+// --- photos -----------------------------------------------------------------------
+
+// Still photos only: no GIFs (can be animated) and no video.
+const STILL_EXT = /\.(jpe?g|png|hei[cf]|webp)$/i;
+const STILL_MIME = /^image\/(jpeg|png|heic|heif|webp)$/i;
+
+export function isStillPhoto(name: string, type: string): boolean {
+  if (type && /^image\/gif$/i.test(type)) return false;
+  return STILL_MIME.test(type) || STILL_EXT.test(name);
 }
 
 // --- list filtering + summary ---------------------------------------------------

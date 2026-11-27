@@ -14,14 +14,21 @@ export function canUseFixLog(perms: UserPermissions | null): boolean {
   return (perms.editableDepartments || []).includes(FIXLOG_DEPARTMENT);
 }
 
-/** Edit / delete an entry (and its photos): whoever logged it, or an admin. */
+/**
+ * Edit / delete an entry (and its photos): whoever created it, or an admin.
+ * Identity comes from SharePoint's immutable creator; LoggedByEmail is only the
+ * fallback when Graph omits the creator's email. SharePoint enforces the same rule
+ * natively (item-level "edit own items only" on the QuickFixLog list), so this
+ * just keeps the buttons honest.
+ */
 export function canModifyEntry(
-  entry: Pick<FixLogEntry, "loggedByEmail">,
+  entry: Pick<FixLogEntry, "loggedByEmail" | "createdByEmail">,
   perms: UserPermissions | null
 ): boolean {
   if (!perms) return false;
   if (perms.role === "admin") return true;
-  return !!entry.loggedByEmail && entry.loggedByEmail.toLowerCase() === perms.email.toLowerCase();
+  const owner = (entry.createdByEmail || entry.loggedByEmail || "").toLowerCase();
+  return !!owner && owner === perms.email.toLowerCase();
 }
 
 /** Retention cleanup (delete old photos / names / entries in bulk): admins only. */

@@ -3399,9 +3399,10 @@ const helpSections: HelpSection[] = [
           <p className="text-sm text-yellow-800">
             <strong>Photos:</strong> photograph the equipment only — no guests, children, staff
             faces, or screens showing a guest&apos;s name or card details. If anyone is in the
-            frame, delete it and retake. You must tick the box confirming this before saving. On a
-            phone, the photo button opens the camera directly so the picture isn&apos;t also kept
-            in your camera roll.
+            frame, delete it and retake. You must tick the box confirming this before saving. Only
+            still photos (JPEG, PNG, HEIC, WebP) are accepted. On most phones the photo button opens
+            the camera directly, which usually keeps the picture out of your camera roll — if it
+            doesn&apos;t on your phone, delete the copy from your camera roll afterwards.
           </p>
         </div>
 
@@ -3428,14 +3429,16 @@ const helpSections: HelpSection[] = [
             <strong>top issues</strong> for whatever is shown
           </li>
           <li>
-            Tap a fix to see it in full. Whoever logged it (or an admin) can <strong>Edit</strong>,{" "}
-            <strong>Delete</strong>, or add and remove photos
+            Tap a fix to see it in full, including when it was fixed and when it was logged.
+            Whoever logged it (or an admin) can <strong>Edit</strong>, <strong>Delete</strong>, or add
+            and remove photos; SharePoint enforces the same rule
           </li>
         </ul>
 
         <h4 className="font-semibold text-text-primary mt-6">Managing the Issue Buttons</h4>
         <p>
-          Tap <strong>Manage issues</strong> on the Fix Log page. Anyone on the IT team can add an
+          Tap <strong>Manage issues</strong> on the Fix Log page (admins also find it under{" "}
+          <strong>Settings → Quick Fix Issues</strong>). Anyone on the IT team can add an
           issue, rename it, set its category, move it up or down, or <strong>Retire</strong> it
           (hides the button but keeps fixes already logged with it). Deleting an issue doesn&apos;t
           change past fixes either — they keep the issue text.
