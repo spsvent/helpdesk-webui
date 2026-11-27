@@ -61,6 +61,7 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
     const client = getGraphClient(instance, accounts[0]);
     let done = 0;
     let skipped = 0;
+    let noVersion = 0; // still due, but SharePoint gave no version token to write against
     let failed = 0;
     for (const e of rows) {
       try {
@@ -76,7 +77,7 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
         // the entry is reported as skipped rather than overwritten or deleted.
         // No version token → no unconditional write; skip it.
         if (job !== "photos" && !fresh.etag) {
-          skipped++;
+          noVersion++;
           continue;
         }
         if (job === "photos") await deleteAllEntryPhotos(client, e.id, instance, accounts[0]);
@@ -96,8 +97,8 @@ export default function CleanupPanel({ onDone }: { onDone: () => void }) {
     setRunning(null);
     setMessage(
       `Done: ${done} cleaned up${skipped ? `, ${skipped} no longer due` : ""}${
-        failed ? `, ${failed} failed (run it again)` : ""
-      }.`
+        noVersion ? `, ${noVersion} still due but couldn't be safely changed (run it again)` : ""
+      }${failed ? `, ${failed} failed (run it again)` : ""}.`
     );
     onDone();
     await check(true);

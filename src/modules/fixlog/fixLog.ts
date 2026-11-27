@@ -75,8 +75,15 @@ export type FrameKind = "still" | "animated" | "unknown";
 
 const tag = (b: Uint8Array, at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
 const MAX_PNG_CHUNKS = 100000;
-// ISO-BMFF brands for image *sequences* (animated HEIF/AVIF).
-const SEQUENCE_BRANDS = new Set(["msf1", "hevs", "hevm", "avis"]);
+// ISO-BMFF ("ftyp") brands. A file counts as a still HEIC/HEIF only when its major
+// brand is a known still-image brand AND no brand anywhere in the box is a
+// sequence/video one. Everything else (MP4, MOV, HEIF sequences…) is rejected.
+const STILL_HEIF_BRANDS = new Set(["heic", "heix", "heim", "heis", "mif1", "mif2"]);
+const MOVING_BRANDS = new Set([
+  "msf1", "hevc", "hevx", "hevm", "hevs", "avis", // image sequences
+  "isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "qt  ", "M4V ", "3gp4", "3gp5", "3g2a", "dash", "MSNV", // video
+]);
+const MAX_FTYP = 4096;
 
 /**
  * Walks the real container structure (only small header reads, any file size):
@@ -114,8 +121,18 @@ export async function imageFrameKind(read: ByteReader, size: number): Promise<Fr
   }
   // JPEG
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "still";
-  // HEIC / HEIF (ISO-BMFF "ftyp" box)
-  if (tag(head, 4) === "ftyp") return SEQUENCE_BRANDS.has(tag(head, 8)) ? "animated" : "still";
+  // HEIC / HEIF (ISO-BMFF "ftyp" box: size, "ftyp", major brand, minor version,
+  // then compatible brands to the end of the box)
+  if (tag(head, 4) === "ftyp") {
+    const boxSize = head[0] * 0x1000000 + (head[1] << 16) + (head[2] << 8) + head[3];
+    if (boxSize < 16 || boxSize > MAX_FTYP || boxSize > size) return "unknown";
+    const box = await read(0, boxSize);
+    if (box.length < boxSize) return "unknown";
+    const brands = [tag(box, 8)];
+    for (let at = 16; at + 4 <= boxSize; at += 4) brands.push(tag(box, at));
+    if (brands.some((b) => MOVING_BRANDS.has(b))) return "animated";
+    return STILL_HEIF_BRANDS.has(brands[0]) ? "still" : "unknown";
+  }
   return "unknown";
 }
 

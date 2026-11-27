@@ -55,6 +55,12 @@ export default function PhotoPicker({
           setError(`${f.name} isn't a still photo (JPEG, PNG, HEIC or WebP).`);
           continue;
         }
+        // Cheap checks first: never parse a file that will be refused on size.
+        const sizeErr = f.size === 0 ? `${f.name} is empty.` : validateAttachment(f, DEFAULT_MAX_SIZE_MB);
+        if (sizeErr) {
+          setError(sizeErr);
+          continue;
+        }
         let kind: "still" | "animated" | "unknown" = "unknown";
         try {
           kind = await imageFrameKind(
@@ -70,11 +76,6 @@ export default function PhotoPicker({
               ? `${f.name} is animated. Only still photos are allowed.`
               : `Couldn't read ${f.name} as a photo. Try taking it again.`
           );
-          continue;
-        }
-        const err = validateAttachment(f, DEFAULT_MAX_SIZE_MB);
-        if (err) {
-          setError(err);
           continue;
         }
         next.push(f);

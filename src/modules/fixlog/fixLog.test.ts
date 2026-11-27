@@ -196,10 +196,27 @@ describe("imageFrameKind", () => {
     expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8X", [10, 0, 0, 0], [0x02]))).toBe("animated");
     expect(await kind(bytes("RIFF", [0, 0, 0, 0], "WEBP", "VP8X", [10, 0, 0, 0], [0x10]))).toBe("still");
   });
-  it("JPEG and HEIC are still; HEIF image sequences are animated", async () => {
+  // ftyp box: size, "ftyp", major, minor(4), compatible brands…
+  const ftyp = (major: string, ...compat: string[]) =>
+    bytes(be32(16 + 4 * compat.length), "ftyp", major, [0, 0, 0, 0], ...compat, new Array(8).fill(0));
+  it("JPEG and an iPhone-style HEIC are still", async () => {
     expect(await kind(bytes([0xff, 0xd8, 0xff, 0xe0], new Array(12).fill(0)))).toBe("still");
-    expect(await kind(bytes([0, 0, 0, 24], "ftyp", "heic", new Array(8).fill(0)))).toBe("still");
-    expect(await kind(bytes([0, 0, 0, 24], "ftyp", "msf1", new Array(8).fill(0)))).toBe("animated");
+    expect(await kind(ftyp("heic", "mif1", "MiHE", "miaf", "heic"))).toBe("still");
+    expect(await kind(ftyp("mif1", "heic"))).toBe("still");
+  });
+  it("HEIF sequences are rejected by major OR compatible brand", async () => {
+    expect(await kind(ftyp("msf1", "hevc"))).toBe("animated");
+    expect(await kind(ftyp("hevc", "msf1"))).toBe("animated");
+    expect(await kind(ftyp("mif1", "msf1", "hevc"))).toBe("animated");
+  });
+  it("a video container dressed as a photo is rejected", async () => {
+    expect(await kind(ftyp("isom", "iso2", "avc1", "mp41"))).toBe("animated");
+    expect(await kind(ftyp("qt  "))).toBe("animated");
+    // Unknown major brand with no moving brand: not positively a still → unknown.
+    expect(await kind(ftyp("xyzw"))).toBe("unknown");
+  });
+  it("a malformed ftyp size is unknown", async () => {
+    expect(await kind(bytes(be32(9999999), "ftyp", "heic", new Array(8).fill(0)))).toBe("unknown");
   });
   it("anything unrecognised or tiny is unknown", async () => {
     expect(await kind(bytes("GIF89a", new Array(10).fill(0)))).toBe("unknown");
