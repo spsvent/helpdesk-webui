@@ -118,6 +118,7 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_ESCALATION_LIST_ID` - EscalationRules list
 - `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` - ActivityLog list
 - `NEXT_PUBLIC_NOTIFICATION_OPTOUT_LIST_ID` - NotificationOptOut list (emails suppressed from all notifications; access/roles unaffected). Also set `NOTIFICATION_OPTOUT_LIST_ID` on the Function App so server-side send paths enforce it.
+- `NEXT_PUBLIC_FIXLOG_LIST_ID` / `NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID` - QuickFixLog + QuickFixIssues lists (IT Quick Fix Log, `src/modules/fixlog/`). Never notifies; lists have unique permissions (IT + GMs); retention cleanup is manual from the page. Provision/lock with `scripts/provision-fixlog-lists.mjs`.
 
 ### Teams Notifications
 - `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` - "true" to enable Teams notifications

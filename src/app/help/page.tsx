@@ -3352,6 +3352,118 @@ const helpSections: HelpSection[] = [
     ),
   },
   {
+    id: "quick-fix-log",
+    title: "Quick Fix Log (IT)",
+    content: (
+      <div className="space-y-4">
+        <p>
+          The <strong>Quick Fix Log</strong> is where the IT team records fixes that never had a
+          ticket — someone waves you over, you clear a printer jam, and it&apos;s done. Logging it
+          takes a few taps and shows how much untracked work happens and which locations and
+          devices keep breaking.
+        </p>
+        <p>
+          It&apos;s separate from tickets: logging a fix <strong>never sends an email or Teams
+          message</strong>, isn&apos;t assigned to anyone, and doesn&apos;t change ticket counts or
+          the weekly summary. Only the IT team and admins can see it.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">Logging a Fix</h4>
+        <ol className="list-decimal list-inside space-y-2 ml-4">
+          <li>
+            Open <strong>Fix Log</strong> from the workspace switcher at the top, or choose{" "}
+            <strong>+ New → Log a quick fix</strong>
+          </li>
+          <li>
+            Pick the <strong>location</strong>. Places you&apos;ve used recently appear as buttons
+            above the list.
+          </li>
+          <li>
+            Tap the <strong>issue</strong>. If none fit, tap <strong>Other…</strong> and type it.
+          </li>
+          <li>
+            Optionally add a <strong>note</strong> (what you did), the <strong>device</strong>{" "}
+            (e.g. &quot;Register 2&quot;), the <strong>person at the station</strong>, and{" "}
+            <strong>photos</strong>
+          </li>
+          <li>
+            <strong>When</strong> defaults to now. Tap <strong>Change</strong> to log something
+            you fixed earlier.
+          </li>
+          <li>
+            Tap <strong>Log fix</strong>. The form clears so you can log the next one.
+          </li>
+        </ol>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Photos:</strong> photograph the equipment only — no guests, children, staff
+            faces, or screens showing a guest&apos;s name or card details. If anyone is in the
+            frame, delete it and retake. You must tick the box confirming this before saving. On a
+            phone, the photo button opens the camera directly so the picture isn&apos;t also kept
+            in your camera roll.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Person at the station</strong> is optional and only there so IT can follow up
+            about the fix. It is never used to evaluate anyone, and the log has no way to list or
+            count fixes by that person. Describe the equipment and the fix in notes, not people.
+          </p>
+        </div>
+
+        <h4 className="font-semibold text-text-primary mt-6">Looking Back</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>
+            <strong>Recent fixes</strong> lists everything in the chosen period (last 30 days by
+            default), newest first
+          </li>
+          <li>
+            Filter by <strong>location</strong>, <strong>issue</strong>, or <strong>Only
+            mine</strong>, or search notes and devices
+          </li>
+          <li>
+            The summary boxes show the total plus the <strong>top locations</strong> and{" "}
+            <strong>top issues</strong> for whatever is shown
+          </li>
+          <li>
+            Tap a fix to see it in full. Whoever logged it (or an admin) can <strong>Edit</strong>,{" "}
+            <strong>Delete</strong>, or add and remove photos
+          </li>
+        </ul>
+
+        <h4 className="font-semibold text-text-primary mt-6">Managing the Issue Buttons</h4>
+        <p>
+          Tap <strong>Manage issues</strong> on the Fix Log page. Anyone on the IT team can add an
+          issue, rename it, set its category, move it up or down, or <strong>Retire</strong> it
+          (hides the button but keeps fixes already logged with it). Deleting an issue doesn&apos;t
+          change past fixes either — they keep the issue text.
+        </p>
+
+        <h4 className="font-semibold text-text-primary mt-6">How Long Things Are Kept (Admins)</h4>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>Photos: 90 days</li>
+          <li>Person at the station: 12 months, then cleared</li>
+          <li>The rest of the entry: 3 years</li>
+        </ul>
+        <p>
+          Cleanup is manual. About once a month an admin opens{" "}
+          <strong>Retention cleanup (admins)</strong> at the bottom of the Fix Log page, taps{" "}
+          <strong>Check what&apos;s due</strong>, and runs each cleanup that has items waiting.
+          Deleted items stay in the SharePoint recycle bin until it empties.
+        </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> If a fix turns out to be bigger than a quick fix, open a normal
+            ticket for it so it gets tracked and assigned.
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: "monitoring-alerts",
     title: "Automatic Monitoring Tickets",
     content: (
@@ -3806,6 +3918,12 @@ const helpCategories: {
     id: "access",
     label: "Access & Visibility",
     sectionIds: ["permissions", "request-visibility"],
+  },
+  {
+    id: "it-team",
+    label: "IT Team",
+    staffOnly: true,
+    sectionIds: ["quick-fix-log"],
   },
   {
     id: "admin",

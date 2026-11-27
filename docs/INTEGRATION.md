@@ -464,6 +464,8 @@ against list GUIDs supplied by env vars.
 | PurchaseRequests | `PURCHASE_LIST_ID` | `NEXT_PUBLIC_PURCHASE_LIST_ID` | Purchase module |
 | CDW | `CDW_LIST_ID` | `NEXT_PUBLIC_CDW_LIST_ID` | CDW module |
 | OrderCatalog | — | `NEXT_PUBLIC_ORDER_CATALOG_LIST_ID` | Recurring order sheets |
+| QuickFixLog | — | `NEXT_PUBLIC_FIXLOG_LIST_ID` | IT fixes made without a ticket (§8.6) |
+| QuickFixIssues | — | `NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID` | Quick Fix Log issue buttons |
 | VisibilityKeywords | — | `NEXT_PUBLIC_VISIBILITY_KEYWORDS_LIST_ID` | Keyword-based visibility |
 | TodoSyncMap | `TODO_SYNC_MAP_LIST_ID` | — | ticket → To Do task id |
 | VikunjaSyncMap | `VIKUNJA_SYNC_MAP_LIST_ID` | — | ticket → Vikunja task id |
@@ -535,6 +537,21 @@ Agent-API writes set `EventType` to `comment_added` / `ticket_status_changed` an
 `Title` · `IsActive` · `SortOrder` · `TriggerType` · `TriggerHours` ·
 `MatchDepartment` · `MatchPriority` · `MatchStatus` · `ActionType` ·
 `EscalateToPriority` · `ReassignToEmail` · `NotifyEmail`
+
+### 8.6 QuickFixLog / QuickFixIssues — fields
+
+`QuickFixLog`: `Title` (issue label) · `Location` · `IssueId` · `Category` · `Device` ·
+`Notes` · `FixedAt` (dateTime, indexed; may be back-dated) · `StationStaffName` ·
+`StationStaffEmail` · `LoggedByName` · `LoggedByEmail` · `Department` · `PhotoCount`.
+Photos are item attachments. `QuickFixIssues`: `Title` · `Category` · `SortOrder` ·
+`Active` · `Department`.
+
+Written only by the SPA (`src/modules/fixlog/`); no Function reads them and nothing
+notifies. Both lists have **unique permissions** (IT group + GMs edit, site Owners full
+control), so an agent's delegated token for anyone else gets 403. Retention (photos 90
+days, station-staff name 12 months, entries 3 years) is applied **by hand** from the Fix
+Log page's admin cleanup panel; there is no timer. Provisioning + lock:
+`scripts/provision-fixlog-lists.mjs`.
 
 ---
 
@@ -650,8 +667,8 @@ Environment variables**. These are runtime values; changing one restarts the app
 > does nothing — this is a static export with no server. Edit
 > `.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml` and push.
 
-39 variables, defined in that workflow's `env:` block. Groups: Azure AD
-(`CLIENT_ID`, `TENANT_ID`), SharePoint site + 12 list ids, 4 Entra group ids, 12
+41 variables, defined in that workflow's `env:` block. Groups: Azure AD
+(`CLIENT_ID`, `TENANT_ID`), SharePoint site + 14 list ids, 4 Entra group ids, 12
 Function URLs (each carrying its `?code=` where the target needs a host key), feature
 flags (`TEAMS_NOTIFICATIONS_ENABLED`, `TEAMS_NAA_ENABLED`, `TODO_SYNC_ENABLED`,
 `VIKUNJA_SYNC_ENABLED`), and `APPINSIGHTS_CONNECTION_STRING` (from a GitHub Secret).

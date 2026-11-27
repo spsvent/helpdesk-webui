@@ -95,8 +95,9 @@ const ticketModule: FormModule = {
 // module = remove its import + the one array entry here (plus its folder/list).
 import { cdwModule } from "@/modules/cdw";
 import { purchaseModule } from "@/modules/purchase";
+import { fixLogModule } from "@/modules/fixlog";
 
-export const FORM_MODULES: FormModule[] = [ticketModule, cdwModule, purchaseModule];
+export const FORM_MODULES: FormModule[] = [ticketModule, cdwModule, purchaseModule, fixLogModule];
 
 // Modules the given user can create, in menu order.
 export function creatableModules(perms: UserPermissions | null): FormModule[] {
