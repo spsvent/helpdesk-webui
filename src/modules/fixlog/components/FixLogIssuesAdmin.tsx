@@ -145,13 +145,14 @@ export default function FixLogIssuesAdmin() {
   function rescue(node: FixLogIssue) {
     act(async () => {
       const fresh = await fetchTree();
-      if (!unreachableNodes(fresh).some((i) => i.id === node.id))
-        throw new UserFacingError(`"${node.label}" was already sorted out by someone else.`);
-      if (childrenOf(fresh, "").some((i) => i.id !== node.id && i.label.toLowerCase() === node.label.toLowerCase()))
+      // Use the node as it is NOW (it may have been renamed since this panel loaded).
+      const live = unreachableNodes(fresh).find((i) => i.id === node.id);
+      if (!live) throw new UserFacingError(`"${node.label}" was already sorted out by someone else.`);
+      if (childrenOf(fresh, "").some((i) => i.id !== live.id && i.label.toLowerCase() === live.label.toLowerCase()))
         throw new UserFacingError(
-          `There's already a "${node.label}" at the top level. Delete or rename one of them in SharePoint, or ask IT to merge them.`
+          `There's already a "${live.label}" at the top level. Delete or rename one of them in SharePoint, or ask IT to merge them.`
         );
-      await updateIssue(client(), node.id, { parentId: "", sortOrder: nextSortOrder(childrenOf(fresh, "")) });
+      await updateIssue(client(), live.id, { parentId: "", sortOrder: nextSortOrder(childrenOf(fresh, "")) });
     });
   }
 
