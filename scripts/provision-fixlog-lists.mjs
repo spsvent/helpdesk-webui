@@ -9,7 +9,8 @@
 // ones stay retired). --reseed DELETES every issue row and seeds the starter tree
 // fresh — refused if QuickFixLog already has any entries.
 //
-//   QuickFixLog     Title, Location, IssueId, Category, Device, Resolution (plain), Notes (plain),
+//   QuickFixLog     Title (issue path cut to 255), IssuePath (full path, plain multi-line),
+//                   Location, IssueId, Category, Device, Resolution (plain), Notes (plain),
 //                   FixedAt (dateTime, indexed), StationStaffName, StationStaffEmail,
 //                   LoggedByName, LoggedByEmail, Department, PhotoCount.
 //                   Photos = the item's attachments (on by default).
@@ -82,6 +83,7 @@ async function call(url, token, init = {}, accept = "application/json") {
 const TEXT = (name) => ({ name, text: { allowMultipleLines: false, maxLength: 255 } });
 
 const LOG_COLUMNS = [
+  { name: "IssuePath", text: { allowMultipleLines: true, textType: "plain" } },
   TEXT("Location"),
   TEXT("IssueId"),
   TEXT("Category"),

@@ -10,7 +10,7 @@ import type { FixLogEntry, FixLogIssue } from "../types";
 import { RANGE_OPTIONS, filterEntries, rangeStartIso, topCounts } from "../fixLog";
 import { listEntries, listIssues } from "../fixLogService";
 import { canRunCleanup } from "../access";
-import QuickFixForm, { type SaveResult } from "./QuickFixForm";
+import QuickFixForm, { type LocationTicketStatus, type SaveResult } from "./QuickFixForm";
 import CleanupPanel from "./CleanupPanel";
 
 // Year shown when asked for, or whenever it isn't the current year.
@@ -96,6 +96,12 @@ export default function FixLogHome() {
   const locationChoices = useMemo(() => Array.from(new Set(entries.map((e) => e.location))).sort(), [entries]);
   const issueChoices = useMemo(() => Array.from(new Set(entries.map((e) => e.issue))).sort(), [entries]);
 
+  // The ticket finishes after the save banner is up; update that banner if it's
+  // still showing the same entry.
+  function handleLocationTicket(entryId: string, status: LocationTicketStatus) {
+    setSaved((cur) => (cur && cur.entry.id === entryId ? { ...cur, locationTicket: status } : cur));
+  }
+
   function handleSaved(r: SaveResult) {
     setSaved(r);
     // Show it straight away (the range filter in `shown` hides it if it's outside
@@ -130,6 +136,7 @@ export default function FixLogHome() {
           }`}
         >
           Logged <strong>{saved.entry.issue}</strong> at {saved.entry.location}.{" "}
+          {saved.locationTicket?.kind === "pending" && <>Opening a ticket for the new location… </>}
           {saved.locationTicket?.kind === "created" && (
             <>
               New location sent to Justin as a ticket
@@ -162,7 +169,7 @@ export default function FixLogHome() {
 
       <div className="bg-bg-card border border-border rounded-xl p-4 sm:p-6">
         <h2 className="text-base font-semibold text-text-primary mb-4">Log a fix</h2>
-        <QuickFixForm issues={issues} onSaved={handleSaved} />
+        <QuickFixForm issues={issues} onSaved={handleSaved} onLocationTicket={handleLocationTicket} />
       </div>
 
       <div className="space-y-3">

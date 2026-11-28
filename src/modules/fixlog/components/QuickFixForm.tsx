@@ -10,6 +10,7 @@ import { FIXLOG_DEPARTMENT, type FixLogEntry, type FixLogIssue, type FixLogWrita
 import {
   OTHER_LOCATION,
   describePick,
+  effectiveParent,
   fromLocalInputValue,
   isOfficialLocation,
   pushRecentLocation,
@@ -35,11 +36,17 @@ function readRecent(): string[] {
   }
 }
 
+export type LocationTicketStatus =
+  | { kind: "pending" }
+  | { kind: "created" | "exists"; ticketNumber?: number }
+  | { kind: "failed" };
+
 export interface SaveResult {
   entry: FixLogEntry;
   photoFailures: number;
-  // Set when the location was typed under "Other" (not in the official list).
-  locationTicket?: { kind: "created" | "exists"; ticketNumber?: number } | { kind: "failed" };
+  // Set when the location was typed under "Other" (not in the official list):
+  // "pending" at save time, then reported via onLocationTicket when it finishes.
+  locationTicket?: LocationTicketStatus;
 }
 
 // The quick-entry form. Create mode (no `initial`) also stages photos; edit mode
@@ -48,11 +55,14 @@ export default function QuickFixForm({
   issues,
   initial,
   onSaved,
+  onLocationTicket,
   onCancel,
 }: {
   issues: FixLogIssue[];
   initial?: FixLogEntry;
   onSaved: (r: SaveResult) => void;
+  // The new-location ticket runs after the save is acknowledged; this reports it.
+  onLocationTicket?: (entryId: string, status: LocationTicketStatus) => void;
   onCancel?: () => void;
 }) {
   const { instance, accounts } = useMsal();
@@ -65,7 +75,8 @@ export default function QuickFixForm({
   // in the tree; otherwise nothing is pre-picked and the saved text is kept.
   const initialPick: IssuePick = (() => {
     const node = initial?.issueId ? tree.find((i) => i.id === initial.issueId) : undefined;
-    return node ? { folderId: node.parentId, nodeId: node.id } : EMPTY_PICK;
+    // effectiveParent: an orphan (folder deleted) is shown at the top level.
+    return node ? { folderId: effectiveParent(tree, node), nodeId: node.id } : EMPTY_PICK;
   })();
   const initialOfficial = !!initial?.location && isOfficialLocation(initial.location);
 
@@ -104,12 +115,8 @@ export default function QuickFixForm({
   // the user actually picks something different, so renaming/retiring a node later
   // — or the issue list failing to load — never alters an existing entry's history.
   const picked = !!pick.nodeId || (!!pick.other && !!pick.otherText?.trim());
-  const issueChanged =
-    !editing ||
-    (picked &&
-      (pick.nodeId !== initialPick.nodeId ||
-        !!pick.other ||
-        pick.folderId !== initialPick.folderId));
+  // A named pick is "changed" only if it's a different node; typed Other always is.
+  const issueChanged = !editing || (picked && (!!pick.other || pick.nodeId !== initialPick.nodeId));
   const described = describePick(tree, pick.other ? { folderId: pick.folderId, otherText: pick.otherText } : { nodeId: pick.nodeId });
   const issueLabel = issueChanged ? described.issue : initial?.issue || "";
 
@@ -203,23 +210,24 @@ export default function QuickFixForm({
       }
 
       // A new (typed) location → one ticket so it gets added to the official list.
-      // Never blocks the save: the entry is already stored.
-      let locationTicket: SaveResult["locationTicket"];
-      if (isNewLocation && (!editing || location !== initial?.location)) {
-        try {
-          locationTicket = await ensureLocationTicket(client, {
-            name: location,
-            entryId: entry.id,
-            requesterEmail: me.email,
-            requesterName: me.name,
-            instance,
-            account: accounts[0],
+      // Started AFTER the save is acknowledged, so a slow ticket call never holds
+      // the form (and never tempts anyone to log the same fix twice).
+      const wantsTicket = isNewLocation && (!editing || location !== initial?.location);
+      const savedEntryId = entry.id;
+      const runTicket = () =>
+        ensureLocationTicket(client, {
+          name: location,
+          entryId: savedEntryId,
+          requesterEmail: me.email,
+          requesterName: me.name,
+          instance,
+          account: accounts[0],
+        })
+          .then((r) => onLocationTicket?.(savedEntryId, r))
+          .catch((e) => {
+            console.error("[QuickFixForm] new-location ticket failed:", e);
+            onLocationTicket?.(savedEntryId, { kind: "failed" });
           });
-        } catch (e) {
-          console.error("[QuickFixForm] new-location ticket failed:", e);
-          locationTicket = { kind: "failed" };
-        }
-      }
 
       if (!editing) {
         const nextRecent = pushRecentLocation(recent, location);
@@ -237,7 +245,8 @@ export default function QuickFixForm({
         });
         reset();
       }
-      onSaved({ entry, photoFailures, locationTicket });
+      onSaved({ entry, photoFailures, locationTicket: wantsTicket ? { kind: "pending" } : undefined });
+      if (wantsTicket) void runTicket();
     } catch (e) {
       console.error("[QuickFixForm] save failed:", e);
       setError("Couldn't save. Check your connection and try again.");

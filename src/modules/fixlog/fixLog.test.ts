@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import type { UserPermissions } from "@/types/rbac";
 import { DEFAULT_PERMISSIONS } from "@/types/rbac";
 import type { FixLogEntry } from "./types";
-import { mapToFixLogEntry, mapToFixLogIssue } from "./types";
+import { TITLE_MAX, mapToFixLogEntry, mapToFixLogIssue, titleFor } from "./types";
 import {
   childrenOf,
   describePick,
+  effectiveParent,
+  unreachableNodes,
   descendantIds,
   filterEntries,
   fromLocalInputValue,
@@ -272,6 +274,19 @@ describe("issue tree", () => {
     expect(pathLabel(pathTo(tree, "card"), "Typed")).toBe("POS › Card reader › Typed");
   });
 
+  it("finds nodes stuck in a loop (reciprocal moves) so the editor can rescue them", () => {
+    const loop = [n("a", "A", "b"), n("b", "B", "a"), n("c", "C", "a"), n("ok", "OK")];
+    expect(unreachableNodes(loop).map((i) => i.id).sort()).toEqual(["a", "b", "c"]);
+    expect(unreachableNodes(tree)).toEqual([]);
+    // The form shows none of them.
+    expect(visibleIssues(loop).map((i) => i.id)).toEqual(["ok"]);
+  });
+
+  it("puts an orphan's effective parent at the top level", () => {
+    expect(effectiveParent(tree, tree.find((i) => i.id === "orphan")!)).toBe("");
+    expect(effectiveParent(tree, tree.find((i) => i.id === "chip")!)).toBe("card");
+  });
+
   it("survives a parent cycle", () => {
     const loop = [n("a", "A", "b"), n("b", "B", "a")];
     expect(pathTo(loop, "a").length).toBeLessThanOrEqual(2);
@@ -412,6 +427,18 @@ describe("mappers", () => {
     const bare = { id: "8", createdBy: { user: {} } } as unknown as Parameters<typeof mapToFixLogEntry>[0];
     expect(() => mapToFixLogEntry(bare)).not.toThrow();
     expect(() => mapToFixLogIssue(bare)).not.toThrow();
+  });
+  it("reads the full path from IssuePath, falling back to Title for older rows", () => {
+    const long = "A".repeat(300);
+    expect(mapToFixLogEntry({ ...base, fields: { Title: titleFor(long), IssuePath: long } }).issue).toBe(long);
+    expect(mapToFixLogEntry({ ...base, fields: { Title: "Old row" } }).issue).toBe("Old row");
+  });
+  it("cuts the Title copy to SharePoint's 255 chars, leaving short paths alone", () => {
+    expect(titleFor("POS › Card reader")).toBe("POS › Card reader");
+    expect(titleFor("x".repeat(255))).toHaveLength(255);
+    const cut = titleFor("x".repeat(256));
+    expect(cut).toHaveLength(TITLE_MAX);
+    expect(cut.endsWith("…")).toBe(true);
   });
   it("treats a missing Active as active", () => {
     expect(mapToFixLogIssue({ ...base, fields: { Title: "X" } }).active).toBe(true);

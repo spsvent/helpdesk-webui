@@ -20,6 +20,7 @@ import {
   FixLogIssueWritable,
   FIXLOG_COLUMN_MAP,
   FIXLOG_ISSUE_COLUMN_MAP,
+  titleFor,
   mapToFixLogEntry,
   mapToFixLogIssue,
 } from "./types";
@@ -46,6 +47,17 @@ function toFields<K extends string>(w: Partial<Record<K, unknown>>, map: Record<
     const value = w[k];
     if (value !== undefined) fields[map[k]] = value;
   });
+  return fields;
+}
+
+// Entry fields: `issue` goes to IssuePath in full and to Title cut to 255 chars.
+function toEntryFields(w: FixLogWritable): Record<string, unknown> {
+  const { issue, ...rest } = w;
+  const fields = toFields(rest, FIXLOG_COLUMN_MAP);
+  if (issue !== undefined) {
+    fields.IssuePath = issue;
+    fields.Title = titleFor(issue);
+  }
   return fields;
 }
 
@@ -108,7 +120,7 @@ export async function createEntry(client: Client, input: FixLogWritable): Promis
   requireEntries();
   const created = await client
     .api(itemsUrl(ENTRIES_LIST_ID))
-    .post({ fields: toFields(input, FIXLOG_COLUMN_MAP) });
+    .post({ fields: toEntryFields(input) });
   // The item exists now. If only the re-read fails, build the entry from what was
   // submitted plus the POST's identity rather than throwing — a thrown error here
   // invites a second, duplicate POST.
@@ -117,7 +129,7 @@ export async function createEntry(client: Client, input: FixLogWritable): Promis
       ...created,
       createdDateTime: created.createdDateTime || new Date().toISOString(),
       lastModifiedDateTime: created.lastModifiedDateTime || new Date().toISOString(),
-      fields: { ...toFields(input, FIXLOG_COLUMN_MAP), ...(created.fields || {}) },
+      fields: { ...toEntryFields(input), ...(created.fields || {}) },
     })
   );
 }
@@ -138,7 +150,7 @@ export async function updateEntry(
   const req = client.api(`${itemsUrl(ENTRIES_LIST_ID)}/${id}`);
   if (ifMatch) req.header("If-Match", ifMatch);
   try {
-    await req.patch({ fields: toFields(patch, FIXLOG_COLUMN_MAP) });
+    await req.patch({ fields: toEntryFields(patch) });
   } catch (e) {
     if (isPreconditionFailed(e)) throw new EntryChangedError(`Entry ${id} changed`);
     throw e;

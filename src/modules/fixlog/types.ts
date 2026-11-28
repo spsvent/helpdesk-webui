@@ -16,7 +16,10 @@ export const FIXLOG_DEPARTMENT = "Tech";
 
 export interface FixLogEntry {
   id: string;
-  issue: string; // SharePoint Title — the full path, e.g. "POS › Card reader › Not reading cards"
+  // The full path, e.g. "POS › Card reader › Not reading cards". Stored in the
+  // multi-line IssuePath column (a deep tree can pass 255 chars); Title holds a
+  // copy cut to fit SharePoint's 255-char limit so the raw list stays readable.
+  issue: string;
   issueId?: string; // QuickFixIssues node id; blank for a typed "Other" issue
   category?: string; // top-level folder of the issue at log time (e.g. "POS")
   location: string;
@@ -51,8 +54,17 @@ export type FixLogWritable = Partial<
   >
 >;
 
-export const FIXLOG_COLUMN_MAP: Record<keyof FixLogWritable, string> = {
-  issue: "Title",
+// SharePoint's single-line text limit (Title).
+export const TITLE_MAX = 255;
+
+/** Title copy of a path: the whole thing when it fits, else cut with an ellipsis. */
+export function titleFor(issue: string): string {
+  return issue.length <= TITLE_MAX ? issue : `${issue.slice(0, TITLE_MAX - 1)}…`;
+}
+
+// `issue` is written by toEntryFields (both IssuePath and the cut Title), so it
+// is not in this one-field-per-column map.
+export const FIXLOG_COLUMN_MAP: Record<Exclude<keyof FixLogWritable, "issue">, string> = {
   issueId: "IssueId",
   category: "Category",
   location: "Location",
@@ -97,7 +109,8 @@ export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
   const etag = raw["@odata.etag"] ?? raw.eTag;
   return {
     id: item.id,
-    issue: str(f.Title) || "",
+    // Older rows (before IssuePath) only have Title.
+    issue: str(f.IssuePath) || str(f.Title) || "",
     issueId: str(f.IssueId),
     category: str(f.Category),
     location: str(f.Location) || "",

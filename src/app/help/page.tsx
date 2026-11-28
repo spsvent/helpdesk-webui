@@ -3363,9 +3363,11 @@ const helpSections: HelpSection[] = [
           devices keep breaking.
         </p>
         <p>
-          It&apos;s separate from tickets: logging a fix <strong>never sends an email or Teams
-          message</strong>, isn&apos;t assigned to anyone, and doesn&apos;t change ticket counts or
-          the weekly summary. Only the IT team and admins can see it.
+          It&apos;s separate from tickets: a logged fix <strong>never sends an email or Teams
+          message</strong>, isn&apos;t assigned to anyone, and doesn&apos;t count as a ticket or
+          appear in the weekly summary. The one exception is a <em>new location</em> (see
+          &quot;Missing Locations&quot;), which opens a normal ticket for Justin. Only the IT team
+          and admins can see the log.
         </p>
 
         <h4 className="font-semibold text-text-primary mt-6">Logging a Fix</h4>
@@ -3426,7 +3428,8 @@ const helpSections: HelpSection[] = [
           under <strong>Other</strong>, the fix is saved with that name and a ticket titled{" "}
           <em>Add location: …</em> is opened for Justin to add it to the official list (no
           email is sent). If the same name is already waiting in an open ticket, no second
-          ticket is made. Typing an existing name with different capitals or spacing just uses
+          ticket is made (in the rare case two people type the same new place at the same
+          moment, Justin may get two and just closes one). Typing an existing name with different capitals or spacing just uses
           the official one.
         </p>
 

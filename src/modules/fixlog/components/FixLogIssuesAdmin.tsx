@@ -6,10 +6,22 @@ import { useMsal } from "@azure/msal-react";
 import { getGraphClient } from "@/shared/graph";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { FIXLOG_DEPARTMENT, type FixLogIssue, type FixLogIssueWritable } from "../types";
-import { PATH_SEPARATOR, childrenOf, descendantIds, moveTargets, nextSortOrder, pathLabel, pathTo } from "../fixLog";
+import {
+  PATH_SEPARATOR,
+  childrenOf,
+  descendantIds,
+  moveTargets,
+  nextSortOrder,
+  pathLabel,
+  pathTo,
+  unreachableNodes,
+} from "../fixLog";
 import { createIssue, deleteIssue, isFixLogIssuesConfigured, listIssues, updateIssue } from "../fixLogService";
 
 const inputCls = "px-2 py-1.5 border border-border rounded-lg bg-bg-card text-text-primary text-sm";
+
+// A failure whose message is written for the person editing.
+class UserFacingError extends Error {}
 
 // Tree editor for the quick-pick issues. Browse folders like the form; add options
 // to the folder you're in; open any option to give it sub-options (that turns it
@@ -24,39 +36,48 @@ export default function FixLogIssuesAdmin() {
   const [busy, setBusy] = useState(false);
   const [newLabel, setNewLabel] = useState("");
 
+  // Fresh copy of the whole tree. Structural changes re-read it right before
+  // writing, so a change made in another tab can't be planned against stale data.
+  const fetchTree = useCallback(
+    () => listIssues(getGraphClient(instance, account!), { includeInactive: true }),
+    [account, instance]
+  );
+
+  // Never clears `error`: a reload after a failed change must not hide that failure.
   const load = useCallback(async () => {
     if (!account) return;
     try {
-      setIssues(await listIssues(getGraphClient(instance, account), { includeInactive: true }));
-      setError(null);
+      setIssues(await fetchTree());
     } catch (e) {
       console.error("[FixLogIssuesAdmin] load failed:", e);
       setError("Couldn't load issues.");
     } finally {
       setLoading(false);
     }
-  }, [account, instance]);
+  }, [account, fetchTree]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const stuck = useMemo(() => unreachableNodes(issues), [issues]);
 
   // A folder deleted meanwhile drops the view back to the top.
   const current = folderId && issues.some((i) => i.id === folderId) ? folderId : "";
   const crumbs = useMemo(() => (current ? pathTo(issues, current) : []), [issues, current]);
   const items = useMemo(() => childrenOf(issues, current), [issues, current]);
 
+  // fn may throw an Error whose message is meant for the user (UserFacingError).
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
       await fn();
-      await load();
     } catch (e) {
       console.error("[FixLogIssuesAdmin] save failed:", e);
-      setError("Couldn't save that change.");
-      await load();
+      setError(e instanceof UserFacingError ? e.message : "Couldn't save that change.");
     } finally {
+      await load();
       setBusy(false);
     }
   }
@@ -101,12 +122,19 @@ export default function FixLogIssuesAdmin() {
 
   function moveTo(node: FixLogIssue, parentId: string) {
     if (parentId === node.parentId) return;
-    const siblings = childrenOf(issues, parentId);
-    if (siblings.some((i) => i.label.toLowerCase() === node.label.toLowerCase())) {
-      setError(`"${node.label}" already exists in that folder.`);
-      return;
-    }
-    act(() => updateIssue(client(), node.id, { parentId, sortOrder: nextSortOrder(siblings) }));
+    act(async () => {
+      // Re-check against the live tree: another tab may have moved things since.
+      const fresh = await fetchTree();
+      if (!fresh.some((i) => i.id === node.id)) throw new UserFacingError(`"${node.label}" was deleted meanwhile.`);
+      if (parentId && !fresh.some((i) => i.id === parentId))
+        throw new UserFacingError("That folder was deleted meanwhile.");
+      if (parentId && (parentId === node.id || descendantIds(fresh, node.id).includes(parentId)))
+        throw new UserFacingError(`Can't move "${node.label}" into itself or one of its own sub-options.`);
+      const siblings = childrenOf(fresh, parentId);
+      if (siblings.some((i) => i.id !== node.id && i.label.toLowerCase() === node.label.toLowerCase()))
+        throw new UserFacingError(`"${node.label}" already exists in that folder.`);
+      await updateIssue(client(), node.id, { parentId, sortOrder: nextSortOrder(siblings) });
+    });
   }
 
   function remove(node: FixLogIssue) {
@@ -115,10 +143,28 @@ export default function FixLogIssuesAdmin() {
       ? `Delete "${node.label}" and the ${below.length} option${below.length > 1 ? "s" : ""} inside it? Fixes already logged keep their issue text. Retire it instead to just hide it.`
       : `Delete "${node.label}"? Fixes already logged keep their issue text. Retire it instead to just hide it.`;
     if (!window.confirm(msg)) return;
-    // Children first, so a failure part-way never leaves orphans pointing at a gone folder.
     act(async () => {
-      for (const id of [...below].reverse()) await deleteIssue(client(), id);
-      await deleteIssue(client(), node.id);
+      // Delete exactly what was confirmed: if the folder's contents changed in
+      // another tab since, stop and let the user look again.
+      const fresh = await fetchTree();
+      const now = descendantIds(fresh, node.id);
+      const same = now.length === below.length && now.every((id) => below.includes(id));
+      if (!fresh.some((i) => i.id === node.id) || !same)
+        throw new UserFacingError(`"${node.label}" changed since you looked. Check it and try again.`);
+      // Children first, so a failure part-way never leaves orphans pointing at a gone folder.
+      const order = [...now].reverse().concat(node.id);
+      let done = 0;
+      try {
+        for (const id of order) {
+          await deleteIssue(client(), id);
+          done++;
+        }
+      } catch (e) {
+        console.error("[FixLogIssuesAdmin] delete stopped part-way:", e);
+        throw new UserFacingError(
+          `Deleted ${done} of ${order.length}. The rest of "${node.label}" is still there — try Delete again.`
+        );
+      }
     });
   }
 
@@ -182,6 +228,31 @@ export default function FixLogIssuesAdmin() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!current && stuck.length > 0 && (
+        <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-4 space-y-2">
+          <p className="text-sm text-yellow-900">
+            <strong>Needs attention:</strong> these options got moved into each other (probably two
+            people editing at once), so they can&apos;t be reached or picked. Move each back to the top
+            level, then file it where it belongs.
+          </p>
+          <ul className="space-y-1">
+            {stuck.map((n) => (
+              <li key={n.id} className="flex items-center justify-between gap-2 text-sm text-yellow-900">
+                <span>{n.label}</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => act(() => updateIssue(client(), n.id, { parentId: "" }))}
+                  className="px-2.5 py-1 rounded-lg border border-yellow-400 bg-white text-sm"
+                >
+                  Move to top level
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <LoadingSpinner />

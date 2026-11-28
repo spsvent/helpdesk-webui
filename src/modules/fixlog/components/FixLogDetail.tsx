@@ -21,9 +21,22 @@ import {
   syncPhotoCount,
   uploadEntryPhoto,
 } from "../fixLogService";
-import QuickFixForm from "./QuickFixForm";
+import QuickFixForm, { type LocationTicketStatus } from "./QuickFixForm";
 import PhotoPicker from "./PhotoPicker";
 import { formatWhen } from "./FixLogHome";
+
+function ticketNotice(t: LocationTicketStatus): string {
+  switch (t.kind) {
+    case "pending":
+      return "Saved. Opening a ticket for the new location…";
+    case "failed":
+      return "Saved, but couldn't open the new-location ticket — please tell Justin the location's name.";
+    case "created":
+      return `Saved. New location sent to Justin as a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`;
+    default:
+      return `Saved. That new location is already waiting in a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`;
+  }
+}
 
 export default function FixLogDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -207,17 +220,9 @@ export default function FixLogDetail({ id }: { id: string }) {
             onSaved={(r) => {
               setEntry(r.entry);
               setEditing(false);
-              const t = r.locationTicket;
-              setNotice(
-                !t
-                  ? null
-                  : t.kind === "failed"
-                    ? "Saved, but couldn't open the new-location ticket — please tell Justin the location's name."
-                    : t.kind === "created"
-                      ? `Saved. New location sent to Justin as a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`
-                      : `Saved. That new location is already waiting in a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`
-              );
+              setNotice(r.locationTicket ? ticketNotice(r.locationTicket) : null);
             }}
+            onLocationTicket={(_, t) => setNotice(ticketNotice(t))}
             onCancel={() => setEditing(false)}
           />
         </div>

@@ -216,8 +216,30 @@ export function sortIssues(issues: FixLogIssue[]): FixLogIssue[] {
   return [...issues].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
 }
 
-function effectiveParent(issues: FixLogIssue[], node: FixLogIssue): string {
+/** The folder a node is shown in: its parent, or "" (top) if that parent is gone. */
+export function effectiveParent(issues: FixLogIssue[], node: FixLogIssue): string {
   return node.parentId && issues.some((i) => i.id === node.parentId) ? node.parentId : "";
+}
+
+/**
+ * Nodes that can't be reached from the top because their parent chain loops
+ * (e.g. two people moved A into B and B into A at the same moment). The editor
+ * lists them under "Needs attention" so they can be put back; the form hides them.
+ */
+export function unreachableNodes(issues: FixLogIssue[]): FixLogIssue[] {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  return sortIssues(
+    issues.filter((n) => {
+      const seen = new Set<string>();
+      let cur: FixLogIssue | undefined = n;
+      while (cur) {
+        if (seen.has(cur.id)) return true;
+        seen.add(cur.id);
+        cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+      }
+      return false;
+    })
+  );
 }
 
 /** Direct children of a folder ("" = top level), sorted. */

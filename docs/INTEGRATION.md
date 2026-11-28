@@ -540,7 +540,8 @@ Agent-API writes set `EventType` to `comment_added` / `ticket_status_changed` an
 
 ### 8.6 QuickFixLog / QuickFixIssues — fields
 
-`QuickFixLog`: `Title` (full issue path, e.g. `POS › Card reader › Not reading cards`) ·
+`QuickFixLog`: `IssuePath` (full issue path, e.g. `POS › Card reader › Not reading cards`;
+plain multi-line, since a deep tree can pass 255 chars) · `Title` (the same, cut to 255) ·
 `Location` · `IssueId` · `Category` (top-level folder) · `Device` · `Resolution` · `Notes` ·
 `FixedAt` (dateTime, indexed; may be back-dated) · `StationStaffName` · `StationStaffEmail` ·
 `LoggedByName` · `LoggedByEmail` · `Department` · `PhotoCount`. Photos are item attachments.
@@ -553,7 +554,10 @@ never notify. One exception creates a **ticket**: a location typed under "Other"
 Problem ticket titled `Add location: <name>`, assigned to
 `NEXT_PUBLIC_FIXLOG_LOCATION_TICKET_ASSIGNEE`, with no email or Teams post (it does get
 the activity-log row and the To Do / Vikunja syncs). An open ticket with the same title
-suppresses duplicates. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
+normally suppresses duplicates; it's a best-effort check (two people typing the same new
+place at the same moment, a renamed ticket, or a failed lookup can still yield a second
+ticket — by design, a duplicate is preferred over a lost request). The ticket is created
+after the fix is saved and never blocks or undoes the save. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
 IT group Contribute. On `QuickFixLog` IT can edit only items they created (item-level
 `WriteSecurity=2`) and version history is off, so cleared names don't survive in old
 versions. A delegated token for anyone else gets 403. Residual: anyone with read access
