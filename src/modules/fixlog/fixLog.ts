@@ -1,6 +1,7 @@
 // Pure Quick Fix Log helpers (no Graph, no React) so they unit-test under node.
 
 import type { FixLogEntry, FixLogIssue } from "./types";
+import { LOCATION_OPTIONS } from "@/lib/locationConfig";
 
 // --- retention ----------------------------------------------------------------
 // Periods from the attorney check (2026-11-27). Cleanup is MANUAL by Justin's
@@ -176,7 +177,7 @@ export function filterEntries(entries: FixLogEntry[], f: FixLogFilter): FixLogEn
     .filter((e) => (mine ? e.loggedByEmail.toLowerCase() === mine : true))
     .filter((e) =>
       q
-        ? [e.issue, e.location, e.device, e.notes, e.category]
+        ? [e.issue, e.location, e.device, e.resolution, e.notes, e.category]
             .filter(Boolean)
             .some((s) => (s as string).toLowerCase().includes(q))
         : true
@@ -204,15 +205,135 @@ export function topCounts(
     .slice(0, n);
 }
 
-// --- issues ------------------------------------------------------------------------
+// --- issue tree ------------------------------------------------------------------
+// QuickFixIssues rows form a tree via parentId ("" = top level). A node with
+// children is a folder; one without is a pickable issue. Orphans (parent deleted
+// or missing) are treated as top level so nothing silently disappears.
+
+export const PATH_SEPARATOR = " › ";
 
 export function sortIssues(issues: FixLogIssue[]): FixLogIssue[] {
   return [...issues].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
 }
 
-// Next SortOrder for a newly added issue (end of the list, in steps of 10).
-export function nextSortOrder(issues: FixLogIssue[]): number {
-  return issues.reduce((max, i) => Math.max(max, i.sortOrder), 0) + 10;
+function effectiveParent(issues: FixLogIssue[], node: FixLogIssue): string {
+  return node.parentId && issues.some((i) => i.id === node.parentId) ? node.parentId : "";
+}
+
+/** Direct children of a folder ("" = top level), sorted. */
+export function childrenOf(issues: FixLogIssue[], parentId: string): FixLogIssue[] {
+  return sortIssues(issues.filter((i) => effectiveParent(issues, i) === parentId));
+}
+
+export function hasChildren(issues: FixLogIssue[], id: string): boolean {
+  return issues.some((i) => effectiveParent(issues, i) === id);
+}
+
+/** Root → node chain (inclusive). Stops on a cycle instead of looping forever. */
+export function pathTo(issues: FixLogIssue[], id: string): FixLogIssue[] {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  const chain: FixLogIssue[] = [];
+  const seen = new Set<string>();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    chain.unshift(cur);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return chain;
+}
+
+export function pathLabel(nodes: { label: string }[], extra?: string): string {
+  return [...nodes.map((n) => n.label), ...(extra ? [extra] : [])].join(PATH_SEPARATOR);
+}
+
+/** Every node under `id` (not including it). */
+export function descendantIds(issues: FixLogIssue[], id: string): string[] {
+  const out: string[] = [];
+  const queue = [id];
+  const seen = new Set<string>([id]);
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const c of issues.filter((i) => i.parentId === cur)) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c.id);
+      queue.push(c.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * The form's view of the tree: only active nodes whose whole ancestor chain is
+ * active (retiring a folder hides everything inside it).
+ */
+export function visibleIssues(issues: FixLogIssue[]): FixLogIssue[] {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  const ok = (n: FixLogIssue): boolean => {
+    const seen = new Set<string>();
+    let cur: FixLogIssue | undefined = n;
+    while (cur) {
+      if (!cur.active || seen.has(cur.id)) return false;
+      seen.add(cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return true;
+  };
+  return issues.filter(ok);
+}
+
+/**
+ * What gets stored for a pick: the full path label, the node id, and the
+ * top-level folder as the category. `otherText` = a typed issue inside `folderId`.
+ */
+export function describePick(
+  issues: FixLogIssue[],
+  pick: { nodeId?: string; folderId?: string; otherText?: string }
+): { issue: string; issueId: string; category: string } {
+  if (pick.nodeId) {
+    const path = pathTo(issues, pick.nodeId);
+    return { issue: pathLabel(path), issueId: pick.nodeId, category: path.length > 1 ? path[0].label : "" };
+  }
+  const folder = pick.folderId ? pathTo(issues, pick.folderId) : [];
+  const text = (pick.otherText || "").trim();
+  return { issue: text ? pathLabel(folder, text) : "", issueId: "", category: folder[0]?.label || "" };
+}
+
+/** Folders a node may be moved into: anything except itself and its descendants. */
+export function moveTargets(issues: FixLogIssue[], id: string): FixLogIssue[] {
+  const banned = new Set([id, ...descendantIds(issues, id)]);
+  return sortIssues(issues.filter((i) => !banned.has(i.id)));
+}
+
+// Next SortOrder at the end of a folder, in steps of 10.
+export function nextSortOrder(siblings: FixLogIssue[]): number {
+  return siblings.reduce((max, i) => Math.max(max, i.sortOrder), 0) + 10;
+}
+
+// --- locations ---------------------------------------------------------------------
+
+// Choosing this in the Fix Log means "not in the list — I'll type it".
+export const OTHER_LOCATION = "Other";
+
+const OFFICIAL_LOCATIONS: readonly string[] = LOCATION_OPTIONS.filter((l) => l !== OTHER_LOCATION);
+
+export function isOfficialLocation(name: string): boolean {
+  return OFFICIAL_LOCATIONS.includes(name);
+}
+
+/** Tidy a typed location (trim, collapse spaces) and snap it to an official name
+ *  if it only differs by case/spacing, so "pavilion " doesn't raise a ticket. */
+export function resolveTypedLocation(typed: string): { name: string; official: boolean } {
+  const name = typed.trim().replace(/\s+/g, " ");
+  const hit = OFFICIAL_LOCATIONS.find((l) => l.toLowerCase() === name.toLowerCase());
+  return hit ? { name: hit, official: true } : { name, official: false };
+}
+
+export const LOCATION_TICKET_PREFIX = "Add location: ";
+
+export function locationTicketTitle(name: string): string {
+  return `${LOCATION_TICKET_PREFIX}${name}`;
 }
 
 // --- recent locations (persisted per browser by the form) --------------------------
@@ -245,7 +366,7 @@ const FUTURE_SKEW_MS = 5 * 60 * 1000;
 // --- validation ------------------------------------------------------------------
 
 export interface FixLogDraft {
-  location: string;
+  location: string; // final location string ("" when "Other" is picked but nothing typed)
   issue: string;
   fixedAtIso?: string;
   photoCount: number;
@@ -253,7 +374,7 @@ export interface FixLogDraft {
 }
 
 export function validateDraft(d: FixLogDraft, now: Date): string | null {
-  if (!d.location) return "Pick a location.";
+  if (!d.location.trim()) return "Pick a location, or choose Other and type it.";
   if (!d.issue.trim()) return "Pick an issue, or choose Other and type one.";
   if (!d.fixedAtIso) return "Enter when the fix happened.";
   if (new Date(d.fixedAtIso).getTime() > now.getTime() + FUTURE_SKEW_MS)

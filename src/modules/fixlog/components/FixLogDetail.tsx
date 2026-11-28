@@ -41,6 +41,7 @@ export default function FixLogDetail({ id }: { id: string }) {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newPhotos, setNewPhotos] = useState<File[]>([]);
   const [confirmed, setConfirmed] = useState(false);
@@ -66,7 +67,8 @@ export default function FixLogDetail({ id }: { id: string }) {
         console.error("[FixLogDetail] load failed:", e);
         setError("Couldn't load this entry. It may have been deleted.");
       });
-    listIssues(client)
+    // All nodes, retired too (the edit form hides retired folders itself).
+    listIssues(client, { includeInactive: true })
       .then(setIssues)
       .catch(() => setIssues([]));
     loadPhotos();
@@ -190,6 +192,12 @@ export default function FixLogDetail({ id }: { id: string }) {
         ← Fix log
       </Link>
 
+      {notice && (
+        <p role="status" className="rounded-lg border border-border bg-bg-card p-3 text-sm text-text-primary">
+          {notice}
+        </p>
+      )}
+
       {editing ? (
         <div className="bg-bg-card border border-border rounded-xl p-4 sm:p-6">
           <h1 className="text-base font-semibold text-text-primary mb-4">Edit fix</h1>
@@ -199,6 +207,16 @@ export default function FixLogDetail({ id }: { id: string }) {
             onSaved={(r) => {
               setEntry(r.entry);
               setEditing(false);
+              const t = r.locationTicket;
+              setNotice(
+                !t
+                  ? null
+                  : t.kind === "failed"
+                    ? "Saved, but couldn't open the new-location ticket — please tell Justin the location's name."
+                    : t.kind === "created"
+                      ? `Saved. New location sent to Justin as a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`
+                      : `Saved. That new location is already waiting in a ticket${t.ticketNumber ? ` (#${t.ticketNumber})` : ""}.`
+              );
             }}
             onCancel={() => setEditing(false)}
           />
@@ -210,7 +228,6 @@ export default function FixLogDetail({ id }: { id: string }) {
               <h1 className="text-lg font-semibold text-text-primary">{entry.issue}</h1>
               <p className="text-sm text-text-secondary">
                 {entry.location}
-                {entry.category && <> · {entry.category}</>}
               </p>
             </div>
             {canModify && (
@@ -257,7 +274,18 @@ export default function FixLogDetail({ id }: { id: string }) {
             )}
           </dl>
 
-          {entry.notes && <p className="text-sm text-text-primary whitespace-pre-wrap">{entry.notes}</p>}
+          {entry.resolution && (
+            <div>
+              <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Resolution</h2>
+              <p className="text-sm text-text-primary whitespace-pre-wrap">{entry.resolution}</p>
+            </div>
+          )}
+          {entry.notes && (
+            <div>
+              <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Note</h2>
+              <p className="text-sm text-text-primary whitespace-pre-wrap">{entry.notes}</p>
+            </div>
+          )}
         </div>
       )}
 

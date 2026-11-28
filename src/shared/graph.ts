@@ -9,8 +9,9 @@
 // it): code under src/modules/** imports Graph helpers from HERE
 // ("@/shared/graph"), never from "@/lib/graphClient" directly. Ticket-specific
 // helpers (getTicket, updateTicket, addComment, …) are intentionally not
-// re-exported; the single sanctioned exception is PurchaseForm's
-// convert-from-ticket bridge, which deep-imports them with a comment saying so.
+// re-exported. Two sanctioned exceptions deep-import them, each with a comment
+// saying so: PurchaseForm's convert-from-ticket bridge, and the Fix Log's
+// new-location ticket bridge (src/modules/fixlog/locationTicket.ts).
 // Before merging module changes: grep '@/lib/graphClient' under src/modules/.
 // If a module needs another list-agnostic helper, add the re-export here.
 // ============================================================================

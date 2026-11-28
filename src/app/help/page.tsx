@@ -3376,15 +3376,21 @@ const helpSections: HelpSection[] = [
           </li>
           <li>
             Pick the <strong>location</strong>. Places you&apos;ve used recently appear as buttons
-            above the list.
+            above the list. If it isn&apos;t in the list, choose <strong>Other (not in the
+            list)…</strong> and type its name — see &quot;Missing Locations&quot; below.
           </li>
           <li>
-            Tap the <strong>issue</strong>. If none fit, tap <strong>Other…</strong> and type it.
+            Pick the <strong>issue</strong>. The boxes work like folders: a box showing a number
+            and <strong>›</strong> opens more options inside it (e.g. <em>POS › Card reader ›
+            Not reading cards</em>); any other box picks that issue. Use the path at the top to
+            go back up. If nothing fits, tap <strong>Other…</strong> in whichever folder
+            you&apos;re in and type it.
           </li>
           <li>
-            Optionally add a <strong>note</strong> (what you did), the <strong>device</strong>{" "}
-            (e.g. &quot;Register 2&quot;), the <strong>person at the station</strong>, and{" "}
-            <strong>photos</strong>
+            Optionally add the <strong>resolution</strong> (what fixed it), a{" "}
+            <strong>note</strong> (anything else, such as what was wrong), the{" "}
+            <strong>device</strong> (e.g. &quot;Register 2&quot;), the <strong>person at the
+            station</strong>, and <strong>photos</strong>
           </li>
           <li>
             <strong>When</strong> defaults to now. Tap <strong>Change</strong> to log something
@@ -3414,6 +3420,16 @@ const helpSections: HelpSection[] = [
           </p>
         </div>
 
+        <h4 className="font-semibold text-text-primary mt-6">Missing Locations</h4>
+        <p>
+          The Fix Log uses the same location list as the ticket form. When you type a location
+          under <strong>Other</strong>, the fix is saved with that name and a ticket titled{" "}
+          <em>Add location: …</em> is opened for Justin to add it to the official list (no
+          email is sent). If the same name is already waiting in an open ticket, no second
+          ticket is made. Typing an existing name with different capitals or spacing just uses
+          the official one.
+        </p>
+
         <h4 className="font-semibold text-text-primary mt-6">Looking Back</h4>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>
@@ -3422,7 +3438,7 @@ const helpSections: HelpSection[] = [
           </li>
           <li>
             Filter by <strong>location</strong>, <strong>issue</strong>, or <strong>Only
-            mine</strong>, or search notes and devices
+            mine</strong>, or search resolutions, notes and devices
           </li>
           <li>
             The summary boxes show the total plus the <strong>top locations</strong> and{" "}
@@ -3438,11 +3454,24 @@ const helpSections: HelpSection[] = [
         <h4 className="font-semibold text-text-primary mt-6">Managing the Issue Buttons</h4>
         <p>
           Tap <strong>Manage issues</strong> on the Fix Log page (admins also find it under{" "}
-          <strong>Settings → Quick Fix Issues</strong>). Anyone on the IT team can add an
-          issue, rename it, set its category, move it up or down, or <strong>Retire</strong> it
-          (hides the button but keeps fixes already logged with it). Deleting an issue doesn&apos;t
-          change past fixes either — they keep the issue text.
+          <strong>Settings → Quick Fix Issues</strong>). It works like the form: open folders
+          to move around. Anyone on the IT team can:
         </p>
+        <ul className="list-disc list-inside space-y-2 ml-4">
+          <li>Add an option to the folder you&apos;re in</li>
+          <li>
+            Tap <strong>Add sub-options ›</strong> on any option to put options inside it — that
+            turns it into a folder
+          </li>
+          <li>Rename, move up or down, or <strong>Move to…</strong> another folder</li>
+          <li>
+            <strong>Retire</strong> an option to hide it (and everything inside it) from the form
+          </li>
+          <li>
+            <strong>Delete</strong> an option (and everything inside it). Fixes already logged keep
+            their issue text either way.
+          </li>
+        </ul>
 
         <h4 className="font-semibold text-text-primary mt-6">How Long Things Are Kept (Admins)</h4>
         <ul className="list-disc list-inside space-y-2 ml-4">

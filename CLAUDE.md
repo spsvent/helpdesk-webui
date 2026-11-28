@@ -118,7 +118,7 @@ Required environment variables for local development (`.env.local`) and producti
 - `NEXT_PUBLIC_ESCALATION_LIST_ID` - EscalationRules list
 - `NEXT_PUBLIC_ACTIVITY_LOG_LIST_ID` - ActivityLog list
 - `NEXT_PUBLIC_NOTIFICATION_OPTOUT_LIST_ID` - NotificationOptOut list (emails suppressed from all notifications; access/roles unaffected). Also set `NOTIFICATION_OPTOUT_LIST_ID` on the Function App so server-side send paths enforce it.
-- `NEXT_PUBLIC_FIXLOG_LIST_ID` / `NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID` - QuickFixLog + QuickFixIssues lists (IT Quick Fix Log, `src/modules/fixlog/`). Never notifies; lists have unique permissions (Owners full, GMs Edit, IT Contribute; QuickFixLog = edit-own-items, no version history); retention cleanup is manual from the page. Provision/lock with `scripts/provision-fixlog-lists.mjs`.
+- `NEXT_PUBLIC_FIXLOG_LIST_ID` / `NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID` - QuickFixLog + QuickFixIssues lists (IT Quick Fix Log, `src/modules/fixlog/`). Never notifies; lists have unique permissions (Owners full, GMs Edit, IT Contribute; QuickFixLog = edit-own-items, no version history); retention cleanup is manual from the page. Provision/lock with `scripts/provision-fixlog-lists.mjs`. `NEXT_PUBLIC_FIXLOG_LOCATION_TICKET_ASSIGNEE` - who gets the one ticket raised when a Fix Log location is typed under "Other" (no email; `src/modules/fixlog/locationTicket.ts`).
 
 ### Teams Notifications
 - `NEXT_PUBLIC_TEAMS_NOTIFICATIONS_ENABLED` - "true" to enable Teams notifications

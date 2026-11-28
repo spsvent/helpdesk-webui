@@ -3,19 +3,22 @@
 // Provision the Quick Fix Log SharePoint lists (src/modules/fixlog/).
 // =============================================================================
 // Dependency-free (Node 18+ fetch). Idempotent: existing lists/columns are reused.
-// Starter issues are seeded when QuickFixIssues is created; pass --seed-missing to
-// add any starter labels that aren't there (e.g. after an interrupted first run) —
-// it never touches existing rows, so retired issues stay retired.
+// The starter tree (fixlog-starter-issues.json, nested) is seeded when
+// QuickFixIssues is created. --seed-missing adds starter nodes that aren't there
+// (matched by label within their folder; never edits existing rows, so retired
+// ones stay retired). --reseed DELETES every issue row and seeds the starter tree
+// fresh — refused if QuickFixLog already has any entries.
 //
-//   QuickFixLog     Title, Location, IssueId, Category, Device, Notes (plain),
+//   QuickFixLog     Title, Location, IssueId, Category, Device, Resolution (plain), Notes (plain),
 //                   FixedAt (dateTime, indexed), StationStaffName, StationStaffEmail,
 //                   LoggedByName, LoggedByEmail, Department, PhotoCount.
 //                   Photos = the item's attachments (on by default).
-//   QuickFixIssues  Title, Category, SortOrder, Active, Department.
+//   QuickFixIssues  Title, ParentId, SortOrder, Active, Department (+ legacy Category).
+//                   A tree: ParentId = the folder's item id, "" = top level.
 //
 // Step 1 — create + seed (Graph token that can create lists/columns on the site,
 // e.g. the Help Desk app's app-only token with Sites.ReadWrite.All):
-//   GRAPH_TOKEN=... SITE_ID=... node scripts/provision-fixlog-lists.mjs [--seed-missing]
+//   GRAPH_TOKEN=... SITE_ID=... node scripts/provision-fixlog-lists.mjs [--seed-missing | --reseed]
 //   Prints both list ids → NEXT_PUBLIC_FIXLOG_LIST_ID / NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID
 //   in .github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml.
 //
@@ -83,6 +86,7 @@ const LOG_COLUMNS = [
   TEXT("IssueId"),
   TEXT("Category"),
   TEXT("Device"),
+  { name: "Resolution", text: { allowMultipleLines: true, textType: "plain" } },
   { name: "Notes", text: { allowMultipleLines: true, textType: "plain" } },
   { name: "FixedAt", indexed: true, dateTime: { format: "dateTime", displayAs: "default" } },
   TEXT("StationStaffName"),
@@ -94,7 +98,8 @@ const LOG_COLUMNS = [
 ];
 
 const ISSUE_COLUMNS = [
-  TEXT("Category"),
+  TEXT("ParentId"),
+  TEXT("Category"), // legacy (flat list); the tree uses ParentId
   { name: "SortOrder", number: {} },
   { name: "Active", boolean: {} },
   TEXT("Department"),
@@ -146,29 +151,58 @@ async function ensureList(token, siteId, displayName, description, columns) {
   return { listId, created };
 }
 
-// Adds starter labels that are missing (compared against ALL rows, retired ones
-// included), keeping each starter's place in the order. Never edits existing rows.
-async function seedIssues(token, siteId, listId) {
-  const have = new Set();
-  let url = `${GRAPH}/sites/${siteId}/lists/${listId}/items?$expand=fields($select=Title)&$top=500`;
+async function listAll(token, url) {
+  const out = [];
   while (url) {
     const page = await call(url, token);
-    for (const it of page.value || []) have.add(String(it.fields?.Title || "").trim().toLowerCase());
+    if (!Array.isArray(page?.value)) throw new Error(`Unexpected response from ${url}`);
+    out.push(...page.value);
     url = page["@odata.nextLink"];
   }
+  return out;
+}
+
+// Seeds the nested starter tree, adding only nodes that are missing (matched by
+// label within the same folder, retired ones included). Never edits existing rows.
+async function seedIssues(token, siteId, listId) {
+  const rows = await listAll(token, `${GRAPH}/sites/${siteId}/lists/${listId}/items?$expand=fields($select=Title,ParentId)&$top=500`);
+  const key = (parentId, label) => `${parentId}\u0000${label.trim().toLowerCase()}`;
+  const have = new Map(rows.map((r) => [key(r.fields?.ParentId || "", String(r.fields?.Title || "")), r.id]));
   const seed = JSON.parse(readFileSync(new URL("./fixlog-starter-issues.json", import.meta.url), "utf8"));
   let added = 0;
-  for (const [i, s] of seed.entries()) {
-    if (have.has(s.label.trim().toLowerCase())) continue;
-    await call(`${GRAPH}/sites/${siteId}/lists/${listId}/items`, token, {
-      method: "POST",
-      body: JSON.stringify({
-        fields: { Title: s.label, Category: s.category || "", SortOrder: (i + 1) * 10, Active: true, Department: "Tech" },
-      }),
-    });
-    added++;
+  let kept = 0;
+  async function walk(nodes, parentId) {
+    for (const [i, n] of nodes.entries()) {
+      let id = have.get(key(parentId, n.label));
+      if (id) kept++;
+      else {
+        const created = await call(`${GRAPH}/sites/${siteId}/lists/${listId}/items`, token, {
+          method: "POST",
+          body: JSON.stringify({
+            fields: { Title: n.label, ParentId: parentId, SortOrder: (i + 1) * 10, Active: true, Department: "Tech" },
+          }),
+        });
+        id = created.id;
+        have.set(key(parentId, n.label), id);
+        added++;
+      }
+      if (n.children?.length) await walk(n.children, id);
+    }
   }
-  console.log(`  + seeded ${added} starter issue(s) (${seed.length - added} already present)`);
+  await walk(seed, "");
+  console.log(`  + seeded ${added} starter node(s) (${kept} already present)`);
+}
+
+// Delete every issue row (children before parents is irrelevant here — ParentId
+// is plain text), then seed fresh. Only while nothing has been logged yet.
+async function reseedIssues(token, siteId, logId, issuesId) {
+  const entries = await call(`${GRAPH}/sites/${siteId}/lists/${logId}/items?$top=1`, token);
+  if (!Array.isArray(entries?.value)) throw new Error("Couldn't read QuickFixLog");
+  if (entries.value.length) throw new Error("QuickFixLog has entries — refusing --reseed (use --seed-missing)");
+  const rows = await listAll(token, `${GRAPH}/sites/${siteId}/lists/${issuesId}/items?$top=500`);
+  for (const r of rows) await call(`${GRAPH}/sites/${siteId}/lists/${issuesId}/items/${r.id}`, token, { method: "DELETE" });
+  console.log(`  - deleted ${rows.length} existing issue row(s)`);
+  await seedIssues(token, siteId, issuesId);
 }
 
 async function provision() {
@@ -188,8 +222,9 @@ async function provision() {
     "Common-issue quick-pick buttons for the Help Desk Quick Fix Log.",
     ISSUE_COLUMNS
   );
-  if (issuesCreated || args.has("--seed-missing")) await seedIssues(token, siteId, issuesId);
-  else console.log("= QuickFixIssues already existed; not seeding (use --seed-missing to add absent starters)");
+  if (args.has("--reseed")) await reseedIssues(token, siteId, logId, issuesId);
+  else if (issuesCreated || args.has("--seed-missing")) await seedIssues(token, siteId, issuesId);
+  else console.log("= QuickFixIssues already existed; not seeding (--seed-missing adds absent starters)");
   console.log(`\nNEXT_PUBLIC_FIXLOG_LIST_ID=${logId}\nNEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID=${issuesId}`);
 }
 

@@ -1,23 +1,42 @@
 [
-  { "label": "POS frozen / restarted", "category": "POS" },
-  { "label": "Card reader not working", "category": "POS" },
-  { "label": "Cash drawer won't open", "category": "POS" },
-  { "label": "POS login / password help", "category": "POS" },
-  { "label": "Ticket or wristband scanner", "category": "POS" },
-  { "label": "Receipt printer jam / paper", "category": "Printers" },
-  { "label": "Label printer issue", "category": "Printers" },
-  { "label": "Office printer / toner / jam", "category": "Printers" },
-  { "label": "Wi-Fi or network down", "category": "IT" },
-  { "label": "Computer won't start or is slow", "category": "IT" },
-  { "label": "Software or app not working", "category": "IT" },
-  { "label": "Cable unplugged / loose", "category": "IT" },
-  { "label": "Photo system issue", "category": "IT" },
-  { "label": "Password reset / locked out", "category": "User Access" },
-  { "label": "Radio not working / battery swap", "category": "Communications" },
-  { "label": "Phone not working", "category": "Communications" },
-  { "label": "TV or digital signage blank", "category": "Display/Video" },
-  { "label": "Music or PA not playing", "category": "Audio" },
-  { "label": "Camera / CCTV offline", "category": "Security Systems" },
-  { "label": "Door lock or key card", "category": "Security Systems" },
-  { "label": "Lighting control issue", "category": "Lighting Control" }
+  { "label": "POS", "children": [
+    { "label": "Frozen / restarted" },
+    { "label": "Card reader", "children": [
+      { "label": "Not reading cards" },
+      { "label": "Not connecting to the register" }
+    ] },
+    { "label": "Cash drawer won't open" },
+    { "label": "Login / password" },
+    { "label": "Ticket or wristband scanner" }
+  ] },
+  { "label": "Printers", "children": [
+    { "label": "Receipt printer (jam / paper)" },
+    { "label": "Kitchen printer" },
+    { "label": "Label printer" },
+    { "label": "Office printer (toner / jam)" }
+  ] },
+  { "label": "Network & Wi-Fi", "children": [
+    { "label": "Wi-Fi down" },
+    { "label": "Internet slow" },
+    { "label": "Cable unplugged / loose" }
+  ] },
+  { "label": "Computers & software", "children": [
+    { "label": "Won't start or is slow" },
+    { "label": "Software or app not working" },
+    { "label": "Password reset / locked out" }
+  ] },
+  { "label": "Radios & phones", "children": [
+    { "label": "Radio not working / battery swap" },
+    { "label": "Phone not working" }
+  ] },
+  { "label": "Screens, audio & lighting", "children": [
+    { "label": "TV or digital signage blank" },
+    { "label": "Music or PA not playing" },
+    { "label": "Lighting control" }
+  ] },
+  { "label": "Cameras & doors", "children": [
+    { "label": "Camera / CCTV offline" },
+    { "label": "Door lock or key card" }
+  ] },
+  { "label": "Photo system" }
 ]

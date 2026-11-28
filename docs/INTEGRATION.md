@@ -540,14 +540,20 @@ Agent-API writes set `EventType` to `comment_added` / `ticket_status_changed` an
 
 ### 8.6 QuickFixLog / QuickFixIssues — fields
 
-`QuickFixLog`: `Title` (issue label) · `Location` · `IssueId` · `Category` · `Device` ·
-`Notes` · `FixedAt` (dateTime, indexed; may be back-dated) · `StationStaffName` ·
-`StationStaffEmail` · `LoggedByName` · `LoggedByEmail` · `Department` · `PhotoCount`.
-Photos are item attachments. `QuickFixIssues`: `Title` · `Category` · `SortOrder` ·
-`Active` · `Department`.
+`QuickFixLog`: `Title` (full issue path, e.g. `POS › Card reader › Not reading cards`) ·
+`Location` · `IssueId` · `Category` (top-level folder) · `Device` · `Resolution` · `Notes` ·
+`FixedAt` (dateTime, indexed; may be back-dated) · `StationStaffName` · `StationStaffEmail` ·
+`LoggedByName` · `LoggedByEmail` · `Department` · `PhotoCount`. Photos are item attachments.
+`QuickFixIssues` is a tree: `Title` · `ParentId` (folder's item id, blank = top level) ·
+`SortOrder` · `Active` · `Department` (+ unused legacy `Category`).
 
-Written only by the SPA (`src/modules/fixlog/`); no Function reads them and nothing
-notifies. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
+Written only by the SPA (`src/modules/fixlog/`); no Function reads them and fix entries
+never notify. One exception creates a **ticket**: a location typed under "Other" (not in
+`src/lib/locationConfig.ts`, which the ticket form shares) raises a single Tech/HelpDesk
+Problem ticket titled `Add location: <name>`, assigned to
+`NEXT_PUBLIC_FIXLOG_LOCATION_TICKET_ASSIGNEE`, with no email or Teams post (it does get
+the activity-log row and the To Do / Vikunja syncs). An open ticket with the same title
+suppresses duplicates. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
 IT group Contribute. On `QuickFixLog` IT can edit only items they created (item-level
 `WriteSecurity=2`) and version history is off, so cleared names don't survive in old
 versions. A delegated token for anyone else gets 403. Residual: anyone with read access
@@ -670,7 +676,7 @@ Environment variables**. These are runtime values; changing one restarts the app
 > does nothing — this is a static export with no server. Edit
 > `.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml` and push.
 
-41 variables, defined in that workflow's `env:` block. Groups: Azure AD
+42 variables, defined in that workflow's `env:` block. Groups: Azure AD
 (`CLIENT_ID`, `TENANT_ID`), SharePoint site + 14 list ids, 4 Entra group ids, 12
 Function URLs (each carrying its `?code=` where the target needs a host key), feature
 flags (`TEAMS_NOTIFICATIONS_ENABLED`, `TEAMS_NAA_ENABLED`, `TODO_SYNC_ENABLED`,

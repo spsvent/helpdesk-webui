@@ -4,8 +4,19 @@ import { DEFAULT_PERMISSIONS } from "@/types/rbac";
 import type { FixLogEntry } from "./types";
 import { mapToFixLogEntry, mapToFixLogIssue } from "./types";
 import {
+  childrenOf,
+  describePick,
+  descendantIds,
   filterEntries,
   fromLocalInputValue,
+  hasChildren,
+  isOfficialLocation,
+  locationTicketTitle,
+  moveTargets,
+  pathLabel,
+  pathTo,
+  resolveTypedLocation,
+  visibleIssues,
   imageFrameKind,
   isStillPhoto,
   stillDue,
@@ -110,6 +121,7 @@ describe("filterEntries", () => {
 
   it("searches notes and device", () => {
     expect(filterEntries(all, { search: "reboot" }).map((e) => e.id)).toEqual(["a"]);
+    expect(filterEntries([entry({ id: "r", resolution: "Swapped the cable" })], { search: "cable" })).toHaveLength(1);
     expect(filterEntries(all, { search: "ap-3" }).map((e) => e.id)).toEqual(["b"]);
   });
 
@@ -135,9 +147,9 @@ describe("topCounts", () => {
 
 describe("issues helpers", () => {
   const issues = [
-    { id: "1", label: "Zeta", sortOrder: 20, active: true, department: "Tech" },
-    { id: "2", label: "Alpha", sortOrder: 20, active: true, department: "Tech" },
-    { id: "3", label: "First", sortOrder: 10, active: true, department: "Tech" },
+    { id: "1", label: "Zeta", parentId: "", sortOrder: 20, active: true, department: "Tech" },
+    { id: "2", label: "Alpha", parentId: "", sortOrder: 20, active: true, department: "Tech" },
+    { id: "3", label: "First", parentId: "", sortOrder: 10, active: true, department: "Tech" },
   ];
   it("sorts by SortOrder then label", () => {
     expect(sortIssues(issues).map((i) => i.id)).toEqual(["3", "2", "1"]);
@@ -223,6 +235,99 @@ describe("imageFrameKind", () => {
   it("anything unrecognised or tiny is unknown", async () => {
     expect(await kind(bytes("GIF89a", new Array(10).fill(0)))).toBe("unknown");
     expect(await kind(new Uint8Array(4))).toBe("unknown");
+  });
+});
+
+describe("issue tree", () => {
+  const n = (id: string, label: string, parentId = "", sortOrder = 10, active = true) => ({
+    id,
+    label,
+    parentId,
+    sortOrder,
+    active,
+    department: "Tech",
+  });
+  const tree = [
+    n("pos", "POS", "", 10),
+    n("card", "Card reader", "pos", 20),
+    n("chip", "Not reading cards", "card", 10),
+    n("frozen", "Frozen / restarted", "pos", 10),
+    n("print", "Printers", "", 20),
+    n("receipt", "Receipt printer", "print", 10),
+    n("old", "Old stuff", "", 30, false),
+    n("inOld", "Still active inside retired", "old", 10),
+    n("orphan", "Orphan", "deleted-parent", 40),
+  ];
+
+  it("lists a folder's children in order, orphans at the top level", () => {
+    expect(childrenOf(tree, "").map((i) => i.id)).toEqual(["pos", "print", "old", "orphan"]);
+    expect(childrenOf(tree, "pos").map((i) => i.id)).toEqual(["frozen", "card"]);
+    expect(hasChildren(tree, "card")).toBe(true);
+    expect(hasChildren(tree, "chip")).toBe(false);
+  });
+
+  it("builds root→node paths and labels", () => {
+    expect(pathTo(tree, "chip").map((i) => i.id)).toEqual(["pos", "card", "chip"]);
+    expect(pathLabel(pathTo(tree, "chip"))).toBe("POS › Card reader › Not reading cards");
+    expect(pathLabel(pathTo(tree, "card"), "Typed")).toBe("POS › Card reader › Typed");
+  });
+
+  it("survives a parent cycle", () => {
+    const loop = [n("a", "A", "b"), n("b", "B", "a")];
+    expect(pathTo(loop, "a").length).toBeLessThanOrEqual(2);
+    expect(visibleIssues(loop)).toEqual(expect.any(Array));
+    expect(descendantIds(loop, "a")).toEqual(["b"]);
+  });
+
+  it("hides retired nodes AND everything inside a retired folder", () => {
+    const ids = visibleIssues(tree).map((i) => i.id);
+    expect(ids).not.toContain("old");
+    expect(ids).not.toContain("inOld");
+    expect(ids).toContain("chip");
+    expect(ids).toContain("orphan");
+  });
+
+  it("describes a pick: full path, node id, top folder as category", () => {
+    expect(describePick(tree, { nodeId: "chip" })).toEqual({
+      issue: "POS › Card reader › Not reading cards",
+      issueId: "chip",
+      category: "POS",
+    });
+    // A top-level leaf has no folder → no category.
+    expect(describePick(tree, { nodeId: "orphan" })).toEqual({ issue: "Orphan", issueId: "orphan", category: "" });
+    // Typed "Other" inside a folder keeps the folder path.
+    expect(describePick(tree, { folderId: "card", otherText: "  Beeps  " })).toEqual({
+      issue: "POS › Card reader › Beeps",
+      issueId: "",
+      category: "POS",
+    });
+    expect(describePick(tree, { folderId: "", otherText: "Odd thing" }).issue).toBe("Odd thing");
+    expect(describePick(tree, { folderId: "pos", otherText: "  " }).issue).toBe("");
+  });
+
+  it("never offers a node, or anything inside it, as its own move target", () => {
+    const ids = moveTargets(tree, "pos").map((i) => i.id);
+    expect(ids).not.toContain("pos");
+    expect(ids).not.toContain("card");
+    expect(ids).not.toContain("chip");
+    expect(ids).toContain("print");
+    expect(descendantIds(tree, "pos").sort()).toEqual(["card", "chip", "frozen"]);
+  });
+});
+
+describe("locations", () => {
+  it("knows the official list (not the Other placeholder)", () => {
+    expect(isOfficialLocation("Admissions")).toBe(true);
+    expect(isOfficialLocation("Other")).toBe(false);
+    expect(isOfficialLocation("The New Kiosk")).toBe(false);
+  });
+  it("snaps a typed name to an official one by case/spacing, else tidies it", () => {
+    expect(resolveTypedLocation("  pavilion ")).toEqual({ name: "Pavilion", official: true });
+    expect(resolveTypedLocation("north   gate  kiosk")).toEqual({ name: "north gate kiosk", official: false });
+    expect(resolveTypedLocation("")).toEqual({ name: "", official: false });
+  });
+  it("titles the ticket consistently (it's the duplicate key)", () => {
+    expect(locationTicketTitle("North Gate Kiosk")).toBe("Add location: North Gate Kiosk");
   });
 });
 

@@ -3,7 +3,9 @@
 // Two lists back this module (created by scripts/provision-fixlog-lists.mjs):
 //   QuickFixLog    — one item per fix IT made without a ticket. Photos are the
 //                    item's SharePoint attachments.
-//   QuickFixIssues — the "common issue" quick-pick buttons, editable in the app.
+//   QuickFixIssues — the quick-pick tree: every row is a node; ParentId points at
+//                    its folder ("" = top level). A node with children is a
+//                    folder (tapping opens it); one without is a pickable issue.
 // Neither list is the Tickets list, and nothing here sends a notification.
 
 import type { SharePointListItem } from "@/shared/spTypes";
@@ -14,12 +16,13 @@ export const FIXLOG_DEPARTMENT = "Tech";
 
 export interface FixLogEntry {
   id: string;
-  issue: string; // SharePoint Title
-  issueId?: string; // QuickFixIssues item id; blank for a typed "Other" issue
-  category?: string; // Tech sub-category copied from the issue at log time
+  issue: string; // SharePoint Title — the full path, e.g. "POS › Card reader › Not reading cards"
+  issueId?: string; // QuickFixIssues node id; blank for a typed "Other" issue
+  category?: string; // top-level folder of the issue at log time (e.g. "POS")
   location: string;
   device?: string;
-  notes?: string;
+  resolution?: string; // what fixed it
+  notes?: string; // anything else (e.g. what was wrong)
   fixedAt: string; // ISO — when the fix happened (may be back-dated)
   stationStaffName?: string;
   stationStaffEmail?: string;
@@ -54,6 +57,7 @@ export const FIXLOG_COLUMN_MAP: Record<keyof FixLogWritable, string> = {
   category: "Category",
   location: "Location",
   device: "Device",
+  resolution: "Resolution",
   notes: "Notes",
   fixedAt: "FixedAt",
   stationStaffName: "StationStaffName",
@@ -67,7 +71,7 @@ export const FIXLOG_COLUMN_MAP: Record<keyof FixLogWritable, string> = {
 export interface FixLogIssue {
   id: string;
   label: string; // SharePoint Title
-  category?: string;
+  parentId: string; // "" = top level
   sortOrder: number;
   active: boolean;
   department: string;
@@ -77,7 +81,7 @@ export type FixLogIssueWritable = Partial<Omit<FixLogIssue, "id">>;
 
 export const FIXLOG_ISSUE_COLUMN_MAP: Record<keyof FixLogIssueWritable, string> = {
   label: "Title",
-  category: "Category",
+  parentId: "ParentId",
   sortOrder: "SortOrder",
   active: "Active",
   department: "Department",
@@ -98,6 +102,7 @@ export function mapToFixLogEntry(item: SharePointListItem): FixLogEntry {
     category: str(f.Category),
     location: str(f.Location) || "",
     device: str(f.Device),
+    resolution: str(f.Resolution),
     notes: str(f.Notes),
     fixedAt: str(f.FixedAt) || item.createdDateTime,
     stationStaffName: str(f.StationStaffName),
@@ -120,7 +125,7 @@ export function mapToFixLogIssue(item: SharePointListItem): FixLogIssue {
   return {
     id: item.id,
     label: str(f.Title) || "",
-    category: str(f.Category),
+    parentId: str(f.ParentId) || "",
     sortOrder: typeof f.SortOrder === "number" ? f.SortOrder : 0,
     // Missing Active = active (rows added by hand in SharePoint shouldn't vanish).
     active: f.Active !== false,

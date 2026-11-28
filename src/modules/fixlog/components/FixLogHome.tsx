@@ -45,7 +45,8 @@ export default function FixLogHome() {
 
   useEffect(() => {
     if (!account) return;
-    listIssues(getGraphClient(instance, account))
+    // All nodes, retired too: the form needs them to know which folders are hidden.
+    listIssues(getGraphClient(instance, account), { includeInactive: true })
       .then(setIssues)
       .catch((e) => console.error("[FixLog] issues load failed:", e));
   }, [account, instance]);
@@ -123,12 +124,27 @@ export default function FixLogHome() {
         <div
           role="status"
           className={`rounded-lg border p-3 text-sm ${
-            saved.photoFailures
+            saved.photoFailures || saved.locationTicket?.kind === "failed"
               ? "border-yellow-300 bg-yellow-50 text-yellow-900"
               : "border-green-300 bg-green-50 text-green-900"
           }`}
         >
           Logged <strong>{saved.entry.issue}</strong> at {saved.entry.location}.{" "}
+          {saved.locationTicket?.kind === "created" && (
+            <>
+              New location sent to Justin as a ticket
+              {saved.locationTicket.ticketNumber ? ` (#${saved.locationTicket.ticketNumber})` : ""}.{" "}
+            </>
+          )}
+          {saved.locationTicket?.kind === "exists" && (
+            <>
+              That new location is already waiting in a ticket
+              {saved.locationTicket.ticketNumber ? ` (#${saved.locationTicket.ticketNumber})` : ""}.{" "}
+            </>
+          )}
+          {saved.locationTicket?.kind === "failed" && (
+            <>Couldn&apos;t open the new-location ticket — please tell Justin the location&apos;s name. </>
+          )}
           {saved.photoFailures > 0 && (
             <>
               {saved.photoFailures} photo{saved.photoFailures > 1 ? "s" : ""} didn&apos;t upload. Open the entry to
@@ -226,7 +242,9 @@ export default function FixLogHome() {
                         )}
                         <span className="ml-1">· {e.loggedByName || e.loggedByEmail}</span>
                       </div>
-                      {e.notes && <div className="text-sm text-text-primary truncate">{e.notes}</div>}
+                      {(e.resolution || e.notes) && (
+                        <div className="text-sm text-text-primary truncate">{e.resolution || e.notes}</div>
+                      )}
                     </Link>
                   </li>
                 ))}

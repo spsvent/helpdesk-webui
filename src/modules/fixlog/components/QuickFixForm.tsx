@@ -8,18 +8,23 @@ import { LOCATION_OPTIONS } from "@/lib/locationConfig";
 import { trackEvent } from "@/lib/appInsights";
 import { FIXLOG_DEPARTMENT, type FixLogEntry, type FixLogIssue, type FixLogWritable } from "../types";
 import {
+  OTHER_LOCATION,
+  describePick,
   fromLocalInputValue,
+  isOfficialLocation,
   pushRecentLocation,
-  sortIssues,
+  resolveTypedLocation,
   toLocalInputValue,
   validateDraft,
+  visibleIssues,
 } from "../fixLog";
 import { createEntry, syncPhotoCount, updateEntry, uploadEntryPhoto } from "../fixLogService";
+import { ensureLocationTicket } from "../locationTicket";
 import StaffPicker, { type StationStaff } from "./StaffPicker";
 import PhotoPicker from "./PhotoPicker";
+import IssuePicker, { EMPTY_PICK, type IssuePick } from "./IssuePicker";
 
 const RECENT_KEY = "fixlog.recentLocations";
-const OTHER = "__other__";
 
 function readRecent(): string[] {
   try {
@@ -33,6 +38,8 @@ function readRecent(): string[] {
 export interface SaveResult {
   entry: FixLogEntry;
   photoFailures: number;
+  // Set when the location was typed under "Other" (not in the official list).
+  locationTicket?: { kind: "created" | "exists"; ticketNumber?: number } | { kind: "failed" };
 }
 
 // The quick-entry form. Create mode (no `initial`) also stages photos; edit mode
@@ -51,20 +58,25 @@ export default function QuickFixForm({
   const { instance, accounts } = useMsal();
   const { permissions } = useRBAC();
   const editing = !!initial;
-  const sorted = useMemo(() => sortIssues(issues), [issues]);
+  // The form only offers active nodes under active folders.
+  const tree = useMemo(() => visibleIssues(issues), [issues]);
 
-  // Edit mode: match the saved issue to a button by id, then by label; else "Other".
-  const initialChoice = (() => {
-    if (!initial) return "";
-    const hit =
-      sorted.find((i) => i.id === initial.issueId) || sorted.find((i) => i.label === initial.issue);
-    return hit ? hit.id : OTHER;
+  // Edit mode starts on the saved issue's folder with it selected, if it's still
+  // in the tree; otherwise nothing is pre-picked and the saved text is kept.
+  const initialPick: IssuePick = (() => {
+    const node = initial?.issueId ? tree.find((i) => i.id === initial.issueId) : undefined;
+    return node ? { folderId: node.parentId, nodeId: node.id } : EMPTY_PICK;
   })();
+  const initialOfficial = !!initial?.location && isOfficialLocation(initial.location);
 
   const [recent, setRecent] = useState<string[]>([]);
-  const [location, setLocation] = useState(initial?.location || "");
-  const [choice, setChoice] = useState(initialChoice);
-  const [otherText, setOtherText] = useState(initialChoice === OTHER ? initial?.issue || "" : "");
+  // The location <select> value: "", an official name, or "Other" (then typed).
+  const [locSelect, setLocSelect] = useState(
+    initial ? (initialOfficial ? initial.location : OTHER_LOCATION) : ""
+  );
+  const [customLocation, setCustomLocation] = useState(initial && !initialOfficial ? initial.location : "");
+  const [pick, setPick] = useState<IssuePick>(initialPick);
+  const [resolution, setResolution] = useState(initial?.resolution || "");
   const [notes, setNotes] = useState(initial?.notes || "");
   const [device, setDevice] = useState(initial?.device || "");
   const [staff, setStaff] = useState<StationStaff | null>(
@@ -83,29 +95,39 @@ export default function QuickFixForm({
 
   useEffect(() => setRecent(readRecent()), []);
 
-  // Location options: the standard list, plus the saved value if it's no longer in it.
-  const locations = useMemo<string[]>(() => {
-    const base: string[] = [...LOCATION_OPTIONS];
-    if (initial?.location && !base.includes(initial.location)) base.unshift(initial.location);
-    return base;
-  }, [initial?.location]);
+  const typed = resolveTypedLocation(customLocation);
+  const location = locSelect === OTHER_LOCATION ? typed.name : locSelect;
+  // A typed name that isn't (a case/spacing variant of) an official location.
+  const isNewLocation = locSelect === OTHER_LOCATION && !!typed.name && !typed.official;
 
-  const picked = sorted.find((i) => i.id === choice);
-  // Edit mode: the stored issue snapshot (label/id/category) is only rewritten when
-  // the user changes the selection, so renaming/retiring an issue later — or the
-  // issue list failing to load — never alters an existing entry's history.
+  // Edit mode: the stored issue snapshot (path/id/category) is only rewritten when
+  // the user actually picks something different, so renaming/retiring a node later
+  // — or the issue list failing to load — never alters an existing entry's history.
+  const picked = !!pick.nodeId || (!!pick.other && !!pick.otherText?.trim());
   const issueChanged =
-    !editing || choice !== initialChoice || (choice === OTHER && otherText.trim() !== (initial?.issue || ""));
-  const issueLabel = !issueChanged
-    ? initial?.issue || ""
-    : choice === OTHER
-      ? otherText.trim()
-      : picked?.label || "";
+    !editing ||
+    (picked &&
+      (pick.nodeId !== initialPick.nodeId ||
+        !!pick.other ||
+        pick.folderId !== initialPick.folderId));
+  const described = describePick(tree, pick.other ? { folderId: pick.folderId, otherText: pick.otherText } : { nodeId: pick.nodeId });
+  const issueLabel = issueChanged ? described.issue : initial?.issue || "";
+
+  function chooseLocation(name: string) {
+    if (isOfficialLocation(name)) {
+      setLocSelect(name);
+      setCustomLocation("");
+    } else {
+      setLocSelect(OTHER_LOCATION);
+      setCustomLocation(name);
+    }
+  }
 
   function reset() {
-    setLocation("");
-    setChoice("");
-    setOtherText("");
+    setLocSelect("");
+    setCustomLocation("");
+    setPick(EMPTY_PICK);
+    setResolution("");
     setNotes("");
     setDevice("");
     setStaff(null);
@@ -136,68 +158,86 @@ export default function QuickFixForm({
     setError(null);
     setSaving(true);
     const client = getGraphClient(instance, accounts[0]);
+    const me = {
+      name: permissions?.displayName || accounts[0].name || "",
+      email: permissions?.email || accounts[0].username || "",
+    };
     try {
       const fields: FixLogWritable = {
-        ...(issueChanged
-          ? {
-              issue: issueLabel,
-              // Blank (not omitted) so switching an edited entry to "Other" clears the old link.
-              issueId: picked?.id || "",
-              category: picked?.category || "",
-            }
-          : {}),
+        // Blank issueId (not omitted) so switching an edited entry to "Other" clears the old link.
+        ...(issueChanged ? { issue: issueLabel, issueId: described.issueId, category: described.category } : {}),
         location,
         ...(timeChanged ? { fixedAt: fixedAtIso } : {}),
         // Edit sends "" to clear a field; create just leaves it out.
         device: device.trim() || (editing ? "" : undefined),
+        resolution: resolution.trim() || (editing ? "" : undefined),
         notes: notes.trim() || (editing ? "" : undefined),
         stationStaffName: staff?.name.trim() || (editing ? "" : undefined),
         stationStaffEmail: staff?.email || (editing ? "" : undefined),
       };
 
-      if (editing && initial) {
-        const entry = await updateEntry(client, initial.id, fields);
-        onSaved({ entry, photoFailures: 0 });
-        return;
-      }
-
-      let entry = await createEntry(client, {
-        ...fields,
-        loggedByName: permissions?.displayName || accounts[0].name || "",
-        loggedByEmail: permissions?.email || accounts[0].username || "",
-        department: FIXLOG_DEPARTMENT,
-        photoCount: 0,
-      });
-
+      let entry: FixLogEntry;
       let photoFailures = 0;
-      if (files.length) {
-        for (const f of files) {
-          const ok = await uploadEntryPhoto(client, entry.id, f, instance, accounts[0]).catch(() => null);
-          if (!ok) photoFailures++;
-        }
-        try {
-          const count = await syncPhotoCount(client, entry.id, instance, accounts[0]);
-          entry = { ...entry, photoCount: count };
-        } catch (e) {
-          console.warn("[QuickFixForm] photo count sync failed:", e);
+      if (editing && initial) {
+        entry = await updateEntry(client, initial.id, fields);
+      } else {
+        entry = await createEntry(client, {
+          ...fields,
+          loggedByName: me.name,
+          loggedByEmail: me.email,
+          department: FIXLOG_DEPARTMENT,
+          photoCount: 0,
+        });
+        if (files.length) {
+          for (const f of files) {
+            const ok = await uploadEntryPhoto(client, entry.id, f, instance, accounts[0]).catch(() => null);
+            if (!ok) photoFailures++;
+          }
+          try {
+            const count = await syncPhotoCount(client, entry.id, instance, accounts[0]);
+            entry = { ...entry, photoCount: count };
+          } catch (e) {
+            console.warn("[QuickFixForm] photo count sync failed:", e);
+          }
         }
       }
 
-      const nextRecent = pushRecentLocation(recent, location);
-      setRecent(nextRecent);
-      try {
-        localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
-      } catch {
-        /* private mode — recent chips just won't persist */
+      // A new (typed) location → one ticket so it gets added to the official list.
+      // Never blocks the save: the entry is already stored.
+      let locationTicket: SaveResult["locationTicket"];
+      if (isNewLocation && (!editing || location !== initial?.location)) {
+        try {
+          locationTicket = await ensureLocationTicket(client, {
+            name: location,
+            entryId: entry.id,
+            requesterEmail: me.email,
+            requesterName: me.name,
+            instance,
+            account: accounts[0],
+          });
+        } catch (e) {
+          console.error("[QuickFixForm] new-location ticket failed:", e);
+          locationTicket = { kind: "failed" };
+        }
       }
-      // Controlled values only — never the typed "Other" text, notes or names.
-      trackEvent("QuickFixLogged", {
-        location,
-        category: picked?.category || "",
-        commonIssue: picked ? "yes" : "no",
-      });
-      reset();
-      onSaved({ entry, photoFailures });
+
+      if (!editing) {
+        const nextRecent = pushRecentLocation(recent, location);
+        setRecent(nextRecent);
+        try {
+          localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
+        } catch {
+          /* private mode — recent chips just won't persist */
+        }
+        // Controlled values only — never typed text (issue, location), notes or names.
+        trackEvent("QuickFixLogged", {
+          location: isNewLocation ? "(new location)" : location,
+          category: described.category,
+          commonIssue: described.issueId ? "yes" : "no",
+        });
+        reset();
+      }
+      onSaved({ entry, photoFailures, locationTicket });
     } catch (e) {
       console.error("[QuickFixForm] save failed:", e);
       setError("Couldn't save. Check your connection and try again.");
@@ -221,59 +261,74 @@ export default function QuickFixForm({
         {recent.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {recent.map((l) => (
-              <button key={l} type="button" onClick={() => setLocation(l)} className={chip(location === l)}>
+              <button key={l} type="button" onClick={() => chooseLocation(l)} className={chip(location === l)}>
                 {l}
               </button>
             ))}
           </div>
         )}
         <select
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          value={locSelect}
+          onChange={(e) => {
+            setLocSelect(e.target.value);
+            if (e.target.value !== OTHER_LOCATION) setCustomLocation("");
+          }}
           className="w-full px-3 py-2 border border-border rounded-lg bg-bg-card text-text-primary text-base sm:text-sm"
         >
           <option value="">Choose a location…</option>
-          {locations.map((l) => (
+          {LOCATION_OPTIONS.filter((l) => l !== OTHER_LOCATION).map((l) => (
             <option key={l} value={l}>
               {l}
             </option>
           ))}
+          <option value={OTHER_LOCATION}>Other (not in the list)…</option>
         </select>
+        {locSelect === OTHER_LOCATION && (
+          <div className="mt-2">
+            <input
+              type="text"
+              value={customLocation}
+              onChange={(e) => setCustomLocation(e.target.value)}
+              maxLength={100}
+              placeholder="Type the location's name"
+              autoFocus={!editing}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-bg-card text-text-primary text-base sm:text-sm"
+            />
+            <p className="mt-1 text-xs text-text-secondary">
+              {typed.official
+                ? `That's already in the list as "${typed.name}" — it will be used.`
+                : "Not in the list? Type it here. Saving also opens a ticket to add it to the official list."}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* 2. Issue */}
       <section>
         <h3 className="text-sm font-semibold text-text-primary mb-2">Issue</h3>
-        {sorted.length === 0 && (
+        {editing && initial?.issue && (
           <p className="text-sm text-text-secondary mb-2">
-            No common issues set up yet. Use Other, or add some under Manage issues.
+            Currently: <strong className="text-text-primary">{initial.issue}</strong>. Pick something else only to change it.
           </p>
         )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {sorted.map((i) => (
-            <button key={i.id} type="button" onClick={() => setChoice(i.id)} className={chip(choice === i.id)}>
-              {i.label}
-            </button>
-          ))}
-          <button type="button" onClick={() => setChoice(OTHER)} className={chip(choice === OTHER)}>
-            Other…
-          </button>
-        </div>
-        {choice === OTHER && (
-          <input
-            type="text"
-            value={otherText}
-            onChange={(e) => setOtherText(e.target.value)}
-            maxLength={255}
-            placeholder="What was the issue?"
-            autoFocus
-            className="mt-2 w-full px-3 py-2 border border-border rounded-lg bg-bg-card text-text-primary text-base sm:text-sm"
-          />
-        )}
+        <IssuePicker issues={tree} value={pick} onChange={setPick} />
       </section>
 
       {/* 3. Details (all optional) */}
       <section className="space-y-3">
+        <div>
+          <label className="block text-sm font-semibold text-text-primary mb-1">
+            Resolution <span className="font-normal text-text-secondary">(optional)</span>
+          </label>
+          <textarea
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value)}
+            rows={2}
+            placeholder="What fixed it, e.g. restarted the register, replaced the paper roll"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-bg-card text-text-primary text-base sm:text-sm"
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-semibold text-text-primary mb-1">
             Note <span className="font-normal text-text-secondary">(optional)</span>
@@ -281,11 +336,13 @@ export default function QuickFixForm({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="What you did to fix it"
+            rows={2}
+            placeholder="Anything else, e.g. what was wrong or what to watch for"
             className="w-full px-3 py-2 border border-border rounded-lg bg-bg-card text-text-primary text-base sm:text-sm"
           />
-          <p className="mt-1 text-xs text-text-secondary">Describe the equipment and the fix, not people.</p>
+          <p className="mt-1 text-xs text-text-secondary">
+            In both boxes, describe the equipment and the fix, not people.
+          </p>
         </div>
 
         <div>
