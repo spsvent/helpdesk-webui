@@ -63,6 +63,12 @@ jobs:
           NEXT_PUBLIC_PURCHASE_LIST_ID: "510ef7d1-2c9d-480b-9aa8-e9a8b1ddf82c"
           # Order Catalog (recurring order sheets) — master list of standard reorder items.
           NEXT_PUBLIC_ORDER_CATALOG_LIST_ID: "75f93bfc-acec-427a-bdb7-013f0c83f531"
+          # Quick Fix Log (IT fixes with no ticket): entries + common-issue buttons.
+          # Created/locked by scripts/provision-fixlog-lists.mjs. Blank the log id to hide the module.
+          NEXT_PUBLIC_FIXLOG_LIST_ID: "147e9853-eca4-498c-963d-8683157c4a34"
+          NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID: "071a1ace-80de-4355-a4f7-5c6a056618c8"
+          # A location typed under "Other" in the Fix Log opens one ticket assigned here (no email).
+          NEXT_PUBLIC_FIXLOG_LOCATION_TICKET_ASSIGNEE: "jnunn@skyparksantasvillage.com"
           NEXT_PUBLIC_PURCHASE_APPROVAL_ACTION_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/purchaseapprovalaction"
           NEXT_PUBLIC_SEND_PURCHASE_APPROVAL_REQUEST_URL: "https://helpdesk-notify-func-d9ephvfxgaavhdg6.westus2-01.azurewebsites.net/api/sendpurchaseapprovalrequest?code=${{ secrets.FUNC_HOST_CODE }}"
           # HEIC → JPEG converter: enables inline preview of iPhone HEIC photos. Blank = download-only fallback.

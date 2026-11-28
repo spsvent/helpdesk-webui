@@ -1,0 +1,42 @@
+[
+  { "label": "POS", "children": [
+    { "label": "Frozen / restarted" },
+    { "label": "Card reader", "children": [
+      { "label": "Not reading cards" },
+      { "label": "Not connecting to the register" }
+    ] },
+    { "label": "Cash drawer won't open" },
+    { "label": "Login / password" },
+    { "label": "Ticket or wristband scanner" }
+  ] },
+  { "label": "Printers", "children": [
+    { "label": "Receipt printer (jam / paper)" },
+    { "label": "Kitchen printer" },
+    { "label": "Label printer" },
+    { "label": "Office printer (toner / jam)" }
+  ] },
+  { "label": "Network & Wi-Fi", "children": [
+    { "label": "Wi-Fi down" },
+    { "label": "Internet slow" },
+    { "label": "Cable unplugged / loose" }
+  ] },
+  { "label": "Computers & software", "children": [
+    { "label": "Won't start or is slow" },
+    { "label": "Software or app not working" },
+    { "label": "Password reset / locked out" }
+  ] },
+  { "label": "Radios & phones", "children": [
+    { "label": "Radio not working / battery swap" },
+    { "label": "Phone not working" }
+  ] },
+  { "label": "Screens, audio & lighting", "children": [
+    { "label": "TV or digital signage blank" },
+    { "label": "Music or PA not playing" },
+    { "label": "Lighting control" }
+  ] },
+  { "label": "Cameras & doors", "children": [
+    { "label": "Camera / CCTV offline" },
+    { "label": "Door lock or key card" }
+  ] },
+  { "label": "Photo system" }
+]

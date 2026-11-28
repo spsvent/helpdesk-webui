@@ -464,6 +464,8 @@ against list GUIDs supplied by env vars.
 | PurchaseRequests | `PURCHASE_LIST_ID` | `NEXT_PUBLIC_PURCHASE_LIST_ID` | Purchase module |
 | CDW | `CDW_LIST_ID` | `NEXT_PUBLIC_CDW_LIST_ID` | CDW module |
 | OrderCatalog | — | `NEXT_PUBLIC_ORDER_CATALOG_LIST_ID` | Recurring order sheets |
+| QuickFixLog | — | `NEXT_PUBLIC_FIXLOG_LIST_ID` | IT fixes made without a ticket (§8.6) |
+| QuickFixIssues | — | `NEXT_PUBLIC_FIXLOG_ISSUES_LIST_ID` | Quick Fix Log issue buttons |
 | VisibilityKeywords | — | `NEXT_PUBLIC_VISIBILITY_KEYWORDS_LIST_ID` | Keyword-based visibility |
 | TodoSyncMap | `TODO_SYNC_MAP_LIST_ID` | — | ticket → To Do task id |
 | VikunjaSyncMap | `VIKUNJA_SYNC_MAP_LIST_ID` | — | ticket → Vikunja task id |
@@ -535,6 +537,34 @@ Agent-API writes set `EventType` to `comment_added` / `ticket_status_changed` an
 `Title` · `IsActive` · `SortOrder` · `TriggerType` · `TriggerHours` ·
 `MatchDepartment` · `MatchPriority` · `MatchStatus` · `ActionType` ·
 `EscalateToPriority` · `ReassignToEmail` · `NotifyEmail`
+
+### 8.6 QuickFixLog / QuickFixIssues — fields
+
+`QuickFixLog`: `IssuePath` (full issue path, e.g. `POS › Card reader › Not reading cards`;
+plain multi-line, since a deep tree can pass 255 chars) · `Title` (the same, cut to 255) ·
+`Location` · `IssueId` · `Category` (top-level folder) · `Device` · `Resolution` · `Notes` ·
+`FixedAt` (dateTime, indexed; may be back-dated) · `StationStaffName` · `StationStaffEmail` ·
+`LoggedByName` · `LoggedByEmail` · `Department` · `PhotoCount`. Photos are item attachments.
+`QuickFixIssues` is a tree: `Title` · `ParentId` (folder's item id, blank = top level) ·
+`SortOrder` · `Active` · `Department` (+ unused legacy `Category`).
+
+Written only by the SPA (`src/modules/fixlog/`); no Function reads them and fix entries
+never notify. One exception creates a **ticket**: a location typed under "Other" (not in
+`src/lib/locationConfig.ts`, which the ticket form shares) raises a single Tech/HelpDesk
+Problem ticket titled `Add location: <name>`, assigned to
+`NEXT_PUBLIC_FIXLOG_LOCATION_TICKET_ASSIGNEE`, with no email or Teams post (it does get
+the activity-log row and the To Do / Vikunja syncs). An open ticket with the same title
+normally suppresses duplicates; it's a best-effort check (two people typing the same new
+place at the same moment, a renamed ticket, or a failed lookup can still yield a second
+ticket — by design, a duplicate is preferred over a lost request). The ticket is created
+after the fix is saved and never blocks or undoes the save. Both lists have **unique permissions**: site Owners Full Control, GMs Edit, the
+IT group Contribute. On `QuickFixLog` IT can edit only items they created (item-level
+`WriteSecurity=2`) and version history is off, so cleared names don't survive in old
+versions. A delegated token for anyone else gets 403. Residual: anyone with read access
+can still open the raw list in SharePoint and sort or export it there. Retention (photos 90
+days, station-staff name 12 months, entries 3 years) is applied **by hand** from the Fix
+Log page's admin cleanup panel; there is no timer. Provisioning + lock:
+`scripts/provision-fixlog-lists.mjs`.
 
 ---
 
@@ -650,8 +680,8 @@ Environment variables**. These are runtime values; changing one restarts the app
 > does nothing — this is a static export with no server. Edit
 > `.github/workflows/azure-static-web-apps-lively-coast-062dfc51e.yml` and push.
 
-39 variables, defined in that workflow's `env:` block. Groups: Azure AD
-(`CLIENT_ID`, `TENANT_ID`), SharePoint site + 12 list ids, 4 Entra group ids, 12
+42 variables, defined in that workflow's `env:` block. Groups: Azure AD
+(`CLIENT_ID`, `TENANT_ID`), SharePoint site + 14 list ids, 4 Entra group ids, 12
 Function URLs (each carrying its `?code=` where the target needs a host key), feature
 flags (`TEAMS_NOTIFICATIONS_ENABLED`, `TEAMS_NAA_ENABLED`, `TODO_SYNC_ENABLED`,
 `VIKUNJA_SYNC_ENABLED`), and `APPINSIGHTS_CONNECTION_STRING` (from a GitHub Secret).
