@@ -59,7 +59,11 @@ export const TITLE_MAX = 255;
 
 /** Title copy of a path: the whole thing when it fits, else cut with an ellipsis. */
 export function titleFor(issue: string): string {
-  return issue.length <= TITLE_MAX ? issue : `${issue.slice(0, TITLE_MAX - 1)}…`;
+  if (issue.length <= TITLE_MAX) return issue;
+  let cut = issue.slice(0, TITLE_MAX - 1);
+  // Don't leave half of a surrogate pair (e.g. an emoji) before the ellipsis.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return `${cut}…`;
 }
 
 // `issue` is written by toEntryFields (both IssuePath and the cut Title), so it

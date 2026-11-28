@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
@@ -55,6 +55,8 @@ export default function FixLogDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // The latest edit save; a ticket result from an older save is ignored.
+  const lastSaveId = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newPhotos, setNewPhotos] = useState<File[]>([]);
   const [confirmed, setConfirmed] = useState(false);
@@ -220,9 +222,12 @@ export default function FixLogDetail({ id }: { id: string }) {
             onSaved={(r) => {
               setEntry(r.entry);
               setEditing(false);
+              lastSaveId.current = r.saveId;
               setNotice(r.locationTicket ? ticketNotice(r.locationTicket) : null);
             }}
-            onLocationTicket={(_, t) => setNotice(ticketNotice(t))}
+            onLocationTicket={(saveId, t) => {
+              if (saveId === lastSaveId.current) setNotice(ticketNotice(t));
+            }}
             onCancel={() => setEditing(false)}
           />
         </div>

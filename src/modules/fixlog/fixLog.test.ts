@@ -439,6 +439,10 @@ describe("mappers", () => {
     const cut = titleFor("x".repeat(256));
     expect(cut).toHaveLength(TITLE_MAX);
     expect(cut.endsWith("…")).toBe(true);
+    // Never splits an emoji (surrogate pair) at the cut.
+    const emoji = titleFor("a".repeat(253) + "😀" + "bc");
+    expect(emoji).toBe("a".repeat(253) + "…");
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji)).toBe(false);
   });
   it("treats a missing Active as active", () => {
     expect(mapToFixLogIssue({ ...base, fields: { Title: "X" } }).active).toBe(true);

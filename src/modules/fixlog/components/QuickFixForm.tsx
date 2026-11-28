@@ -42,6 +42,9 @@ export type LocationTicketStatus =
   | { kind: "failed" };
 
 export interface SaveResult {
+  // Unique per save; onLocationTicket reports against it so a late result from an
+  // earlier save can be told apart from the current one.
+  saveId: string;
   entry: FixLogEntry;
   photoFailures: number;
   // Set when the location was typed under "Other" (not in the official list):
@@ -62,7 +65,7 @@ export default function QuickFixForm({
   initial?: FixLogEntry;
   onSaved: (r: SaveResult) => void;
   // The new-location ticket runs after the save is acknowledged; this reports it.
-  onLocationTicket?: (entryId: string, status: LocationTicketStatus) => void;
+  onLocationTicket?: (saveId: string, status: LocationTicketStatus) => void;
   onCancel?: () => void;
 }) {
   const { instance, accounts } = useMsal();
@@ -214,6 +217,7 @@ export default function QuickFixForm({
       // the form (and never tempts anyone to log the same fix twice).
       const wantsTicket = isNewLocation && (!editing || location !== initial?.location);
       const savedEntryId = entry.id;
+      const saveId = `${savedEntryId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
       const runTicket = () =>
         ensureLocationTicket(client, {
           name: location,
@@ -223,10 +227,10 @@ export default function QuickFixForm({
           instance,
           account: accounts[0],
         })
-          .then((r) => onLocationTicket?.(savedEntryId, r))
+          .then((r) => onLocationTicket?.(saveId, r))
           .catch((e) => {
             console.error("[QuickFixForm] new-location ticket failed:", e);
-            onLocationTicket?.(savedEntryId, { kind: "failed" });
+            onLocationTicket?.(saveId, { kind: "failed" });
           });
 
       if (!editing) {
@@ -245,7 +249,7 @@ export default function QuickFixForm({
         });
         reset();
       }
-      onSaved({ entry, photoFailures, locationTicket: wantsTicket ? { kind: "pending" } : undefined });
+      onSaved({ saveId, entry, photoFailures, locationTicket: wantsTicket ? { kind: "pending" } : undefined });
       if (wantsTicket) void runTicket();
     } catch (e) {
       console.error("[QuickFixForm] save failed:", e);

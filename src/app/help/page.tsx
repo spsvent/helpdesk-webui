@@ -3427,9 +3427,9 @@ const helpSections: HelpSection[] = [
           The Fix Log uses the same location list as the ticket form. When you type a location
           under <strong>Other</strong>, the fix is saved with that name and a ticket titled{" "}
           <em>Add location: …</em> is opened for Justin to add it to the official list (no
-          email is sent). If the same name is already waiting in an open ticket, no second
-          ticket is made (in the rare case two people type the same new place at the same
-          moment, Justin may get two and just closes one). Typing an existing name with different capitals or spacing just uses
+          email is sent). If the same name is already waiting in an open ticket, we normally
+          reuse it instead of opening another; once in a while (for example two people typing
+          the same new place at the same moment) Justin may get a second one and just closes it. Typing an existing name with different capitals or spacing just uses
           the official one.
         </p>
 

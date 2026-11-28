@@ -32,7 +32,9 @@ export default function FixLogIssuesAdmin() {
   const [issues, setIssues] = useState<FixLogIssue[]>([]);
   const [folderId, setFolderId] = useState("");
   const [loading, setLoading] = useState(true);
+  // Kept apart so a failed reload can't overwrite the message about a failed change.
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newLabel, setNewLabel] = useState("");
 
@@ -48,9 +50,10 @@ export default function FixLogIssuesAdmin() {
     if (!account) return;
     try {
       setIssues(await fetchTree());
+      setLoadError(null);
     } catch (e) {
       console.error("[FixLogIssuesAdmin] load failed:", e);
-      setError("Couldn't load issues.");
+      setLoadError("Couldn't load issues. What's shown may be out of date.");
     } finally {
       setLoading(false);
     }
@@ -134,6 +137,21 @@ export default function FixLogIssuesAdmin() {
       if (siblings.some((i) => i.id !== node.id && i.label.toLowerCase() === node.label.toLowerCase()))
         throw new UserFacingError(`"${node.label}" already exists in that folder.`);
       await updateIssue(client(), node.id, { parentId, sortOrder: nextSortOrder(siblings) });
+    });
+  }
+
+  // "Needs attention" → top level, re-checked against the live tree: skip if
+  // someone already repaired it, and don't create a same-named twin at the top.
+  function rescue(node: FixLogIssue) {
+    act(async () => {
+      const fresh = await fetchTree();
+      if (!unreachableNodes(fresh).some((i) => i.id === node.id))
+        throw new UserFacingError(`"${node.label}" was already sorted out by someone else.`);
+      if (childrenOf(fresh, "").some((i) => i.id !== node.id && i.label.toLowerCase() === node.label.toLowerCase()))
+        throw new UserFacingError(
+          `There's already a "${node.label}" at the top level. Delete or rename one of them in SharePoint, or ask IT to merge them.`
+        );
+      await updateIssue(client(), node.id, { parentId: "", sortOrder: nextSortOrder(childrenOf(fresh, "")) });
     });
   }
 
@@ -228,6 +246,7 @@ export default function FixLogIssuesAdmin() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {loadError && <p className="text-sm text-red-600">{loadError}</p>}
 
       {!current && stuck.length > 0 && (
         <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-4 space-y-2">
@@ -243,7 +262,7 @@ export default function FixLogIssuesAdmin() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => act(() => updateIssue(client(), n.id, { parentId: "" }))}
+                  onClick={() => rescue(n)}
                   className="px-2.5 py-1 rounded-lg border border-yellow-400 bg-white text-sm"
                 >
                   Move to top level

@@ -96,10 +96,10 @@ export default function FixLogHome() {
   const locationChoices = useMemo(() => Array.from(new Set(entries.map((e) => e.location))).sort(), [entries]);
   const issueChoices = useMemo(() => Array.from(new Set(entries.map((e) => e.issue))).sort(), [entries]);
 
-  // The ticket finishes after the save banner is up; update that banner if it's
-  // still showing the same entry.
-  function handleLocationTicket(entryId: string, status: LocationTicketStatus) {
-    setSaved((cur) => (cur && cur.entry.id === entryId ? { ...cur, locationTicket: status } : cur));
+  // The ticket finishes after the save banner is up; update that banner only if
+  // it's still showing the same save.
+  function handleLocationTicket(saveId: string, status: LocationTicketStatus) {
+    setSaved((cur) => (cur && cur.saveId === saveId ? { ...cur, locationTicket: status } : cur));
   }
 
   function handleSaved(r: SaveResult) {
